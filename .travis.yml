@@ -1,0 +1,17 @@
+language: scala
+
+scala:
+  - 2.11.1
+
+jdk:
+  - oraclejdk7
+  - openjdk6
+  - openjdk7
+
+before_script:
+  # default $SBT_OPTS is irrelevant to sbt lancher
+  - unset SBT_OPTS
+
+script:
+  # run for all environments
+  - ./sbt ++$TRAVIS_SCALA_VERSION borderpatrol-core/test
