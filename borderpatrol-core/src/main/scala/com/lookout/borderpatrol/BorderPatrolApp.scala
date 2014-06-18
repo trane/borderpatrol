@@ -1,13 +1,10 @@
 package com.lookout.borderpatrol
 
-import java.net.InetSocketAddress
-
 import com.lookout.borderpatrol.routing._
 import com.lookout.borderpatrol.auth._
 import com.lookout.borderpatrol.sessions._
 import com.twitter.finagle.{Filter, _}
-import com.twitter.finagle.builder.{ClientBuilder, Server, ServerBuilder}
-import com.twitter.finagle.http.Http
+import com.twitter.finagle.builder.ClientBuilder
 import com.twitter.server.TwitterServer
 import com.twitter.util._
 import org.jboss.netty.handler.codec.http._
@@ -25,7 +22,6 @@ object BorderPatrolApp extends TwitterServer {
   val orchestratorFilter: Filter[HttpRequest, HttpResponse, HttpRequest, HttpResponse] =
     sessionIDFilter andThen routingFilter andThen sessionStoreFilter andThen authFilter
 
-
   val service = new Service[HttpRequest, HttpResponse] {
     def apply(request: HttpRequest) = {
       log.info("Service: Received a request at " + Time.now + ". Calling upstream =" + request.getUri())
@@ -39,7 +35,7 @@ object BorderPatrolApp extends TwitterServer {
       request.setUri(newUri)
       //call upstream
       val client: Service[HttpRequest, HttpResponse] = ClientBuilder()
-        .codec(Http())
+        .codec(com.twitter.finagle.http.Http())
         .hosts(request.getHeader("HOST")) // If >1 host, client does simple load-balancing
         .hostConnectionLimit(1)
         .build()
@@ -54,16 +50,10 @@ object BorderPatrolApp extends TwitterServer {
     orchestratorFilter andThen service
 
   def main() {
-
-    val myService: Service[HttpRequest, HttpResponse] = sessionIDFilter andThen routingFilter andThen service
-    //HttpMuxer.addHandler("/b", orchestratorService)
-    // And wait on the server
-    val server: Server = ServerBuilder()
-      .codec(Http())
-      .bindTo(new InetSocketAddress(8081))
-      .name("lbutt")
-      .build(orchestratorService)
-    //val server = Http.serve(":8080", myService)
-    //Await.ready(httpServer)
+   val server = Http.serve(":8080", orchestratorService)
+    onExit {
+      server.close()
+    }
+   Await.ready(httpServer)
   }
 }

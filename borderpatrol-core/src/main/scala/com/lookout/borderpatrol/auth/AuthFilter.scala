@@ -21,7 +21,7 @@ class AuthFilter extends SimpleFilter[HttpRequest, HttpResponse] {
         // TODO: this URL should come from the RoutingService
         resp.setContent(copiedBuffer("", UTF_8))
         resp.setHeader("Content-Length", "0")
-        resp.setHeader("Location", "/a/auth")
+        resp.setHeader("Location", "/a")
       }
     })
   }
