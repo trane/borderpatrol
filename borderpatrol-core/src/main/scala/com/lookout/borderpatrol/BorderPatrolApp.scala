@@ -3,8 +3,9 @@ package com.lookout.borderpatrol
 import com.lookout.borderpatrol.routing._
 import com.lookout.borderpatrol.auth._
 import com.lookout.borderpatrol.sessions._
+import com.twitter.finagle.http.{RichHttp, Response, Request}
 import com.twitter.finagle.{Filter, _}
-import com.twitter.finagle.builder.ClientBuilder
+import com.twitter.finagle.builder.{ServerBuilder, ClientBuilder}
 import com.twitter.server.TwitterServer
 import com.twitter.util._
 import org.jboss.netty.handler.codec.http._
@@ -46,14 +47,6 @@ object BorderPatrolApp extends TwitterServer {
     }
   }
 
-  val orchestratorService: Service[HttpRequest, HttpResponse] =
-    orchestratorFilter andThen service
-
-  def main() {
-   val server = Http.serve(":8080", orchestratorService)
-    onExit {
-      server.close()
-    }
-   Await.ready(httpServer)
+  def main(): Unit = {
   }
 }

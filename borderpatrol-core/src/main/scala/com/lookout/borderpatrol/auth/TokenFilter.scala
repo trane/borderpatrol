@@ -26,11 +26,14 @@ class TokenFilter(sessionStore: SessionStore) extends SimpleFilter[HttpRequest, 
           //take the master token and store
           val master_token = resp.getHeader("master_token")
           System.out.println("Inside token filter: extracted the master token="+master_token + "; session-id="+sessionId)
+          /*
           session.masterToken = master_token
-          resp.removeHeader("master_token")
+          resp.h
+          resp.headers().remove("master_token")
           resp.setStatus(HttpResponseStatus.MOVED_PERMANENTLY)
           resp.setHeader("Content-Length", "0")
           resp.setHeader("Location", "/b/home")
+          */
         }
       }
     }
