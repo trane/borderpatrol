@@ -9,23 +9,18 @@ import com.twitter.finagle.http.{Http, Request => FinagleRequest, Response => Fi
 /**
  * Created by wkimeria on 12/10/14.
  */
-class UpstreamService extends Service[HttpRequest, FinagleResponse] {
+class UpstreamService(authService: Service[HttpRequest, HttpResponse]) extends Service[HttpRequest, FinagleResponse] {
   def apply(request: HttpRequest) = {
-    println("----------------------------- UpstreamService ------------------------------>")
-    var it = request.headers().entries().iterator()
-    while(it.hasNext){
-      println(it.next().toString)
-    }
-    println("HEADERS --------> " + request.headers().toString)
-    val r =
-      if(request.getUri() == "/good"){
-        val result: Response = new Response(new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK))
-        Future.value(result)
-      }else{
-        val result: FinagleResponse = new NeedsAuthResponse(new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.UNAUTHORIZED))
-        Future.value(result)
+    println("------------------------------ UpstreamService ----------------------------->")
+    request.headers.entries.asInstanceOf[List].foreach(println(_))
+    val r = Future.value(
+      request.getUri match {
+        case "/good" => new Response(new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK))
+        case _ => new NeedsAuthResponse(new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.UNAUTHORIZED))
       }
+    )
     println("<----------------------------- UpstreamService ------------------------------")
     r
   }
+
 }
