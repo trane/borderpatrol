@@ -7,10 +7,11 @@ object BorderPatrol extends Build {
   val sharedSettings = Seq(
     version := libVersion,
     organization := "com.lookout",
-    scalaVersion := "2.10.3",
+    scalaVersion := "2.10.4",
     libraryDependencies ++= Seq(
-      "com.twitter" %% "twitter-server" % "1.0.2",
-      "org.scalatest" % "scalatest_2.11" % "2.2.0" % "test"
+      "com.twitter" %% "twitter-server" % "1.8.0",
+      "com.twitter" %% "bijection-core" % "0.7.0",
+      "org.scalatest" % "scalatest_2.10" % "2.2.1" % "test"
     ),
 
     scalacOptions ++= Seq("-encoding", "utf8"),

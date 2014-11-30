@@ -39,6 +39,11 @@
       <version>1.8.0</version>
     </dependency>
     <dependency>
+      <groupId>com.twitter</groupId>
+      <artifactId>bijection-core_2.10</artifactId>
+      <version>0.7.0</version>
+    </dependency>
+    <dependency>
       <groupId>org.scalatest</groupId>
       <artifactId>scalatest_2.10</artifactId>
       <version>2.2.1</version>

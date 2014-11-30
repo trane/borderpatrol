@@ -54,6 +54,6 @@ object BorderPatrolApp extends TwitterServer {
     onExit {
       server.close()
     }
-   Await.ready(httpServer)
+   Await.ready(server)
   }
 }

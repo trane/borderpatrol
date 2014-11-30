@@ -16,7 +16,7 @@ class SessionIDFilter(sessionStore: SessionStore) extends SimpleFilter[HttpReque
 
   def apply(request: HttpRequest, service: Service[HttpRequest, HttpResponse]) = {
     val id = getIDFromRequest(request) getOrElse generateNewID
-    request.setHeader("BORDER_PATROL_SESSION_ID", id)
+
     System.out.println("Session ID: %s".format(id))
 
     service(request) onSuccess (setCookie(_, id))
