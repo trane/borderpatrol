@@ -8,7 +8,7 @@ import com.lookout.borderpatrol.sessions.SessionStore
 import com.twitter.finagle.{Filter, Service}
 import com.twitter.finagle.http.{Response, Request, RequestProxy}
 import com.twitter.util.{Future, Time}
-import scala.util.{Try, Random}
+import scala.util.{Failure, Success, Try, Random}
 import com.twitter.bijection._
 
 object Session {
@@ -16,28 +16,46 @@ object Session {
   trait Signer {
     val algo = "HmacSHA256"
 
-    private def hmac(key: Key): Mac = {
-      val m = Mac.getInstance(algo); m.init(key); m
-    }
+    private def hmac(key: Key): Mac = { val m = Mac.getInstance(algo); m.init(key); m }
 
     def sign(key: Key, bytes: Array[Byte]): Array[Byte] = hmac(key).doFinal(bytes)
   }
 
+
   trait SessionIdBijector {
+    type Timestamp = Array[Byte]
+    type Data = Array[Byte]
+    type Signature = Array[Byte]
+    type BytesTuple = (Timestamp, Data, Signature)
+
+    def parseBytes(bytes: Array[Byte]): Try[BytesTuple] = bytes match {
+      case a if a.size == SessionCrypto.sessionByteLength => {
+        val (ts, rest) = a.splitAt(SessionCrypto.tsLength)
+        val (data, sig) = rest.splitAt(SessionCrypto.dataLength)
+        Success(ts, data, sig)
+      }
+      case _ => Failure(new Exception("Invalid session string"))
+    }
+
+    def sessionIdWithSecrets(tuple: BytesTuple): Try[SessionId] = tuple match {
+      case t if SessionCrypto.validateWithSecret(t)(Secrets.secret1) => Success(new SessionId(Injection.long2BigEndian.invert(t._1).get, t._2)(Secrets.secret1))
+      case t if SessionCrypto.validateWithSecret(t)(Secrets.secret2) => Success(new SessionId(Injection.long2BigEndian.invert(t._1).get, t._2)(Secrets.secret2))
+      case _ => Failure(new Exception("Signature does not correspond to any available secret"))
+    }
+
     implicit lazy val sessionId2Bytes: Bijection[SessionId, Array[Byte]] =
       new AbstractBijection[SessionId, Array[Byte]] {
-        def apply(id: SessionId) = id.sigPayload ++ id.sig
+        def apply(id: SessionId): Array[Byte] = id.sigPayload ++ id.sig
 
-        override def invert(bytes: Array[Byte]) = {
-          if (bytes.size != SessionCrypto.sessionByteLength) throw new ClassCastException("not a session string")
-          val (payload, sig) = bytes.splitAt(SessionCrypto.tsLength + SessionCrypto.dataLength)
-          SessionCrypto.validateAsSecret(payload, sig) map { secret =>
-            val (ts, data) = payload.splitAt(SessionCrypto.tsLength)
-            new SessionId(Injection.long2BigEndian.invert(ts).get, data)(secret)
-          } get
+        override def invert(bytes: Array[Byte]): Try[SessionId] = {
+          for {
+            tuple <- parseBytes(bytes)
+            sessionId <- sessionIdWithSecrets(tuple)
+          } yield sessionId
         }
       }
     implicit lazy val session2String = Injection.connect[SessionId, Array[Byte], Base64String, String]
+
   }
 
   trait Generator {
@@ -71,11 +89,12 @@ object Session {
     def decode(s: String): Try[SessionId] = session2String.invert(s)
 
     def validateAsSecret(payload: Array[Byte], sig: Array[Byte]): Option[Secret] = {
-      List(secret1, secret2).
       if (sign(secret1.key, payload) == sig) Some(secret1)
       else if (sign(secret2.key, payload) == sig) Some(secret2)
       else None
     }
+    def validateWithSecret(t: BytesTuple)(s: Secret): Boolean =
+      sign(s.key, t._1 ++ t._2) == t._3
   }
 
   case class SessionId(ts: Long = SessionCrypto.currentExpiry,
