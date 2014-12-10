@@ -9,8 +9,7 @@ object BorderPatrol extends Build {
     organization := "com.lookout",
     scalaVersion := "2.10.3",
     libraryDependencies ++= Seq(
-      "com.twitter" %% "twitter-server" % "1.0.2",
-      "org.scalatest" % "scalatest_2.11" % "2.2.0" % "test"
+      "com.twitter" % "twitter-server_2.10" % "1.8.0"
     ),
 
     scalacOptions ++= Seq("-encoding", "utf8"),
