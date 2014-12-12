@@ -11,6 +11,7 @@ object BorderPatrol extends Build {
     libraryDependencies ++= Seq(
       "com.twitter" %% "twitter-server" % "1.8.0",
       "com.twitter" %% "bijection-core" % "0.7.0",
+      "io.argonaut" %% "argonaut" % "6.0.4",
       "org.scalatest" % "scalatest_2.10" % "2.2.1" % "test"
     ),
 
