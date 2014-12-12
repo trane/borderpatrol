@@ -3,68 +3,56 @@ package com.lookout.borderpatrol
 import java.security.{SecureRandom, Key, CryptoPrimitive, Timestamp}
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
-
+import com.lookout.borderpatrol.Signer
 import com.lookout.borderpatrol.sessions.SessionStore
 import com.twitter.finagle.{Filter, Service}
 import com.twitter.finagle.http.{Response, Request, RequestProxy}
 import com.twitter.util.{Future, Time}
 import scala.util.{Failure, Success, Try, Random}
 import com.twitter.bijection._
+// trait Token
+// type Token = String
+// case class Tokens(mt: MasterToken, sts: Option[Map[ServiceToken]])
+// case class MasterToken(token: Token)
+// case class ServiceToken(service: String, token: Token)
+// object MasterToken {
+//  implicit def MasterTokenCodeJson: CodecJson[MasterToken] =
+//    casecodec1(MasterToken.apply, MasterToken.unapply)("auth_service")
+// }
+// object ServiceToken {
+//   implicit def ServiceTokenCodecJson: CodeJson[ServiceToken] =
+//     casecodec2(ServiceToken.apply, ServiceToken.unapply)("
 
+
+// object Token {
+//   def apply(s: String): Option[List[Token]] =
+//     val json = JSON.parse(s)
+//     for {
+//       (k, v) <- json
+//       (mt, stList) <- v
+//     }
+
+// trait Token {
+//   type MasterToken = String
+//   type ServiceToken = String
+// }
+
+//
+// (Request, Session, Option[MasterToken], Option[ServiceToken])
 object Session {
+  type Token = String
+  type MasterToken = Token
+  type ServiceToken = Token
 
-  trait Signer {
-    val algo = "HmacSHA256"
+  def thing(mt: Option[MasterToken]) = ???
 
-    private def hmac(key: Key): Mac = { val m = Mac.getInstance(algo); m.init(key); m }
-
-    def sign(key: Key, bytes: Array[Byte]): Array[Byte] = hmac(key).doFinal(bytes)
-  }
 
 
   trait SessionIdBijector {
-    type Timestamp = Array[Byte]
-    type Data = Array[Byte]
-    type Signature = Array[Byte]
-    type BytesTuple = (Timestamp, Data, Signature)
-
-    def parseBytes(bytes: Array[Byte]): Try[BytesTuple] = bytes match {
-      case a if a.size == SessionCrypto.sessionByteLength => {
-        val (ts, rest) = a.splitAt(SessionCrypto.tsLength)
-        val (data, sig) = rest.splitAt(SessionCrypto.dataLength)
-        Success(ts, data, sig)
-      }
-      case _ => Failure(new Exception("Invalid session string"))
-    }
-
-    def sessionIdWithSecrets(tuple: BytesTuple): Try[SessionId] = tuple match {
-      case t if SessionCrypto.validateWithSecret(t)(Secrets.secret1) => Success(new SessionId(Injection.long2BigEndian.invert(t._1).get, t._2)(Secrets.secret1))
-      case t if SessionCrypto.validateWithSecret(t)(Secrets.secret2) => Success(new SessionId(Injection.long2BigEndian.invert(t._1).get, t._2)(Secrets.secret2))
-      case _ => Failure(new Exception("Signature does not correspond to any available secret"))
-    }
-
-    implicit lazy val sessionId2Bytes: Bijection[SessionId, Array[Byte]] =
-      new AbstractBijection[SessionId, Array[Byte]] {
-        def apply(id: SessionId): Array[Byte] = id.sigPayload ++ id.sig
-
-        override def invert(bytes: Array[Byte]): Try[SessionId] = {
-          for {
-            tuple <- parseBytes(bytes)
-            sessionId <- sessionIdWithSecrets(tuple)
-          } yield sessionId
-        }
-      }
-    implicit lazy val session2String = Injection.connect[SessionId, Array[Byte], Base64String, String]
-
+    // Injection(thing)
+    // Injection(thing)(session2String)
   }
 
-  trait Generator {
-    private val random = new Random(new SecureRandom)
-
-    private def nextByte = random.nextInt.toByte
-
-    def data(n: Int): Array[Byte] = Array.fill(n)(nextByte)
-  }
 
   object Secrets extends Generator {
     val secret1 = new Secret(data(16))
@@ -95,21 +83,6 @@ object Session {
     }
     def validateWithSecret(t: BytesTuple)(s: Secret): Boolean =
       sign(s.key, t._1 ++ t._2) == t._3
-  }
-
-  case class SessionId(ts: Long = SessionCrypto.currentExpiry,
-                       data: Array[Byte] = SessionCrypto.data(SessionCrypto.dataLength))(secret: Secret) {
-
-    val sigPayload = Injection.long2BigEndian(ts) ++ data
-    val sig = SessionCrypto.sign(secret.key, sigPayload)
-    lazy val repr = SessionCrypto.encode(this)
-
-    def valid(otherSig: Array[Byte]): Boolean =
-      (sig == otherSig) &&
-        (ts > Time.now.inLongSeconds && ts < SessionCrypto.currentExpiry) &&
-        (data.size == SessionCrypto.dataLength)
-
-    override def toString: String = repr
   }
 
 
@@ -194,7 +167,7 @@ trait BorderReq extends RequestProxy {
 
 trait SessionRequest[Req] {
   val request: Req
-  val session: Session
+  //val session: Session
 }
 
 /*
@@ -240,4 +213,70 @@ class SessionFilter(sessionService: SessionService) extends Filter[Request, Resp
     sessionService(req) flatMap { ss => service(ss) }
 }
 */
+/*
+import com.lookout.borderpatrol._
+*/
+import argonaut._
+import Argonaut._
+
+object Stuff {
+  type Token = String
+  type Service = String
+
+  val i = """{"auth_service": "abcd", "service_tokens": {"service1": "jk", "service2": "ep"}}"""
+
+  case class SToken(service: Service, token: Token)
+
+  case class STokenMap(service_tokens: Map[String, Token])
+
+  case class MToken(auth_service: Token)
+
+  case class Tokens(auth_service: String, service_tokens: Map[String, String]) {
+    // def apply(auth_service: String, service_tokens: Map[String, String]) = {
+    //   SessionTokens(MToken(auth_service), (service_tokens map (t => SToken(t._1, t._2))).toSet
+    // }
+  }
+
+  case class SessionTokens(masterToken: MToken, serviceTokens: Set[SToken])
+
+  case class STokenSet(service_tokens: Set[SToken])
+
+  implicit def MTokenCodecJson: CodecJson[MToken] = casecodec1(MToken.apply, MToken.unapply)("auth_service")
+
+  implicit def STokenMapCodecJson: CodecJson[STokenMap] =
+    casecodec1(STokenMap.apply, STokenMap.unapply)("service_tokens")
+
+  implicit def TokensCodecJson: CodecJson[Tokens] = casecodec2(Tokens.apply, Tokens.unapply)("auth_service", "service_tokens")
+
+  implicit def TokensCodecJson: CodecJson[Tokens] =
+    CodecJson(
+      (t: Tokens) =>
+        ("auth_service" := t.auth_service) ->:
+          ("service_tokens" := t.service_tokens) ->:
+          jEmptyObject,
+      c => for {
+        as <- (c --\ "auth_service").as[String]
+        st <- (c --\ "service_tokens").as[Map[String, String]]
+      } yield Tokens(as, st))
+
+  i.decodeOption[Tokens]
+
+  implicit def STokenCodecJson: CodecJson[SToken] =
+    CodecJson(
+      (st: SToken) =>
+        (st.service := st.token) ->:
+          jEmptyObject,
+      c => for {
+        m <- (c --\ jString).as[Map[String, String]]
+        (k, v) <- m
+      } yield SToken(k, v))
+
+  implicit def STokenMapEncodeJson: EncodeJson[STokenMap] =
+    EncodeJson((stm: STokenMap) => ("service_tokens" := stm.service_tokens)) ->: jEmptyObject
+
+  implicit def STokenMapDecodeJson: DecodeJson[STokenMap] =
+    DecodeJson(c => for {
+      mp <- (c --\ "service_tokens").as[STokenMap]
+    } yield mp)
+}
 
