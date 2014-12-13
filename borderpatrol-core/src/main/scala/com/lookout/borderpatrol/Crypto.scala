@@ -7,7 +7,7 @@ import javax.crypto.spec.SecretKeySpec
 
 import com.twitter.util.{Duration, Time}
 
-import scala.util.Random
+import scala.util.{Failure, Success, Try, Random}
 
 trait Generator
 object Generator extends Generator {
@@ -21,22 +21,24 @@ object Generator extends Generator {
 
 trait Signer {
   val algo: String
-  def key: Key
-  def hmac: Mac = { val m = Mac.getInstance(algo); m.init(key); m }
+  val key: Key
+  lazy val hmac: Mac = { val m = Mac.getInstance(algo); m.init(key); m }
   def sign(bytes: Array[Byte]): Array[Byte] = hmac.doFinal(bytes)
 }
 
 sealed trait Secret extends Signer {
   val algo = "HmacSHA256"
   val dataSize = 16
-  def key = new SecretKeySpec(Generator.data(dataSize), algo)
-  def valid = expiry < Time.now
+  val id = Generator(1)
+
   val expiry: Time
 }
 
-case class Current(expiry: Time) extends Secret
+case class Current(expiry: Time) extends Secret {
+  val key = new SecretKeySpec(Generator(dataSize), algo)
+}
 case class Previous(current: Current) extends Secret {
-  override def key = current.key
+  val key = current.key
   val expiry = current.expiry
 }
 
@@ -45,6 +47,14 @@ case class Secrets(current: Current, previous: Option[Previous])
 trait Expiry {
   val lifetime: Duration
   def currentExpiry: Time = Time.now + lifetime
+}
+
+object SecretExpiry extends Expiry {
+  val lifetime = Duration(1, TimeUnit.DAYS)
+}
+
+object SessionExpiry extends Expiry {
+  val lifetime = Duration(1, TimeUnit.DAYS)
 }
 
 /**
@@ -56,7 +66,9 @@ trait Expiry {
  * For example, a zookeeper watcher could update current and previous in memory
  * on change, while an external service handles writing new secrets.
  */
-object SecretStore extends Expiry {
+object SecretStore {
+  import SecretExpiry._
+
   val lifetime: Duration = Duration(1, TimeUnit.DAYS)
 
   private[this] var _secrets: Secrets = Secrets(Current(currentExpiry), None)
@@ -64,7 +76,7 @@ object SecretStore extends Expiry {
 
   def current: Current = {
     val c = _secrets.current
-    if (c.valid) c
+    if (c.expiry > Time.now && c.expiry <= currentExpiry) c
     else {
       val c2 = Current(currentExpiry)
       _secrets = Secrets(c2, Some(Previous(c2)))
@@ -74,11 +86,11 @@ object SecretStore extends Expiry {
 
   def previous: Option[Previous] = _secrets.previous
 
-  def find(f: (Secret) => Boolean): Option[Secret] =
-    if (f(current)) Some(current)
+  def find(f: (Secret) => Boolean): Try[Secret] =
+    if (f(current)) Success(current)
     else previous match {
-      case Some(p) if f(p) => Some(p)
-      case _ => None
+      case Some(p) if f(p) => Success(p)
+      case _ => Failure(new Exception("No matching secrets found"))
     }
 }
 

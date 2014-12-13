@@ -1,64 +1,126 @@
 package com.lookout.borderpatrol
 
 import java.util.concurrent.TimeUnit
-import javax.crypto.spec.SecretKeySpec
 
-import com.twitter.bijection.Injection
+import com.twitter.bijection._
 import com.twitter.util.{Duration, Time}
 
+import scala.util.{Success, Failure, Try}
 
-sealed trait SecureSessionId {
+trait SecureSessionId
+object SecureSessionId extends SecureSessionId {
   type Seconds = Long
   type Size = Int
-  type TimeBytes = Seconds => Array[Byte]
-  type Entropy = Size => Array[Byte]
-  type Signature = (Signer, Array[Byte]) => Array[Byte]
+  type TimeBytes = Array[Byte]
+  type Entropy = Array[Byte]
+  type SecretId = Array[Byte]
+  type Signature = Array[Byte]
+  type Payload = Array[Byte]
 
-  /**
-  val ts: TimeBytes
-  val data: Entropy
-  val payload: Payload
-  val sig: Signature
-    */
-}
+  sealed trait SessionId {
+    val expires: TimeBytes
+    val entropy: Entropy
+    val secretId: SecretId
+    val signature: Signature
+    lazy val repr: String = SessionIdSerializer.encode(this)
+    lazy val toBytes: Array[Byte] = expires ++ entropy ++ secretId ++ signature
 
-
-object SessionIdGenerator extends SecureSessionId with Expiry {
-  val size: Size = 16
-  val lifetime = Duration(1, TimeUnit.DAYS)
-
-  def timeBytes: TimeBytes = Injection.long2BigEndian(_)
-  def entropy: Entropy = Generator(_)
-  def sig: Signature = (s, bytes) => s.sign(bytes)
-
-  def apply: SecureSessionId = {
-    val exp = currentExpiry.inLongSeconds
-    val time = timeBytes(exp)
-    val entropy = entropy(size)
-    val s = sig(SecretStore.current, time ++ entropy)
-    SessionId(time, entropy, s)
+    override def toString: String = repr
   }
 
-  case class SessionId(expires: Array[Byte], entropy: Array[Byte], sig: Array[Byte]) extends SecureSessionId {
+  val entropySize: Size = 16 // bytes
 
+  def notExpired(t: Seconds): Boolean =
+    if (t > Time.now.inLongSeconds && t <= SessionExpiry.currentExpiry.inLongSeconds) true
+    else throw new Exception("Time has expired")
+
+  def valid(s: Signer, p: Payload, sig: Signature): Boolean =
+    if (s.sign(p).sameElements(sig)) true
+    else throw new Exception("Invalid signature")
+
+  def apply: SessionId = SessionIdGenerator.next
+  def apply(s: String): Try[SessionId] = SessionIdSerializer.decode(s)
+}
+
+object SessionIdSerializer {
+  import SecureSessionId._
+
+  def encode(s: SessionId): String = SessionIdBijector.sessionId2String(s)
+  def decode(s: String): Try[SessionId] = SessionIdBijector.sessionId2String.invert(s)
+
+  object SessionIdBijector {
+    type BytesTuple = (TimeBytes, Entropy, SecretId, Signature)
+
+    val timeBytesSize: Size = 8 // long -> bytes
+    val signatureSize: Size = 32 // sha256 -> bytes
+    val secretIdSize: Size = 1 // secret id
+    val expectedSize: Size = timeBytesSize + entropySize + secretIdSize + signatureSize
+
+    def parseBytes(bytes: Array[Byte]): Try[BytesTuple] = bytes match {
+      case a if a.size == expectedSize => {
+        val (tb, tail) = a.splitAt(timeBytesSize)
+        val (ent, last) = tail.splitAt(entropySize)
+        val (id, sig) = last.splitAt(secretIdSize)
+        Success(tb, ent, id, sig)
+      }
+      case _ => Failure(new Exception("Not a session string"))
+    }
+
+    def sessionId(tuple: BytesTuple): Try[SessionId] = {
+      val (tb, ent, id, sig) = tuple
+      (for {
+        t <- Injection.long2BigEndian.invert(tb)
+        if notExpired(t)
+        s <- SecretStore.find((s) => s.id.sameElements(id) && valid(s, tb ++ ent ++ id, sig))
+      } yield IdFromTuple(tuple))
+    }
+
+    implicit lazy val sessionId2Bytes: Injection[SessionId, Array[Byte]] =
+      new AbstractInjection[SessionId, Array[Byte]] {
+        def apply(sid: SessionId): Array[Byte] = sid.toBytes
+
+        override def invert(bytes: Array[Byte]): Try[SessionId] =
+          for (t <- parseBytes(bytes); s <- sessionId(t)) yield s
+      }
+
+    implicit lazy val sessionId2String = Injection.connect[SessionId, Array[Byte], Base64String, String]
+
+    case class IdFromTuple(tuple: BytesTuple) extends SessionId {
+      val (expires, entropy, secretId, signature) = tuple
+    }
+  }
+
+}
+
+object SessionIdGenerator {
+  import SecureSessionId._
+
+  type GenTimeBytes = PartialFunction[Seconds, Option[TimeBytes]]
+  type GenEntropy = PartialFunction[Size, Option[Entropy]]
+  type GenPayload = (TimeBytes, Entropy) => Payload
+  type PayloadSigner = Payload => (Signature, SecretId)
+  type GenSignature = Secret => PayloadSigner
+
+  def genTimeBytes: GenTimeBytes = {
+    case s if s > Time.now.inLongSeconds => Some(Injection.long2BigEndian(s))
+    case _ => None
+  }
+
+  def genEntropy: GenEntropy = {
+    case SecureSessionId.entropySize => Some(Generator(entropySize))
+    case _ => None
+  }
+
+  def genPayload: GenPayload = (tb, ent) => tb ++ ent
+
+  def genSignature: GenSignature = (s) => (bytes) => (s.sign(bytes ++ s.id), s.id)
+
+  def next: SessionId = (for {
+    t <- genTimeBytes(SessionExpiry.currentExpiry.inLongSeconds)
+    e <- genEntropy(entropySize)
+  } yield Id(t, e)(genPayload, genSignature(SecretStore.current))).get
+
+  case class Id(expires: TimeBytes, entropy: Entropy)(pGen: GenPayload, signer: PayloadSigner) extends SessionId {
+    val (signature, secretId) = signer(pGen(expires, entropy))
   }
 }
-
-
-
-/*
-case class SessionId(ts: Long = SessionCrypto.currentExpiry,
-                     data: Array[Byte] = SessionCrypto.data(SessionCrypto.dataLength))(secret: Secret) {
-
-  val sigPayload = Injection.long2BigEndian(ts) ++ data
-  val sig = SessionCrypto.sign(secret.key, sigPayload)
-  lazy val repr = SessionCrypto.encode(this)
-
-  def valid(otherSig: Array[Byte]): Boolean =
-    (sig == otherSig) &&
-      (ts > Time.now.inLongSeconds && ts < SessionCrypto.currentExpiry) &&
-      (data.size == SessionCrypto.dataLength)
-
-  override def toString: String = repr
-}
-*/
