@@ -5,24 +5,33 @@ import java.util.concurrent.TimeUnit
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
+import com.lookout.borderpatrol.util.Combinators
 import com.twitter.util.{Duration, Time}
 
 import scala.util.{Failure, Success, Try, Random}
+import Combinators.tap
 
 trait Generator
 object Generator extends Generator {
+
   private[this] val random = new Random(new SecureRandom)
 
-  private[this] def nextByte = random.nextInt.toByte
+  def apply(n: Int): Array[Byte] = tap(Array.fill[Byte](n)(0))(random.nextBytes)
+}
 
-  def apply(n: Int): Array[Byte] = data(n)
-  def data(n: Int): Array[Byte] = Array.fill(n)(nextByte)
+trait Expiry {
+  val lifetime: Duration
+  def currentExpiry: Time = Time.now + lifetime
+}
+
+object SecretExpiry extends Expiry {
+  val lifetime = Duration(1, TimeUnit.DAYS)
 }
 
 trait Signer {
   val algo: String
   val key: Key
-  lazy val hmac: Mac = { val m = Mac.getInstance(algo); m.init(key); m }
+  lazy val hmac: Mac = tap(Mac.getInstance(algo))(mac => mac.init(key))
   def sign(bytes: Array[Byte]): Array[Byte] = hmac.doFinal(bytes)
 }
 
@@ -43,19 +52,6 @@ case class Previous(current: Current) extends Secret {
 }
 
 case class Secrets(current: Current, previous: Option[Previous])
-
-trait Expiry {
-  val lifetime: Duration
-  def currentExpiry: Time = Time.now + lifetime
-}
-
-object SecretExpiry extends Expiry {
-  val lifetime = Duration(1, TimeUnit.DAYS)
-}
-
-object SessionExpiry extends Expiry {
-  val lifetime = Duration(1, TimeUnit.DAYS)
-}
 
 /**
  * This prototypes out an API for the SecretStore, keeping secrets in memory
@@ -93,4 +89,3 @@ object SecretStore {
       case _ => Failure(new Exception("No matching secrets found"))
     }
 }
-

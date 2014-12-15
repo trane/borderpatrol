@@ -25,18 +25,14 @@ object SecureSessionId extends SecureSessionId {
     lazy val repr: String = SessionIdSerializer.encode(this)
     lazy val toBytes: Array[Byte] = expires ++ entropy ++ secretId ++ signature
 
+    def expired: Boolean = {
+      val t: Seconds = Injection.long2BigEndian.invert(expires).getOrElse(0)
+      t < Time.now.inLongSeconds && t > SessionExpiry.currentExpiry.inLongSeconds
+    }
     override def toString: String = repr
   }
 
   val entropySize: Size = 16 // bytes
-
-  def notExpired(t: Seconds): Boolean =
-    if (t > Time.now.inLongSeconds && t <= SessionExpiry.currentExpiry.inLongSeconds) true
-    else throw new Exception("Time has expired")
-
-  def valid(s: Signer, p: Payload, sig: Signature): Boolean =
-    if (s.sign(p).sameElements(sig)) true
-    else throw new Exception("Invalid signature")
 
   def apply: SessionId = SessionIdGenerator.next
   def apply(s: String): Try[SessionId] = SessionIdSerializer.decode(s)
@@ -45,16 +41,25 @@ object SecureSessionId extends SecureSessionId {
 object SessionIdSerializer {
   import SecureSessionId._
 
-  def encode(s: SessionId): String = SessionIdBijector.sessionId2String(s)
-  def decode(s: String): Try[SessionId] = SessionIdBijector.sessionId2String.invert(s)
+  def encode(s: SessionId): String = Bijector.sessionId2String(s)
+  def decode(s: String): Try[SessionId] = Bijector.sessionId2String.invert(s)
 
-  object SessionIdBijector {
+  object Bijector {
     type BytesTuple = (TimeBytes, Entropy, SecretId, Signature)
 
     val timeBytesSize: Size = 8 // long -> bytes
     val signatureSize: Size = 32 // sha256 -> bytes
     val secretIdSize: Size = 1 // secret id
     val expectedSize: Size = timeBytesSize + entropySize + secretIdSize + signatureSize
+
+    def notExpiredOrThrow(t: Seconds): Boolean =
+      if (t > Time.now.inLongSeconds && t <= SessionExpiry.currentExpiry.inLongSeconds) true
+      else throw new Exception("Time has expired")
+
+    def validOrThrow(s: Signer, p: Payload, sig: Signature): Boolean =
+      if (s.sign(p).sameElements(sig)) true
+      else throw new Exception("Invalid signature")
+
 
     def parseBytes(bytes: Array[Byte]): Try[BytesTuple] = bytes match {
       case a if a.size == expectedSize => {
@@ -70,8 +75,8 @@ object SessionIdSerializer {
       val (tb, ent, id, sig) = tuple
       (for {
         t <- Injection.long2BigEndian.invert(tb)
-        if notExpired(t)
-        s <- SecretStore.find((s) => s.id.sameElements(id) && valid(s, tb ++ ent ++ id, sig))
+        if notExpiredOrThrow(t)
+        s <- SecretStore.find((s) => s.id.sameElements(id) && validOrThrow(s, tb ++ ent ++ id, sig))
       } yield IdFromTuple(tuple))
     }
 
