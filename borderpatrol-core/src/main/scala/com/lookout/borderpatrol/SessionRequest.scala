@@ -5,7 +5,7 @@ import com.twitter.finagle.http.{Response, Request, RequestProxy}
 import com.twitter.util.{Future, Time}
 import scala.util.{Failure, Success, Try, Random}
 
-/*
+/**
 object Session {
   type Token = String
   type MasterToken = Token

@@ -7,8 +7,13 @@ import com.twitter.util.{Duration, Time}
 
 import scala.util.{Success, Failure, Try}
 
-trait SecureSessionId
-object SecureSessionId extends SecureSessionId {
+trait SecureSessionId {
+  this: ExternalSecretStore with Expiry =>
+    def secretStore: SecretStore = SecretStore(Secrets(Current(SessionExpiry.currentExpiry), None))
+    val lifetime: Duration = Duration(1, TimeUnit.DAYS)
+}
+
+object SecureSessionId extends SecureSessionId with ExternalSecretStore with Expiry {
   type Seconds = Long
   type Size = Int
   type TimeBytes = Array[Byte]
@@ -76,7 +81,7 @@ object SessionIdSerializer {
       (for {
         t <- Injection.long2BigEndian.invert(tb)
         if notExpiredOrThrow(t)
-        s <- SecretStore.find((s) => s.id.sameElements(id) && validOrThrow(s, tb ++ ent ++ id, sig))
+        s <- secretStore.find((s) => s.id.sameElements(id) && validOrThrow(s, tb ++ ent ++ id, sig))
       } yield IdFromTuple(tuple))
     }
 
@@ -123,7 +128,7 @@ object SessionIdGenerator {
   def next: SessionId = (for {
     t <- genTimeBytes(SessionExpiry.currentExpiry.inLongSeconds)
     e <- genEntropy(entropySize)
-  } yield Id(t, e)(genPayload, genSignature(SecretStore.current))).get
+  } yield Id(t, e)(genPayload, genSignature(secretStore.current))).get
 
   case class Id(expires: TimeBytes, entropy: Entropy)(pGen: GenPayload, signer: PayloadSigner) extends SessionId {
     val (signature, secretId) = signer(pGen(expires, entropy))

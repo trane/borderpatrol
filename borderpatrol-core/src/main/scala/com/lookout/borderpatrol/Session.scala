@@ -47,7 +47,7 @@ object SessionStore {
   def get(s: String): Option[SessionId] =
     _store.get(s) match {
       case Some(id) if id.expired => None
-      case _ => _
+      case any => any
     }
 
   def update(id: SessionId): Try[SessionId] = {

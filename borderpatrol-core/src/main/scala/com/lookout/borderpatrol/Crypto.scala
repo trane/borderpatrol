@@ -62,15 +62,21 @@ case class Secrets(current: Current, previous: Option[Previous])
  * For example, a zookeeper watcher could update current and previous in memory
  * on change, while an external service handles writing new secrets.
  */
-object SecretStore {
+sealed trait SecretApi {
+  def current: Current
+  def previous: Option[Previous]
+  def find(f: (Secret) => Boolean): Try[Secret]
+}
+
+trait ExternalSecretStore {
   import SecretExpiry._
+}
 
-  val lifetime: Duration = Duration(1, TimeUnit.DAYS)
+case class SecretStore(secrets: Secrets) extends SecretApi {
+  import SecretExpiry._
+  private[this] var _secrets: Secrets = secrets
 
-  private[this] var _secrets: Secrets = Secrets(Current(currentExpiry), None)
-
-
-  def current: Current = {
+  def current = {
     val c = _secrets.current
     if (c.expiry > Time.now && c.expiry <= currentExpiry) c
     else {
@@ -80,9 +86,9 @@ object SecretStore {
     }
   }
 
-  def previous: Option[Previous] = _secrets.previous
+  def previous = _secrets.previous
 
-  def find(f: (Secret) => Boolean): Try[Secret] =
+  def find(f: (Secret) => Boolean) =
     if (f(current)) Success(current)
     else previous match {
       case Some(p) if f(p) => Success(p)
