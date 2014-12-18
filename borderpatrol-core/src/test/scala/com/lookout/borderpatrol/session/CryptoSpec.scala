@@ -1,14 +1,10 @@
 package com.lookout.borderpatrol.session
 
 import java.util.concurrent.TimeUnit
-
 import com.twitter.util.{Duration, Time}
-import org.scalamock.scalatest.MockFactory
 import org.scalatest.{FlatSpec, Matchers}
 
-import scala.util.Success
-
-class CryptoSpec extends FlatSpec with Matchers with MockFactory {
+class CryptoSpec extends FlatSpec with Matchers {
 
   def currentExpiry: Time = Time.now + Duration(1, TimeUnit.DAYS)
   def expiredExpiry: Time = Time.fromSeconds(42)

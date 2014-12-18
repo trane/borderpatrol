@@ -15,7 +15,7 @@ object Generator extends Generator {
 
   private[this] val random = new Random(new SecureRandom)
 
-  def apply(n: Int): Array[Byte] = tap(Array.fill[Byte](n)(0))(random.nextBytes)
+  def apply(n: Int): Seq[Byte] = tap(Array.fill[Byte](n)(0))(random.nextBytes)
 }
 
 trait Expiry {
@@ -31,7 +31,7 @@ trait Signer {
   val algo: String
   val key: Key
   lazy val hmac: Mac = tap(Mac.getInstance(algo))(mac => mac.init(key))
-  def sign(bytes: Array[Byte]): Array[Byte] = hmac.doFinal(bytes)
+  def sign(bytes: Seq[Byte]): Seq[Byte] = hmac.doFinal(bytes.toArray)
 }
 
 sealed trait Secret extends Signer {
@@ -43,7 +43,7 @@ sealed trait Secret extends Signer {
 }
 
 case class Current(expiry: Time) extends Secret {
-  val key = new SecretKeySpec(Generator(entropySize), algo)
+  val key = new SecretKeySpec(Generator(entropySize).toArray, algo)
 }
 
 case class Previous(current: Current) extends Secret {
