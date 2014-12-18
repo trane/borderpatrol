@@ -1,15 +1,14 @@
-package com.lookout.borderpatrol
+package com.lookout.borderpatrol.session
 
 import java.security.{Key, SecureRandom}
 import java.util.concurrent.TimeUnit
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
-import com.lookout.borderpatrol.util.Combinators
+import com.lookout.borderpatrol.util.Combinators.tap
 import com.twitter.util.{Duration, Time}
 
-import scala.util.{Failure, Success, Try, Random}
-import Combinators.tap
+import scala.util.{Failure, Random, Success, Try}
 
 trait Generator
 object Generator extends Generator {
@@ -37,15 +36,16 @@ trait Signer {
 
 sealed trait Secret extends Signer {
   val algo = "HmacSHA256"
-  val dataSize = 16
-  val id = Generator(1)
+  val entropySize = Constants.Secret.entropySize
+  val id: Byte = Generator(1).head
 
   val expiry: Time
 }
 
 case class Current(expiry: Time) extends Secret {
-  val key = new SecretKeySpec(Generator(dataSize), algo)
+  val key = new SecretKeySpec(Generator(entropySize), algo)
 }
+
 case class Previous(current: Current) extends Secret {
   val key = current.key
   val expiry = current.expiry
@@ -62,17 +62,13 @@ case class Secrets(current: Current, previous: Option[Previous])
  * For example, a zookeeper watcher could update current and previous in memory
  * on change, while an external service handles writing new secrets.
  */
-sealed trait SecretApi {
+sealed trait SecretStoreApi {
   def current: Current
   def previous: Option[Previous]
   def find(f: (Secret) => Boolean): Try[Secret]
 }
 
-trait ExternalSecretStore {
-  import SecretExpiry._
-}
-
-case class SecretStore(secrets: Secrets) extends SecretApi {
+case class InMemorySecretStore(secrets: Secrets) extends SecretStoreApi {
   import SecretExpiry._
   private[this] var _secrets: Secrets = secrets
 
@@ -81,7 +77,7 @@ case class SecretStore(secrets: Secrets) extends SecretApi {
     if (c.expiry > Time.now && c.expiry <= currentExpiry) c
     else {
       val c2 = Current(currentExpiry)
-      _secrets = Secrets(c2, Some(Previous(c2)))
+      _secrets = Secrets(c2, Some(Previous(c)))
       c2
     }
   }
@@ -94,4 +90,8 @@ case class SecretStore(secrets: Secrets) extends SecretApi {
       case Some(p) if f(p) => Success(p)
       case _ => Failure(new Exception("No matching secrets found"))
     }
+}
+
+trait SecretStoreComponent {
+  implicit val secretStore: SecretStoreApi
 }

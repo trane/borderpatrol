@@ -1,11 +1,10 @@
-package com.lookout.borderpatrol
+package com.lookout.borderpatrol.session
 
 import java.util.concurrent.TimeUnit
 
-import com.lookout.borderpatrol.SecureSessionId.SessionId
 import com.twitter.util.Duration
 
-import scala.util.{Try, Success}
+import scala.util.{Success, Try}
 
 
 object SessionExpiry extends Expiry {
@@ -17,21 +16,11 @@ sealed trait Session {
   val req: Any
 }
 
-object Session {
-  def apply(req: Any): Session = NewSession(req)
-
-  def apply(s: String, req: Any): Session =
-    SessionIdSerializer.decode(s) match {
-      case Success(id) => ExistingSession(id, req)
-      case _ => NewSession(req)
-    }
-
-  case class NewSession(req: Any) extends Session {
-    lazy val id = SessionIdGenerator.next
-  }
-
-  case class ExistingSession(id: SessionId, req: Any) extends Session
+case class NewSession(req: Any)(implicit g: SessionIdGenerator, s: SecretStoreApi) extends Session {
+  lazy val id = g.next
 }
+
+case class ExistingSession(id: SessionId, req: Any) extends Session
 
 /**
  * This prototypes an API, and should be implemented using some shared store.
@@ -39,9 +28,17 @@ object Session {
  * No coordination is needed for the store, but, should be implemented using an HA
  * store.
  */
-object SessionStore {
-  type Store = Map[String, SessionId]
+sealed trait SessionStoreApi {
+  def get(s: String): Option[SessionId]
+  def update(id: SessionId): Try[SessionId]
+}
 
+trait SessionStoreComponent {
+  implicit val marshaller: SessionIdMarshaller
+  val sessionStore: SessionStoreApi
+}
+
+case class InMemorySessionStore(implicit marshaller: SessionIdMarshaller) extends SessionStoreApi {
   private [this] var _store = Map[String, SessionId]()
 
   def get(s: String): Option[SessionId] =
@@ -51,7 +48,7 @@ object SessionStore {
     }
 
   def update(id: SessionId): Try[SessionId] = {
-    _store = _store.updated(id.repr, id)
+    _store = _store.updated(id.asString, id)
     Success(id)
   }
 }
