@@ -18,8 +18,8 @@ sealed trait SessionTokens {
 
 object SessionTokens {
   def apply(master: String, services: Option[Map[String, String]]): SessionTokens = services match {
-    case Some(st) => Tokens(MasterToken(master), ServiceTokensMap(st))
-    case _ => MasterTokenOnly(MasterToken(master))
+    case Some(s) => Tokens(MasterToken(master), ServiceTokensMap(s))
+    case None => Tokens(MasterToken(master), ServiceTokensMap())
   }
 }
 
@@ -28,7 +28,7 @@ trait ServiceTokens {
   def +(st: ServiceToken): ServiceTokens
 }
 
-case class ServiceTokensMap(map: Map[String, String]) extends ServiceTokens {
+case class ServiceTokensMap(map: Map[String, String] = Map[String, String]()) extends ServiceTokens {
   def get(name: String) =
     map.get(name).map(v => ServiceToken(name, v))
   def +(st: ServiceToken): ServiceTokensMap =
@@ -42,12 +42,11 @@ case class ServiceTokensSet(set: Set[ServiceToken]) extends ServiceTokens {
     ServiceTokensSet(set + st)
 }
 
-case class MasterTokenOnly(master: MasterToken) extends SessionTokens {
-  val services = None
+case class TokensOption(master: MasterToken, services: Option[ServiceTokensMap]) extends SessionTokens {
   def service(name: String) =
-    None
+    services.flatMap(_ get name)
   def +(token: ServiceToken): Tokens =
-    Tokens(master, ServiceTokensMap(Map[String, String](token.name -> token.value)))
+    Tokens(master, services.map(_ + token).getOrElse(ServiceTokensMap()))
 }
 
 case class Tokens(master: MasterToken, services: ServiceTokensMap) extends SessionTokens {
@@ -57,14 +56,7 @@ case class Tokens(master: MasterToken, services: ServiceTokensMap) extends Sessi
     Tokens(master, services + token)
 }
 
-
 object TokenJson {
-  val i = """{"auth_service": "abcd", "service_tokens": {"service1": "jk", "service2": "ep"}}"""
-
-  implicit def MTokenCodecJson: CodecJson[MasterToken] = casecodec1(MasterToken.apply, MasterToken.unapply)("auth_service")
-  implicit def STokensMapCodeJson: CodecJson[ServiceTokensMap] = casecodec1(ServiceTokensMap.apply, ServiceTokensMap.unapply)("service_tokens")
-
-  /*
   implicit def TokensCodecJson: CodecJson[Tokens] =
     CodecJson(
       (ts: Tokens) =>
@@ -72,28 +64,7 @@ object TokenJson {
         ("service_tokens" := ts.services) ->:
           jEmptyObject,
       c => for {
-        master <- (c --\ "auth_service").as[MasterToken]
-        services <- (c --\ "service_tokens").as[ServiceTokensMap]
-      } yield Tokens(master, services))
-
-  i.decodeOption[Tokens]
-
-  implicit def STokenCodecJson: CodecJson[SToken] =
-    CodecJson(
-      (st: SToken) =>
-        (st.service := st.token) ->:
-          jEmptyObject,
-      c => for {
-        m <- (c --\ jString).as[Map[String, String]]
-        (k, v) <- m
-      } yield SToken(k, v))
-
-  implicit def STokenMapEncodeJson: EncodeJson[STokenMap] =
-    EncodeJson((stm: STokenMap) => ("service_tokens" := stm.service_tokens)) ->: jEmptyObject
-
-  implicit def STokenMapDecodeJson: DecodeJson[STokenMap] =
-    DecodeJson(c => for {
-      mp <- (c --\ "service_tokens").as[STokenMap]
-    } yield mp)
-    */
+        master <- (c --\ "auth_service").as[String]
+        services <- (c --\ "service_tokens").as[Map[String, String]]
+      } yield Tokens(MasterToken(master), ServiceTokensMap(services)))
 }
