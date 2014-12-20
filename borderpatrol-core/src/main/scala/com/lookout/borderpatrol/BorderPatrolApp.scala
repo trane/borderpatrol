@@ -2,6 +2,7 @@ package com.lookout.borderpatrol
 
 import java.net.{InetAddress, InetSocketAddress}
 
+import com.lookout.borderpatrol.session._
 import com.twitter.finagle.builder.{Server, ServerBuilder}
 
 import com.twitter.server.TwitterServer
@@ -10,26 +11,18 @@ import com.twitter.finagle.http.{Http, Request => FinagleRequest, Response => Fi
 
 object BorderPatrolApp extends TwitterServer {
 
-  //TODO: Flesh this out
-  class Session {
-    def token(name: String): Option[String] = {
-      val tokens = Map("flexd" -> "DEADBEEF", "mtp" -> "LIVEKALE")
-      tokens.get(name)
-    }
-  }
-
   //A Request with Routing and Session Information
-  class RoutedRequest(val httpRequest: HttpRequest, val session: Session)
-    extends FinagleRequest {
+  case class RoutedRequest(httpRequest: HttpRequest, service: String, session: Session) extends FinagleRequest {
     override val remoteSocketAddress: InetSocketAddress = new InetSocketAddress(InetAddress.getLoopbackAddress, 0) //TODO: This is wrong
+    def +(s: Session): RoutedRequest = copy(httpRequest, service, s)
+    def serviceToken: Option[ServiceToken] = for(t <- session.tokens; st <- t.service(service)) yield st
   }
 
   //Unsuccessful Response
-  case class NeedsAuthResponse (httpResponse: HttpResponse) extends FinagleResponse //with BorderPatrolResponse
+  case class NeedsAuthResponse(httpResponse: HttpResponse) extends FinagleResponse //with BorderPatrolResponse
 
   //Successful response
-  case class Response (httpResponse: HttpResponse) extends FinagleResponse //with BorderPatrolResponse
-
+  case class Response(httpResponse: HttpResponse) extends FinagleResponse //with BorderPatrolResponse
 
   val sessionFilter = new SessionFilter
   val upstreamService = new UpstreamService

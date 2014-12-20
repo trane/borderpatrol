@@ -2,6 +2,7 @@ package com.lookout.borderpatrol
 
 import java.util.concurrent.TimeUnit
 import com.twitter.util.{Future, Await, Duration}
+import org.jboss.netty.handler.codec.http.HttpRequest
 
 import scala.util.Try
 
@@ -40,9 +41,9 @@ package object session {
     implicit val generator: SessionIdGenerator = new SessionIdGenerator
     val sessionStore = new InMemorySessionStore
 
-    def apply(req: Any): Session = NewSession(req)
+    def apply(request: HttpRequest): Session = NewSession(request)
 
-    def apply(s: String, req: Any): Session =
-      Await.result(sessionStore.get(s) or Future.value(NewSession(req)))
+    def apply(s: String, request: HttpRequest): Session =
+      sessionStore.get(s) getOrElse NewSession(request)
   }
 }
