@@ -3,6 +3,7 @@ package com.lookout.borderpatrol
 import java.net.{InetAddress, InetSocketAddress}
 
 import com.twitter.finagle.builder.{Server, ServerBuilder}
+
 import com.twitter.server.TwitterServer
 import org.jboss.netty.handler.codec.http._
 import com.twitter.finagle.http.{Http, Request => FinagleRequest, Response => FinagleResponse}
