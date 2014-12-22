@@ -9,7 +9,7 @@ This module includes dummy integration test services for Border Patrol.
 #### Darwin
 
 * bundle install
-* god load borderpatrol
+* god -Dbc borderpatrol.god
 
 [God](http://godrb.com) to run 4 processes, on the following ports
 
@@ -18,4 +18,7 @@ This module includes dummy integration test services for Border Patrol.
  * `9083` Mock downstream service B
  * `9084` Mock Account Service
 
-To stop the integration services, run god stop borderpatrol
+To stop the integration services, kill god and shotgun
+
+pkill -9 -f shotgun; pkill -9 -f god
+
