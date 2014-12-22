@@ -15,7 +15,19 @@ object BorderPatrolApp extends TwitterServer {
   case class RoutedRequest(httpRequest: HttpRequest, service: String, session: Session) extends FinagleRequest {
     override val remoteSocketAddress: InetSocketAddress = new InetSocketAddress(InetAddress.getLoopbackAddress, 0) //TODO: This is wrong
     def +(s: Session): RoutedRequest = copy(httpRequest, service, s)
+    def +(t: Option[SessionTokens]) = copy(httpRequest, service, ExistingSession(session.id, session.originalRequest, t))
     def serviceToken: Option[ServiceToken] = for(t <- session.tokens; st <- t.service(service)) yield st
+    def toHttpRequest: HttpRequest = {
+      addAuthHeaders
+      addBorderHeaders
+      httpRequest
+    }
+    /* TODO: make this more functional */
+    def addAuthHeaders: Unit =
+      serviceToken.foreach(t => httpRequest.headers.add("Auth-Token", t))
+    /* TODO: make this more functional */
+    def addBorderHeaders: Unit =
+      httpRequest.headers.add("Via", "Border Patrol")
   }
 
   //Unsuccessful Response
@@ -26,7 +38,7 @@ object BorderPatrolApp extends TwitterServer {
 
   val sessionFilter = new SessionFilter
   val upstreamService = new UpstreamService
-  val upstreamFilter = new UpstreamFilter(None, None)
+  val upstreamFilter = new UpstreamFilter(authService)
   val routingFilter = new RoutingFilter
   val loginFilter = new LoginFilter
   val loginService = new LoginService

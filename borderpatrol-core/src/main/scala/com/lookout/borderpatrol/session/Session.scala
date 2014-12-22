@@ -18,12 +18,16 @@ sealed trait Session {
   val tokens: Option[SessionTokens]
 }
 
+object Session {
+
+}
+
 case class NewSession(originalRequest: HttpRequest)(implicit g: SessionIdGenerator, s: SecretStoreApi) extends Session {
   lazy val id = g.next
   val tokens = None
 }
 
-case class ExistingSession(id: SessionId, originalRequest: HttpRequest, tokens: Option[ServiceTokens]) extends Session
+case class ExistingSession(id: SessionId, originalRequest: HttpRequest, tokens: Option[SessionTokens]) extends Session
 
 /**
  * This prototypes an API, and should be implemented using some shared store.

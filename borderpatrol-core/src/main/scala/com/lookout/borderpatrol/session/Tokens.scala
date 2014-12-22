@@ -2,6 +2,7 @@ package com.lookout.borderpatrol.session
 
 import argonaut._
 import Argonaut._
+import org.jboss.netty.buffer.ChannelBuffer
 
 sealed trait Token {
   val value: String
@@ -67,4 +68,9 @@ object TokenJson {
         master <- (c --\ "auth_service").as[String]
         services <- (c --\ "service_tokens").as[Map[String, String]]
       } yield Tokens(MasterToken(master), ServiceTokensMap(services)))
+
+  def apply(s: String) =
+    s.decodeOption[Tokens]
+  def apply(b: ChannelBuffer) =
+    b.toString.decodeOption[Tokens]
 }
