@@ -24,7 +24,6 @@ class AuthService extends Service[HttpRequest, FinagleResponse] {
       """
     val result: FinagleResponse = new Response(new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK))
     result.setContentString(tokens)
-    //result.setContentType("application/json")
     result.setContentTypeJson()
     val r = Future.value(result)
     println("<----------------------------- AuthService------------------------------")

@@ -27,7 +27,7 @@ class UpstreamFilter(auth: Service[RoutedRequest, FinagleResponse]) extends Filt
     val r = service(request.toHttpRequest) flatMap (firstResponse => firstResponse match {
       case NeedsAuthResponse(_) => loginResponseOrAuthRequest(request) flatMap { loginOrAuthenticated =>
         val (loginResponse, authRequest) = loginOrAuthenticated
-        println(authRequest.session.tokens)
+        println("Tokens are " + authRequest.session.tokens)
         if (authRequest.serviceToken.isDefined)
           service(authRequest.toHttpRequest) map (lastResponse => lastResponse match {
             case NeedsAuthResponse(_) => loginResponse
@@ -43,6 +43,8 @@ class UpstreamFilter(auth: Service[RoutedRequest, FinagleResponse]) extends Filt
     r
   }
 
-  def loginResponseOrAuthRequest(request: RoutedRequest): Future[(FinagleResponse, RoutedRequest)] =
+  def loginResponseOrAuthRequest(request: RoutedRequest): Future[(FinagleResponse, RoutedRequest)] = {
     auth(request) map (resp => (resp, request + TokenJson(resp.contentString)))
+  }
+
 }
