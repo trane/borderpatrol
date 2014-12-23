@@ -1,10 +1,10 @@
 package com.lookout.borderpatrol
 
-import com.lookout.borderpatrol.BorderPatrolApp.{Response, RoutedRequest}
+import com.lookout.borderpatrol.BorderPatrolApp.RoutedRequest
 import com.lookout.borderpatrol.session._
+import com.twitter.finagle.http.{Cookie, Request => FinagleRequest, Response => FinagleResponse}
 import com.twitter.finagle.{Service, SimpleFilter}
-import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse, Cookie, Http}
-import org.jboss.netty.handler.codec.http.{Cookie => NettyCookie, DefaultCookie}
+import org.jboss.netty.handler.codec.http.{Cookie => NettyCookie}
 
 
 /**
@@ -14,8 +14,13 @@ class SessionFilter extends SimpleFilter[RoutedRequest, FinagleResponse] {
   val cookieName = "border_session"
   implicit val marshaller = SecureSession.marshaller
 
-  def apply(request: RoutedRequest, service: Service[RoutedRequest, FinagleResponse]) =
-    service(request) map (response => responseWithCookie(response)(request))
+  def apply(request: RoutedRequest, service: Service[RoutedRequest, FinagleResponse]) ={
+    println("------------------------------ SessionFilter ----------------------------->")
+    val r = service(request) map (response => responseWithCookie(response)(request))
+    println("<------------------------------ SessionFilter -----------------------------")
+    r
+  }
+
 
   /**
    * Set the cookie header on the response if not set or needs to be replaced
