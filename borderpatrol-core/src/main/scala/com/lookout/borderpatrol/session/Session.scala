@@ -15,19 +15,25 @@ object SessionExpiry extends Expiry {
 sealed trait Session {
   val id: SessionId
   val originalRequest: HttpRequest
-  val tokens: Option[SessionTokens]
+  val tokens: Tokens
 }
 
 object Session {
+  import SecureSession.{generator,secretStore,sessionStore}
 
+  def apply(id: SessionId, originalRequest: HttpRequest, tokens: Tokens): Session =
+    sessionStore.update(ExistingSession(id, originalRequest, tokens))
+
+  def apply(s: String, originalRequest: HttpRequest): Session =
+    sessionStore.get(s) getOrElse NewSession(originalRequest)
 }
 
 case class NewSession(originalRequest: HttpRequest)(implicit g: SessionIdGenerator, s: SecretStoreApi) extends Session {
   lazy val id = g.next
-  val tokens = None
+  val tokens = Tokens(EmptyToken, EmptyServiceTokens)
 }
 
-case class ExistingSession(id: SessionId, originalRequest: HttpRequest, tokens: Option[SessionTokens]) extends Session
+case class ExistingSession(id: SessionId, originalRequest: HttpRequest, tokens: Tokens) extends Session
 
 /**
  * This prototypes an API, and should be implemented using some shared store.
@@ -37,7 +43,7 @@ case class ExistingSession(id: SessionId, originalRequest: HttpRequest, tokens: 
  */
 sealed trait SessionStoreApi {
   def get(s: String): Option[Session]
-  def update(s: Session): Future[Boolean]
+  def update(s: Session): Session
 }
 
 trait SessionStoreComponent {
@@ -54,8 +60,8 @@ case class InMemorySessionStore(implicit marshaller: SessionIdMarshaller) extend
   def get(id: SessionId): Option[Session] =
     get(id.asString)
 
-  def update(s: Session): Future[Boolean] = {
+  def update(s: Session): Session = {
     _store = _store.updated(s.id.asString, s)
-    Future.value(true)
+    s
   }
 }

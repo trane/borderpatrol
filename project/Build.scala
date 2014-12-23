@@ -30,7 +30,8 @@ object BorderPatrol extends Build {
     resolvers += "twitter-repo" at "http://maven.twttr.com",
 
     // This is bad news for things like com.twitter.util.Time
-    parallelExecution in Test := false
+    parallelExecution in Test := false,
+    fork := true
 
   )
 
