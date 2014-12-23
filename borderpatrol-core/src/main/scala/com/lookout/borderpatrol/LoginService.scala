@@ -2,9 +2,9 @@ package com.lookout.borderpatrol
 
 import com.lookout.borderpatrol.BorderPatrolApp.{Response, RoutedRequest}
 import com.twitter.finagle.Service
+import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse}
 import com.twitter.util.Future
 import org.jboss.netty.handler.codec.http._
-import com.twitter.finagle.http.{Http, Request => FinagleRequest, Response => FinagleResponse}
 
 
 /**

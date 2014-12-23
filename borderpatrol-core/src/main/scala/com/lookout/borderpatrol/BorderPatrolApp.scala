@@ -4,15 +4,9 @@ import java.net.{InetAddress, InetSocketAddress}
 
 import com.lookout.borderpatrol.session._
 import com.twitter.finagle.builder.{Server, ServerBuilder}
-import com.lookout.borderpatrol.routing._
-import com.lookout.borderpatrol.auth._
-import com.lookout.borderpatrol.sessions._
-import com.twitter.finagle.http.{RichHttp, Response, Request}
-import com.twitter.finagle.{Filter, _}
-import com.twitter.finagle.builder.{ServerBuilder, ClientBuilder}
+import com.twitter.finagle.http.{Http, Request => FinagleRequest, Response => FinagleResponse}
 import com.twitter.server.TwitterServer
 import org.jboss.netty.handler.codec.http._
-import com.twitter.finagle.http.{Http, Request => FinagleRequest, Response => FinagleResponse}
 
 object BorderPatrolApp extends TwitterServer {
 
@@ -29,7 +23,7 @@ object BorderPatrolApp extends TwitterServer {
     }
     /* TODO: make this more functional */
     def addAuthHeaders: Unit =
-      serviceToken.foreach(t => httpRequest.headers.add("Auth-Token", t))
+      serviceToken.foreach(t => httpRequest.headers.add("Auth-Token", t.value))
     /* TODO: make this more functional */
     def addBorderHeaders: Unit =
       httpRequest.headers.add("Via", "Border Patrol")
@@ -42,18 +36,14 @@ object BorderPatrolApp extends TwitterServer {
   case class Response(httpResponse: HttpResponse) extends FinagleResponse //with BorderPatrolResponse
 
   val sessionFilter = new SessionFilter
-  val upstreamService = new UpstreamService
+  var authService = new AuthService
+  val upstreamService = new UpstreamService(authService)
   val upstreamFilter = new UpstreamFilter(authService)
   val routingFilter = new RoutingFilter
   val loginFilter = new LoginFilter
   val loginService = new LoginService
-  var authService = new AuthService
-  val authFilter = new AuthFilterCond(authService)
-  val upstreamCombination = upstreamFilter andThen upstreamService
-  val loginCombination = loginFilter andThen authFilter
-  val upStreamFilterWithLeft = new UpstreamFilter(Some(loginCombination andThen upstreamFilter andThen upstreamService), Some(upstreamService))
 
-  val orchestratorService = routingFilter andThen sessionFilter andThen upStreamFilterWithLeft andThen upstreamService
+  val orchestratorService = routingFilter andThen sessionFilter andThen upstreamFilter andThen upstreamService
 
   def main() {
     val server: Server = ServerBuilder()

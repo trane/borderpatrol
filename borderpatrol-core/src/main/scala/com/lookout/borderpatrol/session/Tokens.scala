@@ -58,6 +58,11 @@ case class Tokens(master: MasterToken, services: ServiceTokensMap) extends Sessi
 }
 
 object TokenJson {
+  implicit def MasterTokenCodecJson: CodecJson[MasterToken] =
+    casecodec1(MasterToken.apply, MasterToken.unapply)("auth_tokens")
+
+  implicit def ServiceTokensCodecJson: CodecJson[ServiceTokensMap] =
+    casecodec1(ServiceTokensMap.apply, ServiceTokensMap.unapply)("service_tokens")
   implicit def TokensCodecJson: CodecJson[Tokens] =
     CodecJson(
       (ts: Tokens) =>
@@ -72,5 +77,5 @@ object TokenJson {
   def apply(s: String) =
     s.decodeOption[Tokens]
   def apply(b: ChannelBuffer) =
-    b.toString.decodeOption[Tokens]
+    b.toString().decodeOption[Tokens]
 }

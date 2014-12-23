@@ -1,8 +1,8 @@
 package com.lookout.borderpatrol
 
-import com.lookout.borderpatrol.BorderPatrolApp.{Response, RoutedRequest}
+import com.lookout.borderpatrol.BorderPatrolApp.RoutedRequest
+import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse}
 import com.twitter.finagle.{Service, SimpleFilter}
-import com.twitter.finagle.http.{Http, Request => FinagleRequest, Response => FinagleResponse}
 /**
  * Created by wkimeria on 12/11/14.
  */

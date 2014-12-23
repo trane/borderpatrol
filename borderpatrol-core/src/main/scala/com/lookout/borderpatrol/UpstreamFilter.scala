@@ -8,10 +8,10 @@ package com.lookout.borderpatrol
  */
 
 import com.lookout.borderpatrol.BorderPatrolApp._
-import com.lookout.borderpatrol.session.{SessionTokens, TokenJson}
-import com.twitter.finagle.{Filter, SimpleFilter, Service}
-import com.twitter.util.{Future, Await}
-import com.twitter.finagle.http.{Http, Request => FinagleRequest, Response => FinagleResponse}
+import com.lookout.borderpatrol.session.TokenJson
+import com.twitter.finagle.http.{Response => FinagleResponse}
+import com.twitter.finagle.{Filter, Service}
+import com.twitter.util.Future
 import org.jboss.netty.handler.codec.http.HttpRequest
 
 
@@ -22,10 +22,12 @@ import org.jboss.netty.handler.codec.http.HttpRequest
  */
 class UpstreamFilter(auth: Service[RoutedRequest, FinagleResponse]) extends Filter[RoutedRequest, FinagleResponse, HttpRequest, FinagleResponse] {
 
-  def apply(request: RoutedRequest, service: Service[HttpRequest, FinagleResponse]): Future[FinagleResponse] =
-    service(request.toHttpRequest) flatMap (firstResponse => firstResponse match {
+  def apply(request: RoutedRequest, service: Service[HttpRequest, FinagleResponse]): Future[FinagleResponse] = {
+    println("------------------------------ UpstreamFilter ----------------------------->")
+    val r = service(request.toHttpRequest) flatMap (firstResponse => firstResponse match {
       case NeedsAuthResponse(_) => loginResponseOrAuthRequest(request) flatMap { loginOrAuthenticated =>
         val (loginResponse, authRequest) = loginOrAuthenticated
+        println(authRequest.session.tokens)
         if (authRequest.serviceToken.isDefined)
           service(authRequest.toHttpRequest) map (lastResponse => lastResponse match {
             case NeedsAuthResponse(_) => loginResponse
@@ -33,9 +35,14 @@ class UpstreamFilter(auth: Service[RoutedRequest, FinagleResponse]) extends Filt
           })
         else Future.value(loginResponse)
       }
-      case _ => Future.value(firstResponse)
+      case _ => {
+        Future.value(firstResponse)
+      }
     })
+    println("<------------------------------ UpstreamFilter -----------------------------")
+    r
+  }
 
   def loginResponseOrAuthRequest(request: RoutedRequest): Future[(FinagleResponse, RoutedRequest)] =
-    auth(request) map (resp => (resp, request + TokenJson(resp.content.toString)))
+    auth(request) map (resp => (resp, request + TokenJson(resp.contentString)))
 }
