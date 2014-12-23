@@ -10,7 +10,7 @@ import org.jboss.netty.handler.codec.http._
 /**
  * Created by wkimeria on 12/11/14.
  */
-class LoginService extends Service[RoutedRequest, Response] {
+class LoginService extends Service[RoutedRequest, FinagleResponse] {
   def apply(request: RoutedRequest) = {
     println("----------------------------- LoginService------------------------------>")
     val r = Future.value(new Response(new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK)))

@@ -1,6 +1,6 @@
 package com.lookout.borderpatrol
 
-import com.lookout.borderpatrol.BorderPatrolApp.{NeedsAuthResponse, Response}
+import com.lookout.borderpatrol.BorderPatrolApp.{RoutedRequest, NeedsAuthResponse, Response}
 import com.twitter.finagle.Service
 import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse}
 import com.twitter.util.Future
@@ -9,7 +9,7 @@ import org.jboss.netty.handler.codec.http._
 /**
  * Created by wkimeria on 12/10/14.
  */
-class UpstreamService(authService: Service[HttpRequest, HttpResponse]) extends Service[HttpRequest, FinagleResponse] {
+class UpstreamService(authService: Service[RoutedRequest, HttpResponse]) extends Service[HttpRequest, FinagleResponse] {
   def apply(request: HttpRequest) = {
     println("------------------------------ UpstreamService ----------------------------->")
     //request.headers.entries.asInstanceOf[List[Map[String, String]]].foreach(println(_))
