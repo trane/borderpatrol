@@ -1,9 +1,9 @@
 package com.lookout.borderpatrol
 
 import com.lookout.borderpatrol.BorderPatrolApp.{RoutedRequest, NeedsAuthResponse, Response}
-import com.twitter.finagle.Service
+import com.twitter.finagle.{Http, Service}
 import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse}
-import com.twitter.util.Future
+import com.twitter.util.{Await, Future}
 import org.jboss.netty.handler.codec.http._
 
 /**
@@ -11,24 +11,18 @@ import org.jboss.netty.handler.codec.http._
  */
 class UpstreamService(authService: Service[RoutedRequest, HttpResponse]) extends Service[HttpRequest, FinagleResponse] {
   def apply(request: HttpRequest) = {
-    println("------------------------------ UpstreamService ----------------------------->")
-    //request.headers.entries.asInstanceOf[List[Map[String, String]]].foreach(println(_))
-    val r = Future.value(
-      request.getUri match {
-        case "/good" => new Response(new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK))
-        case _ => {
-          println(" Token = " + request.headers().get("Auth-Token"))
-          if (request.headers().get("Auth-Token")!= null && request.headers().get("Auth-Token").contains("DEADLAKE")){
-            val resp = new Response(new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK))
-            resp.setContentString("I am a Teapot")
-            resp
-          }else{
-            new NeedsAuthResponse(new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.UNAUTHORIZED))
-          }
-
-        }
+    println("------------------------------ UpstreamService " + request.getUri + "----------------------------->")
+    //val resp = Http.fetchUrl("https://localhost:8081/mtp" + request.getUri)
+    val resp = Http.fetchUrl("https://localhost:8081/mtp")  //TODO: This needs to be the appropriate HTTP Verb
+    val response = new Response(Await.result(resp))
+    val modifiedResponse = response.status match {
+      case HttpResponseStatus.UNAUTHORIZED => {
+        println("returning a 401")
+        new NeedsAuthResponse(new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.UNAUTHORIZED))
       }
-    )
+      case _ => response
+    }
+    val r = Future.value(modifiedResponse)
     println("<----------------------------- UpstreamService ------------------------------")
     r
   }

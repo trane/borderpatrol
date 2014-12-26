@@ -4,6 +4,7 @@ import java.net.{InetAddress, InetSocketAddress}
 
 import com.lookout.borderpatrol.session._
 import com.twitter.finagle.http.{Http, Request => FinagleRequest, Response => FinagleResponse}
+import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse, HttpMuxer, Http}
 import com.twitter.finagle.http.{RichHttp, Response, Request}
 import com.twitter.finagle.{Filter, _}
 import com.twitter.server.TwitterServer
@@ -87,15 +88,20 @@ object BorderPatrolApp extends TwitterServer {
   val orchestratorService = routingFilter andThen sessionFilter andThen upstreamFilter andThen upstreamService
 
 
-  /*
-  val authFilter = new AuthFilterCond(authService)
-  val upstreamCombination = upstreamFilter andThen upstreamService
-  val loginCombination = loginFilter andThen authFilter
-  val upStreamFilterWithLeft = new UpstreamFilter(Some(loginCombination andThen upstreamFilter andThen upstreamService), Some(upstreamService))
-
-  val orchestratorService = routingFilter andThen sessionFilter andThen upStreamFilterWithLeft andThen upstreamService
-  */
-
   def main() {
+    val server: Server = ServerBuilder()
+      .codec(Http())
+      .bindTo(new InetSocketAddress(8080))
+      .name("BorderPatrol-1")
+      .build(orchestratorService)
+
+    HttpMuxer.addHandler("/mtp", new MtpService)
+    HttpMuxer.addHandler("/mtp/", new MtpService)
+
+    val server2: Server = ServerBuilder()
+      .codec(Http())
+      .bindTo(new InetSocketAddress(8081))
+      .name("BorderPatrol-2")
+      .build(HttpMuxer)
   }
 }

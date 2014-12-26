@@ -37,5 +37,4 @@ class UpstreamFilter(auth: Service[RoutedRequest, AuthResponse]) extends Filter[
     println("<------------------------------ UpstreamFilter -----------------------------")
     r
   }
-
 }
