@@ -1,6 +1,9 @@
 package com.lookout.borderpatrol
 
+<<<<<<< HEAD
 import com.lookout.borderpatrol.BorderPatrolApp.{NeedsAuthResponse, Response}
+=======
+>>>>>>> de0f14b... Implement mock login/auth/token services
 import com.twitter.finagle.{Http, Service}
 import com.lookout.borderpatrol.BorderPatrolApp.{RoutedRequest, NeedsAuthResponse, Response}
 import com.twitter.finagle.Service
@@ -9,24 +12,23 @@ import com.twitter.util.{Await, Future}
 import org.jboss.netty.handler.codec.http._
 
 /**
- * Created by wkimeria on 12/10/14.
+ * Generic upstream service
+ * @param authService
  */
 class UpstreamService(authService: Service[RoutedRequest, HttpResponse]) extends Service[HttpRequest, FinagleResponse] {
   def apply(request: HttpRequest) = {
     println("------------------------------ UpstreamService " + request.getUri + "----------------------------->")
     //val resp = Http.fetchUrl("https://localhost:8081/mtp" + request.getUri)
-    val resp = Http.fetchUrl("https://localhost:8081/mtp")  //TODO: This needs to be the appropriate HTTP Verb
-    val response = new Response(Await.result(resp))
-    val modifiedResponse = response.status match {
-      case HttpResponseStatus.UNAUTHORIZED => {
-        println("returning a 401")
-        new NeedsAuthResponse(new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.UNAUTHORIZED))
+    val r = Http.fetchUrl("https://localhost:8081/mtp") map { resp => //TODO: This needs to be the appropriate HTTP Verb
+      resp.getStatus match {
+        case HttpResponseStatus.UNAUTHORIZED => {
+          println("returning a 401")
+          NeedsAuthResponse(resp)
+        }
+        case _ => new Response(resp)
       }
-      case _ => response
     }
-    val r = Future.value(modifiedResponse)
     println("<----------------------------- UpstreamService ------------------------------")
     r
   }
-
 }

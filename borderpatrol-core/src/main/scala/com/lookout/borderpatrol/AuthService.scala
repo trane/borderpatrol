@@ -1,7 +1,6 @@
 package com.lookout.borderpatrol
 
 
-import com.lookout.borderpatrol.BorderPatrolApp.{RoutedRequest, Response}
 import com.lookout.borderpatrol.session.{Session, MasterToken, EmptyToken}
 import com.lookout.borderpatrol.session.TokenJson.{TokensJson, ServiceTokensJson}
 import com.twitter.finagle.Service
@@ -10,9 +9,6 @@ import com.twitter.io.Charsets
 import com.twitter.util.Future
 import org.jboss.netty.handler.codec.http._
 
-/**
- * Created by wkimeria on 12/11/14.
- */
 trait AuthResponse extends FinagleResponse
 case class TokenResponse(request: RoutedRequest) extends AuthResponse {
   val httpResponse = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK)
@@ -20,13 +16,13 @@ case class TokenResponse(request: RoutedRequest) extends AuthResponse {
 case class LoginResponse(httpResponse: HttpResponse) extends AuthResponse
 
 class AuthService(tokenService: Service[HttpRequest, FinagleResponse],
-                  loginService: Service[RoutedRequest, FinagleResponse]) extends Service[RoutedRequest, AuthResponse] {
+                  loginService: Service[RoutedRequest, FinagleResponse]) extends Service[RoutedRequest, FinagleResponse] {
 
-  def apply(request: RoutedRequest) = {
+  def apply(request: RoutedRequest): Future[AuthResponse] = {
     println("----------------------------- AuthService------------------------------>")
-    val r = request.session.tokens.master match {
+    val r: Future[AuthResponse] = request.session.tokens.master match {
       case t: MasterToken => getServiceTokens(request, t) map (rrequest => TokenResponse(rrequest))
-      case _ => getLoginPage(request) map (response => LoginResponse(response))
+      case _ => loginService(request) map (response => LoginResponse(response))
     }
     println("<----------------------------- AuthService------------------------------")
     r
@@ -49,8 +45,4 @@ class AuthService(tokenService: Service[HttpRequest, FinagleResponse],
       TokensJson(json).foldRight(request)((tokens, req) => req ++ tokens)
     }
   }
-
-  def getLoginPage(request: RoutedRequest): Future[FinagleResponse] =
-    loginService(request)
-
 }
