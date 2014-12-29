@@ -2,6 +2,8 @@ package com.lookout.borderpatrol.session
 
 import java.util.concurrent.TimeUnit
 
+import com.lookout.borderpatrol.RoutedRequest
+import com.twitter.finagle.http.{Request => FinagleRequest}
 import com.twitter.util.{Future, Duration}
 import org.jboss.netty.handler.codec.http.HttpRequest
 
@@ -26,6 +28,9 @@ object Session {
 
   def apply(s: String, originalRequest: HttpRequest): Session =
     sessionStore.get(s) getOrElse NewSession(originalRequest)
+
+  def apply(request: RoutedRequest): Session =
+    request.borderCookie.flatMap(id => sessionStore.get(id)) getOrElse NewSession(request.httpRequest)
 }
 
 case class NewSession(originalRequest: HttpRequest)(implicit g: SessionIdGenerator, s: SecretStoreApi) extends Session {
