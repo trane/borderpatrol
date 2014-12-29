@@ -11,6 +11,7 @@ class RoutingFilter extends Filter[HttpRequest, FinagleResponse, RoutedRequest, 
   def apply(request: HttpRequest, service: Service[RoutedRequest, FinagleResponse]) = {
     println(request.getUri + "-------- RoutingFilter ------------------------------>")
     val rRequest = RoutedRequest(request, serviceName(request.getUri))
+    println( "Session type " + rRequest.session)
     println(" Service is >" + rRequest.service + "<")
     val r = service(rRequest)
     println("<----------------------------- RoutingFilter ------------------------------")

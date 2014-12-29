@@ -17,7 +17,7 @@ import com.twitter.finagle.http.{Http, Request => FinagleRequest, Response => Fi
  *
  * @param auth The auth service, to be called on an initial 401
  */
-class UpstreamFilter(auth: Service[RoutedRequest, AuthResponse]) extends Filter[RoutedRequest, FinagleResponse, FinagleRequest, FinagleResponse] {
+class UpstreamFilter(auth: Service[RoutedRequest, FinagleResponse]) extends Filter[RoutedRequest, FinagleResponse, FinagleRequest, FinagleResponse] {
 
   def apply(request: RoutedRequest, service: Service[FinagleRequest, FinagleResponse]): Future[FinagleResponse] = {
     println("------------------------------ UpstreamFilter ----------------------------->")

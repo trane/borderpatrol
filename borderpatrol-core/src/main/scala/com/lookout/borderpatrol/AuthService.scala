@@ -16,7 +16,7 @@ case class TokenResponse(request: RoutedRequest) extends AuthResponse {
 case class LoginResponse(httpResponse: HttpResponse) extends AuthResponse
 
 class AuthService(tokenService: Service[HttpRequest, FinagleResponse],
-                  loginService: Service[RoutedRequest, FinagleResponse]) extends Service[RoutedRequest, AuthResponse] {
+                  loginService: Service[RoutedRequest, FinagleResponse]) extends Service[RoutedRequest, FinagleResponse] {
 
   def apply(request: RoutedRequest): Future[AuthResponse] = {
     println("----------------------------- AuthService------------------------------>")

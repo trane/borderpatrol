@@ -29,8 +29,10 @@ object Session {
   def apply(s: String, originalRequest: HttpRequest): Session =
     sessionStore.get(s) getOrElse NewSession(originalRequest)
 
-  def apply(request: RoutedRequest): Session =
+  def apply(request: RoutedRequest): Session = {
+    println("Setting Session...")
     request.borderCookie.flatMap(id => sessionStore.get(id)) getOrElse NewSession(request.httpRequest)
+  }
 }
 
 case class NewSession(originalRequest: HttpRequest)(implicit g: SessionIdGenerator, s: SecretStoreApi) extends Session {

@@ -36,7 +36,8 @@ class SessionFilter extends SimpleFilter[RoutedRequest, FinagleResponse] {
    */
   def responseWithCookie(response: FinagleResponse)(request: RoutedRequest): FinagleResponse = {
     val id = request.session.id.asString
-    request.cookies.getValue(SecureSession.cookieName).filter(_ != id).foreach(_ => setCookie(response, id))
+    //request.cookies.getValue(SecureSession.cookieName).filter(_ != id).foreach(_ => setCookie(response, id))
+   setCookie(response, id)
     response
   }
 
@@ -46,9 +47,10 @@ class SessionFilter extends SimpleFilter[RoutedRequest, FinagleResponse] {
    * @param value The session id string
    */
   def setCookie(response: FinagleResponse, value: String): Unit = {
+    println("setting cookie ..." + value)
     val cookie = new Cookie(SecureSession.cookieName, value)
-    cookie.isSecure = true
-    cookie.domain = "lookout.com"
+    //cookie.isSecure = true
+    //cookie.domain = "lookout.com"
     response.addCookie(cookie)
   }
 }
