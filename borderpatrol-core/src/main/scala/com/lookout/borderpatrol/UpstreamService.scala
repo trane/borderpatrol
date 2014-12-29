@@ -13,18 +13,16 @@ class UpstreamService(authService: Service[RoutedRequest, HttpResponse]) extends
   def apply(request: HttpRequest) = {
     println("------------------------------ UpstreamService " + request.getUri + "----------------------------->")
     //val resp = Http.fetchUrl("https://localhost:8081/mtp" + request.getUri)
-    val resp = Http.fetchUrl("https://localhost:8081/mtp")  //TODO: This needs to be the appropriate HTTP Verb
-    val response = new Response(Await.result(resp))
-    val modifiedResponse = response.status match {
-      case HttpResponseStatus.UNAUTHORIZED => {
-        println("returning a 401")
-        NeedsAuthResponse(new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.UNAUTHORIZED))
+    val r = Http.fetchUrl("https://localhost:8081/mtp") map { resp => //TODO: This needs to be the appropriate HTTP Verb
+      resp.getStatus match {
+        case HttpResponseStatus.UNAUTHORIZED => {
+          println("returning a 401")
+          NeedsAuthResponse(resp)
+        }
+        case _ => new Response(resp)
       }
-      case _ => response
     }
-    val r = Future.value(modifiedResponse)
     println("<----------------------------- UpstreamService ------------------------------")
     r
   }
-
 }

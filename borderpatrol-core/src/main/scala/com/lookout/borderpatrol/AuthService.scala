@@ -18,9 +18,9 @@ case class LoginResponse(httpResponse: HttpResponse) extends AuthResponse
 class AuthService(tokenService: Service[HttpRequest, FinagleResponse],
                   loginService: Service[RoutedRequest, FinagleResponse]) extends Service[RoutedRequest, AuthResponse] {
 
-  def apply(request: RoutedRequest) = {
+  def apply(request: RoutedRequest): Future[AuthResponse] = {
     println("----------------------------- AuthService------------------------------>")
-    val r = request.session.tokens.master match {
+    val r: Future[AuthResponse] = request.session.tokens.master match {
       case t: MasterToken => getServiceTokens(request, t) map (rrequest => TokenResponse(rrequest))
       case _ => loginService(request) map (response => LoginResponse(response))
     }

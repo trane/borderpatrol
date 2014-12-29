@@ -21,16 +21,17 @@ class UpstreamFilter(auth: Service[RoutedRequest, AuthResponse]) extends Filter[
 
   def apply(request: RoutedRequest, service: Service[FinagleRequest, FinagleResponse]): Future[FinagleResponse] = {
     println("------------------------------ UpstreamFilter ----------------------------->")
-    val r = service(request) flatMap (firstResponse => firstResponse match {
-      case NeedsAuthResponse(_) => auth(request) flatMap (loginOrAuth => loginOrAuth match {
+
+    val r = service(request) flatMap (firstResponse => {firstResponse match {
+      case NeedsAuthResponse(_) => auth(request) flatMap (loginOrAuth => {loginOrAuth match {
         case TokenResponse(req) => service(req) flatMap (lastResponse => lastResponse match {
           case NeedsAuthResponse(_) => auth(request.clearTokens)
           case _ => Future.value(lastResponse)
         })
         case LoginResponse(_) => Future.value(loginOrAuth)
-      })
+      }})
       case _ => Future.value(firstResponse)
-    })
+    }})
     println("<------------------------------ UpstreamFilter -----------------------------")
     r
   }

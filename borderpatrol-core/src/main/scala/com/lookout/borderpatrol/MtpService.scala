@@ -8,9 +8,9 @@ import com.twitter.util.Future
 import org.jboss.netty.buffer.{ChannelBuffers, ChannelBuffer}
 import org.jboss.netty.handler.codec.http._
 
-class MtpService extends Service[FinagleRequest, FinagleResponse] {
+class MtpService extends Service[HttpRequest, FinagleResponse] {
 
-  def apply(request: FinagleRequest) = {
+  def apply(request: HttpRequest) = {
     println("------------------------------ MtpService " + request.getUri + " ----------------------------->")
     val r = Future.value(
       request.getUri match {

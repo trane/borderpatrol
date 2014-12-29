@@ -13,12 +13,13 @@ import org.jboss.netty.handler.codec.http.{HttpResponse, HttpRequest}
 
 object BorderPatrolApp extends TwitterServer {
 
+  val loginPipeline = new LoginFilter andThen new LoginService
+  val authService = new AuthService(new TokenService, loginPipeline)
   val sessionFilter = new SessionFilter
   val upstreamService = new UpstreamService(authService)
   val upstreamFilter = new UpstreamFilter(authService)
   val routingFilter = new RoutingFilter
-  val loginPipeline = new LoginFilter andThen new LoginService
-  val authService = new AuthService(new TokenService, loginPipeline)
+
 
   val basePipeline = routingFilter andThen sessionFilter
   val orchestratorService = basePipeline andThen upstreamFilter andThen upstreamService
@@ -30,8 +31,8 @@ object BorderPatrolApp extends TwitterServer {
   def main() {
 
     val router = RoutingService.byPath[HttpRequest] {
-      case "/mtp" => upstreamPipeline andThen new MtpService
-      case "/mtp/" => upstreamPipeline andThen new MtpService
+      case "/mtp" => new MtpService
+      case "/mtp/" => new MtpService
       case "/a" => authPipeline
       case "/a/" => authPipeline
     }
