@@ -2,80 +2,143 @@ package com.lookout.borderpatrol.session
 
 import argonaut._
 import Argonaut._
-import org.jboss.netty.buffer.ChannelBuffer
+
+import scalaz.State
 
 sealed trait Token {
   val value: String
 }
 
+case object EmptyToken extends Token {
+  val value = ""
+}
 case class MasterToken(value: String) extends Token
 case class ServiceToken(name: String, value: String) extends Token
 
-sealed trait SessionTokens {
-  val master: MasterToken
-  def service(name: String): Option[ServiceToken]
-  def +(token: ServiceToken): SessionTokens
-}
-
-object SessionTokens {
-  def apply(master: String, services: Option[Map[String, String]]): SessionTokens = services match {
-    case Some(s) => Tokens(MasterToken(master), ServiceTokensMap(s))
-    case None => Tokens(MasterToken(master), ServiceTokensMap())
-  }
-}
-
-trait ServiceTokens {
+trait ServiceTokensBase {
+  val services: Map[String,String]
   def get(name: String): Option[ServiceToken]
-  def +(st: ServiceToken): ServiceTokens
+  def +(st: ServiceToken): ServiceTokensBase
+  def ++(st: ServiceTokensBase): ServiceTokensBase
 }
 
-case class ServiceTokensMap(map: Map[String, String] = Map[String, String]()) extends ServiceTokens {
+case object EmptyServiceTokens extends ServiceTokensBase {
+  lazy val services = Map[String,String]()
+  def get(name: String) = None
+  def +(st: ServiceToken) = ServiceTokens(Map[String,String](st.name -> st.value))
+  def ++(st: ServiceTokensBase) = st
+}
+
+case class ServiceTokens(services: Map[String, String]) extends ServiceTokensBase {
   def get(name: String) =
-    map.get(name).map(v => ServiceToken(name, v))
-  def +(st: ServiceToken): ServiceTokensMap =
-    ServiceTokensMap(map + (st.name -> st.value))
+    services.get(name).map(v => ServiceToken(name, v))
+  def +(st: ServiceToken): ServiceTokens =
+    ServiceTokens(services + (st.name -> st.value))
+  def ++(st: ServiceTokensBase): ServiceTokens =
+    copy(services ++ st.services)
 }
 
-case class ServiceTokensSet(set: Set[ServiceToken]) extends ServiceTokens {
-  def get(name: String) =
-    set.find(_.name == name)
-  def +(st: ServiceToken): ServiceTokensSet =
-    ServiceTokensSet(set + st)
+case class Tokens(master: Token, services: ServiceTokensBase) {
+  def service(name: String): Option[ServiceToken] = services.get(name)
+  def +=(token: ServiceToken): Tokens = TokenState(token).run(this)._2
+  def +=(token: MasterToken): Tokens = TokenState(token).run(this)._2
+  def ++=(other: Tokens): Tokens = TokenState(other).run(this)._2
+  def ++=(tokens: ServiceTokensBase): Tokens = TokenState(tokens).run(this)._2
 }
 
-case class TokensOption(master: MasterToken, services: Option[ServiceTokensMap]) extends SessionTokens {
-  def service(name: String) =
-    services.flatMap(_ get name)
-  def +(token: ServiceToken): Tokens =
-    Tokens(master, services.map(_ + token).getOrElse(ServiceTokensMap()))
-}
+object TokenState {
+  /**
+   * Add master tokens to the current tokens
+   * @param token A master token
+   * @return
+   */
+  def apply(token: Token): State[Tokens, Tokens] = for {
+    _ <- State.modify((m: Tokens) => (token, m) match {
+      case (MasterToken(_), Tokens(MasterToken(_), _)) => m
+      case (ServiceToken(n, v), Tokens(_, st)) => m.copy(m.master, st + ServiceToken(n, v))
+      case (MasterToken(v), _) => m.copy(MasterToken(v), m.services)
+      case _ => m
+    })
+    s <- State.get
+  } yield Tokens(s.master, s.services)
 
-case class Tokens(master: MasterToken, services: ServiceTokensMap) extends SessionTokens {
-  def service(name: String) =
-    services get name
-  def +(token: ServiceToken): Tokens =
-    Tokens(master, services + token)
+  /**
+   * Add service tokens to the current tokens
+   * @param tokens A master token
+   * @return
+   */
+  def apply(tokens: ServiceTokensBase): State[Tokens, Tokens] = for {
+    _ <- State.modify((m: Tokens) => (tokens, m) match {
+      case (ServiceTokens(map), _) => m.copy(m.master, m.services ++ tokens)
+      case _ => m
+    })
+    s <- State.get
+  } yield Tokens(s.master, s.services)
+
+  /**
+   * Converge new tokens with the current tokens
+   * @param tokens A master token
+   * @return
+   */
+  def apply(tokens: Tokens): State[Tokens, Tokens] = for {
+    _ <- State.modify((m: Tokens) => m match {
+      case Tokens(mt, st) => m.copy(mt, m.services ++ st)
+      case _ => m
+    })
+    s <- State.get
+  } yield Tokens(s.master, s.services)
 }
 
 object TokenJson {
+
   implicit def MasterTokenCodecJson: CodecJson[MasterToken] =
     casecodec1(MasterToken.apply, MasterToken.unapply)("auth_tokens")
 
-  implicit def ServiceTokensCodecJson: CodecJson[ServiceTokensMap] =
-    casecodec1(ServiceTokensMap.apply, ServiceTokensMap.unapply)("service_tokens")
+  implicit def ServiceTokensCodecJson: CodecJson[ServiceTokens] =
+    casecodec1(ServiceTokens.apply, ServiceTokens.unapply)("service_tokens")
+
+  implicit def TokenCodecJson: CodecJson[Token] =
+    CodecJson(
+      (t: Token) =>
+        ("auth_service" := t.value) ->:
+          jEmptyObject,
+      c => for {
+        value <- (c --\ "auth_service").as[String]
+      } yield MasterToken(value))
+
+  implicit def ServiceTokensBaseCodecJson: CodecJson[ServiceTokensBase] =
+    CodecJson(
+      (t: ServiceTokensBase) =>
+        ("service_tokens" := t.services) ->:
+          jEmptyObject,
+      c => for {
+        tokens <- (c --\ "auth_service").as[Map[String,String]]
+      } yield ServiceTokens(tokens))
+
   implicit def TokensCodecJson: CodecJson[Tokens] =
     CodecJson(
       (ts: Tokens) =>
         ("auth_service" := ts.master) ->:
         ("service_tokens" := ts.services) ->:
-          jEmptyObject,
+        jEmptyObject,
       c => for {
         master <- (c --\ "auth_service").as[String]
         services <- (c --\ "service_tokens").as[Map[String, String]]
-      } yield Tokens(MasterToken(master), ServiceTokensMap(services)))
+      } yield Tokens(MasterToken(master), ServiceTokens(services)))
 
-  def apply(s: String) =
-    s.decodeOption[Tokens]
-  def apply(b: ChannelBuffer) =
-    b.toString().decodeOption[Tokens]
+  object MasterTokenJson {
+    def apply(s: String) =
+      s.decodeOption[MasterToken]
+  }
+
+  object ServiceTokensJson {
+    def apply(s: String) =
+      s.decodeOption[ServiceTokens]
+  }
+
+  object TokensJson {
+    def apply(s: String) =
+      s.decodeOption[Tokens]
+  }
+
 }

@@ -1,15 +1,15 @@
 package com.lookout.borderpatrol
 
-import com.lookout.borderpatrol.BorderPatrolApp.{NeedsAuthResponse, Response}
 import com.twitter.finagle.{Http, Service}
 import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse}
 import com.twitter.util.{Await, Future}
 import org.jboss.netty.handler.codec.http._
 
 /**
- * Created by wkimeria on 12/10/14.
+ * Generic upstream service
+ * @param authService
  */
-class UpstreamService(authService: Service[HttpRequest, HttpResponse]) extends Service[HttpRequest, FinagleResponse] {
+class UpstreamService(authService: Service[RoutedRequest, HttpResponse]) extends Service[HttpRequest, FinagleResponse] {
   def apply(request: HttpRequest) = {
     println("------------------------------ UpstreamService " + request.getUri + "----------------------------->")
     //val resp = Http.fetchUrl("https://localhost:8081/mtp" + request.getUri)
@@ -18,7 +18,7 @@ class UpstreamService(authService: Service[HttpRequest, HttpResponse]) extends S
     val modifiedResponse = response.status match {
       case HttpResponseStatus.UNAUTHORIZED => {
         println("returning a 401")
-        new NeedsAuthResponse(new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.UNAUTHORIZED))
+        NeedsAuthResponse(new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.UNAUTHORIZED))
       }
       case _ => response
     }

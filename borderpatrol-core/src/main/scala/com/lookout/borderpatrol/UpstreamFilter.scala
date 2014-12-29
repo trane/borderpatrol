@@ -7,12 +7,9 @@ package com.lookout.borderpatrol
  * the service once more with the Authorization Token
  */
 
-import com.lookout.borderpatrol.BorderPatrolApp._
-import com.lookout.borderpatrol.session.TokenJson
-import com.twitter.finagle.http.{Response => FinagleResponse}
-import com.twitter.finagle.{Filter, Service}
-import com.twitter.util.Future
-import org.jboss.netty.handler.codec.http.HttpRequest
+import com.twitter.finagle.{Filter, SimpleFilter, Service}
+import com.twitter.util.{Future, Await}
+import com.twitter.finagle.http.{Http, Request => FinagleRequest, Response => FinagleResponse}
 
 
 /**
@@ -20,31 +17,21 @@ import org.jboss.netty.handler.codec.http.HttpRequest
  *
  * @param auth The auth service, to be called on an initial 401
  */
-class UpstreamFilter(auth: Service[RoutedRequest, FinagleResponse]) extends Filter[RoutedRequest, FinagleResponse, HttpRequest, FinagleResponse] {
+class UpstreamFilter(auth: Service[RoutedRequest, AuthResponse]) extends Filter[RoutedRequest, FinagleResponse, FinagleRequest, FinagleResponse] {
 
-  def apply(request: RoutedRequest, service: Service[HttpRequest, FinagleResponse]): Future[FinagleResponse] = {
+  def apply(request: RoutedRequest, service: Service[FinagleRequest, FinagleResponse]): Future[FinagleResponse] = {
     println("------------------------------ UpstreamFilter ----------------------------->")
-    val r = service(request.toHttpRequest) flatMap (firstResponse => firstResponse match {
-      case NeedsAuthResponse(_) => loginResponseOrAuthRequest(request) flatMap { loginOrAuthenticated =>
-        val (loginResponse, authRequest) = loginOrAuthenticated
-        println("Tokens are " + authRequest.session.tokens)
-        if (authRequest.serviceToken.isDefined)
-          service(authRequest.toHttpRequest) map (lastResponse => lastResponse match {
-            case NeedsAuthResponse(_) => loginResponse
-            case _ => lastResponse
-          })
-        else Future.value(loginResponse)
-      }
-      case _ => {
-        Future.value(firstResponse)
-      }
+    val r = service(request) flatMap (firstResponse => firstResponse match {
+      case NeedsAuthResponse(_) => auth(request) flatMap (loginOrAuth => loginOrAuth match {
+        case TokenResponse(req) => service(req) flatMap (lastResponse => lastResponse match {
+          case NeedsAuthResponse(_) => auth(request.clearTokens)
+          case _ => Future.value(lastResponse)
+        })
+        case LoginResponse(_) => Future.value(loginOrAuth)
+      })
+      case _ => Future.value(firstResponse)
     })
     println("<------------------------------ UpstreamFilter -----------------------------")
     r
   }
-
-  def loginResponseOrAuthRequest(request: RoutedRequest): Future[(FinagleResponse, RoutedRequest)] = {
-    auth(request) map (resp => (resp, request + TokenJson(resp.contentString)))
-  }
-
 }

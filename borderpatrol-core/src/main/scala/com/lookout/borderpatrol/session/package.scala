@@ -35,6 +35,7 @@ package object session {
                         with SecretStoreComponent
                         with SessionStoreComponent {
 
+    val cookieName = "border_session"
     val entropySize = Constants.SessionId.entropySize
     implicit val secretStore = InMemorySecretStore(Secrets(Current(currentExpiry), None))
     implicit val marshaller = SessionIdMarshaller(secretStore)
