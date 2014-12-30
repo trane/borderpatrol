@@ -26,7 +26,7 @@ class CryptoSpec extends FlatSpec with Matchers {
   "A Secret" should "be comparable" in {
     val currentSecret = Current(currentExpiry)
     currentSecret shouldEqual currentSecret
-    currentSecret should not equal Current(currentExpiry)
+    currentSecret should not equal Current(Time.fromSeconds(0))
   }
 
   it should "have a relatively unique id" in {
