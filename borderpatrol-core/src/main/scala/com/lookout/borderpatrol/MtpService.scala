@@ -8,10 +8,10 @@ import com.twitter.util.Future
 import org.jboss.netty.buffer.{ChannelBuffers, ChannelBuffer}
 import org.jboss.netty.handler.codec.http._
 
-class MtpService extends Service[HttpRequest, FinagleResponse] {
+class MtpService(group: String) extends Service[HttpRequest, FinagleResponse] {
 
   def apply(request: HttpRequest) = {
-    println("------------------------------ MtpService " + request.getUri + " ----------------------------->")
+    println("------------------------------ MtpService " + " " + group + " " + request.getUri + " ----------------------------->")
     val r = Future.value(
       request.getUri match {
         case "/mtp/good" => new Response(new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK))
@@ -28,7 +28,7 @@ class MtpService extends Service[HttpRequest, FinagleResponse] {
         }
       }
     )
-    println("<----------------------------- MtpService ------------------------------")
+    println("<------------------------------ MtpService " + " " + group + " " + request.getUri + " -----------------------------")
     r
   }
 

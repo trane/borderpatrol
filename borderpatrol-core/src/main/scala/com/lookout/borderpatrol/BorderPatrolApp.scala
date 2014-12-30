@@ -10,6 +10,7 @@ import com.twitter.finagle.{Filter, _}
 import com.twitter.server.TwitterServer
 import com.twitter.util.Await
 import org.jboss.netty.handler.codec.http.{HttpResponse, HttpRequest}
+import com.typesafe.config.ConfigFactory
 
 object BorderPatrolApp extends TwitterServer {
 
@@ -30,12 +31,7 @@ object BorderPatrolApp extends TwitterServer {
 
   def main() {
 
-    val router = RoutingService.byPath[HttpRequest] {
-      case "/mtp" => basePipeline andThen new MtpService
-      case "/mtp/" => basePipeline andThen new MtpService
-      case "/a" => authPipeline
-      case "/a/" => authPipeline
-    }
+    val conf = ConfigFactory.load("borderpatrol.conf")
 
     val server = ServerBuilder()
       .codec(Http())
@@ -43,12 +39,39 @@ object BorderPatrolApp extends TwitterServer {
       .name("BorderPatrol-1")
       .build(orchestratorService)
 
+    //Run Mock Services
+    runMockServices
+
+    Await.ready(adminHttpServer)
+  }
+
+  def runMockServices(): Unit ={
+
+    val router1 = RoutingService.byPath[HttpRequest] {
+      case "/mtp" => basePipeline andThen new MtpService(" group 1")
+      case "/mtp/" => basePipeline andThen new MtpService(" group 1")
+      case "/a" => authPipeline
+      case "/a/" => authPipeline
+    }
+
+    val router2 = RoutingService.byPath[HttpRequest] {
+      case "/mtp" => basePipeline andThen new MtpService(" group 2")
+      case "/mtp/" => basePipeline andThen new MtpService(" group 2")
+      case "/a" => authPipeline
+      case "/a/" => authPipeline
+    }
+
     val server2 = ServerBuilder()
       .codec(RichHttp[RoutedRequest](Http()))
       .bindTo(new InetSocketAddress(8081))
       .name("BorderPatrol-2")
-      .build(router)
+      .build(router1)
 
-    Await.ready(adminHttpServer)
+    val server3 = ServerBuilder()
+      .codec(RichHttp[RoutedRequest](Http()))
+      .bindTo(new InetSocketAddress(8082))
+      .name("BorderPatrol-3")
+      .build(router2)
+
   }
 }

@@ -19,7 +19,8 @@ object BorderPatrol extends Build {
       "com.twitter" %% "bijection-core" % "0.7.0",
       "io.argonaut" %% "argonaut" % "6.0.4",
       "org.scalatest" %% "scalatest" % "2.2.2" % "test",
-      "org.scalamock" %% "scalamock-scalatest-support" % "3.2.1" % "test"
+      "org.scalamock" %% "scalamock-scalatest-support" % "3.2.1" % "test",
+      "org.skife.com.typesafe.config" % "typesafe-config" % "0.3.0"
     ),
 
     scalacOptions ++= Seq("-encoding", "utf8"),
