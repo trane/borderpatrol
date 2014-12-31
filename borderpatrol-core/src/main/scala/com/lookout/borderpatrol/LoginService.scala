@@ -37,8 +37,9 @@ class LoginService extends Service[RoutedRequest, FinagleResponse] {
        {
             "auth_service": "DEADBEEF",
             "service_tokens": {
-                "flexd": "LIVEKALE",
-                "mtp": "DEADCAKE"
+                "foo": "LIVEKALE",
+                "bar": "DEADCAKE",
+                "baz": "LIVEBEEF"
             }
         }
     """

@@ -11,36 +11,40 @@ import com.twitter.finagle.service.SingletonFactory
 import com.twitter.finagle.{Dtab, Http, Service, Path}
 import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse, Http => FinagleHttp}
 import com.twitter.util.{Await, Future}
-import org.jboss.netty.handler.codec.http.{HttpRequest, HttpResponse, HttpResponseStatus}
+import org.jboss.netty.handler.codec.http._
 
 /**
  * Generic upstream service
  * @param authService
  */
-class UpstreamService(authService: Service[RoutedRequest, HttpResponse]) extends Service[HttpRequest, FinagleResponse] {
+class UpstreamService(authService: Service[RoutedRequest, HttpResponse],
+                      upstreams: Map[String,Service[HttpRequest, HttpResponse]]) extends Service[HttpRequest, FinagleResponse] {
   def apply(request: HttpRequest) = {
     println("------------------------------ UpstreamService " + request.getUri + "----------------------------->")
 
-    val mappedUrl = getRewrittenUrl("/mtp/good")
-    println("MAPPED URL **********************> " + mappedUrl)
+    //TODO: Rewrite url
+    val originalUri = request.getUri
+    val mappedUrl = getRewrittenUrl(originalUri)
 
-    //TODO: Figure out the correct way of load balancing
-    val client = ClientBuilder()
-      .codec(FinagleHttp())
-      .hosts("localhost:8081,localhost:8082")
-      .hostConnectionLimit(1)
-      .loadBalancer(HeapBalancerFactory.toWeighted)
-      .retries(2)
-      .build()
+    //TODO: Change this to take a routed request in order to get the service name. HardCoded for now
+    val clientOpt = upstreams.get("foo")
 
-    val r = client(request) map { resp =>
-      resp.getStatus match {
-        case HttpResponseStatus.UNAUTHORIZED => {
-          println("returning a 401")
-          NeedsAuthResponse(resp)
+    val r = clientOpt match {
+      case Some(svc) => {
+        svc(request) map { resp =>
+          resp.getStatus match {
+            case HttpResponseStatus.UNAUTHORIZED => {
+              println("returning a 401")
+              NeedsAuthResponse(resp)
+            }
+            case _ => {
+              println("returning a " + resp.getStatus.toString)
+              new Response(resp)
+            }
+          }
         }
-        case _ => new Response(resp)
       }
+      case None => Future.value(new Response(new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.NOT_FOUND)))
     }
     println("<----------------------------- UpstreamService ------------------------------")
     r
