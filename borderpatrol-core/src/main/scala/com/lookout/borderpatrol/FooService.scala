@@ -5,7 +5,7 @@ import java.nio.charset.Charset
 import com.twitter.finagle.Service
 import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse}
 import com.twitter.util.Future
-import org.jboss.netty.buffer.{ChannelBuffers, ChannelBuffer}
+import org.jboss.netty.buffer.{ChannelBuffer, ChannelBuffers}
 import org.jboss.netty.handler.codec.http._
 
 class FooService(group: String) extends Service[HttpRequest, FinagleResponse] {

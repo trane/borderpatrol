@@ -3,10 +3,8 @@ package com.lookout
 import java.net.{InetAddress, InetSocketAddress}
 
 import com.lookout.borderpatrol.session._
-import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse, CookieMap, RequestProxy, HttpMuxer, Http}
+import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse}
 import com.twitter.finagle.{Service => FinagleService}
-import com.twitter.util.Future
-
 import org.jboss.netty.handler.codec.http._
 
 package object borderpatrol {

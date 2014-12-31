@@ -1,16 +1,8 @@
 package com.lookout.borderpatrol
 
-import com.lookout.borderpatrol.BorderPatrolApp.{NeedsAuthResponse, Response}
-import com.twitter.finagle.{Http, Service}
-import com.lookout.borderpatrol.BorderPatrolApp.{RoutedRequest, NeedsAuthResponse, Response}
-import com.twitter.finagle.Service
-import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse}
-import com.twitter.finagle.builder.ClientBuilder
-import com.twitter.finagle.loadbalancer.{HeapBalancerFactory, DefaultBalancerFactory}
-import com.twitter.finagle.service.SingletonFactory
-import com.twitter.finagle.{Dtab, Http, Service, Path}
-import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse, Http => FinagleHttp}
-import com.twitter.util.{Await, Future}
+import com.twitter.finagle.http.{Http => FinagleHttp, Request => FinagleRequest, Response => FinagleResponse}
+import com.twitter.finagle.{Dtab, Path, Service}
+import com.twitter.util.Future
 import org.jboss.netty.handler.codec.http._
 
 /**

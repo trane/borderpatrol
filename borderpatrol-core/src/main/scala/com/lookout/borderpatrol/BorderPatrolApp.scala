@@ -1,17 +1,19 @@
 package com.lookout.borderpatrol
 
-import java.io.{FileReader, File}
-import java.net.{InetSocketAddress}
+import java.io.FileReader
+import java.net.InetSocketAddress
+
+import com.twitter.finagle._
 import com.twitter.finagle.builder.{ClientBuilder, ServerBuilder}
 import com.twitter.finagle.http.service.RoutingService
-import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse, Http, RichHttp, HttpMuxer}
+import com.twitter.finagle.http.{Http, RichHttp, Request => FinagleRequest, Response => FinagleResponse}
 import com.twitter.finagle.loadbalancer.HeapBalancerFactory
-import com.twitter.finagle.{Filter, _}
 import com.twitter.server.TwitterServer
 import com.twitter.util.Await
-import org.jboss.netty.handler.codec.http.{HttpResponse, HttpRequest}
 import com.typesafe.config.ConfigFactory
-import collection.JavaConversions._
+import org.jboss.netty.handler.codec.http.{HttpRequest, HttpResponse}
+
+import scala.collection.JavaConversions._
 
 object BorderPatrolApp extends TwitterServer {
 
