@@ -23,8 +23,8 @@ class TokenService extends Service[HttpRequest, FinagleResponse] {
             "auth_service": "DEADBEEF",
             "service_tokens": {
                 "foo": "LIVEKALE",
-                "bar": "DEADCAKE",
-                "baz": "LIVEBEEF"
+                "bar": "WOUNDEDCAKE",
+                "baz": "HOTCAFE"
             }
         }
     """

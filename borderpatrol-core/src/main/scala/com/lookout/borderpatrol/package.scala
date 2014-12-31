@@ -36,6 +36,7 @@ package object borderpatrol {
     def toHttpRequest: HttpRequest = {
       addAuthHeaders
       addBorderHeaders
+      useOriginalUri
       httpRequest
     }
 
@@ -46,6 +47,12 @@ package object borderpatrol {
     /* TODO: make this more functional */
     def addBorderHeaders: Unit =
       httpRequest.headers.add("Via", "Border Patrol")
+
+    def useOriginalUri: Unit =
+      httpRequest.setUri(session.originalRequest.getUri)
+
+    def useOriginalMethod: Unit =
+      httpRequest.setMethod(session.originalRequest.getMethod)
 
     def borderCookie: Option[String] =
       cookies.getValue(SecureSession.cookieName)

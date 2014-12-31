@@ -10,6 +10,7 @@ package com.lookout.borderpatrol
 import com.twitter.finagle.{Filter, SimpleFilter, Service}
 import com.twitter.util.{Future, Await}
 import com.twitter.finagle.http.{Http, Request => FinagleRequest, Response => FinagleResponse}
+import org.jboss.netty.handler.codec.http.HttpRequest
 
 
 /**
@@ -17,17 +18,16 @@ import com.twitter.finagle.http.{Http, Request => FinagleRequest, Response => Fi
  *
  * @param auth The auth service, to be called on an initial 401
  */
-class UpstreamFilter(auth: Service[RoutedRequest, FinagleResponse]) extends Filter[RoutedRequest, FinagleResponse, FinagleRequest, FinagleResponse] {
+class UpstreamFilter(auth: Service[RoutedRequest, FinagleResponse]) extends Filter[RoutedRequest, FinagleResponse, HttpRequest, FinagleResponse] {
 
-  def apply(request: RoutedRequest, service: Service[FinagleRequest, FinagleResponse]): Future[FinagleResponse] = {
+  def apply(request: RoutedRequest, service: Service[HttpRequest, FinagleResponse]): Future[FinagleResponse] = {
     println("------------------------------ UpstreamFilter ----------------------------->")
-
-    val r = service(request) flatMap (firstResponse => {firstResponse match {
+    val r = service(request.toHttpRequest) flatMap (firstResponse => { firstResponse match {
       case NeedsAuthResponse(_) => auth(request) flatMap (loginOrAuth => {loginOrAuth match {
-        case TokenResponse(req) => service(req) flatMap (lastResponse => lastResponse match {
+        case TokenResponse(req) => service(req.toHttpRequest) flatMap (lastResponse => {lastResponse match {
           case NeedsAuthResponse(_) => auth(request.clearTokens)
           case _ => Future.value(lastResponse)
-        })
+        }})
         case LoginResponse(_) => Future.value(loginOrAuth)
       }})
       case _ => Future.value(firstResponse)

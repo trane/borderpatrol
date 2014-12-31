@@ -3,12 +3,8 @@ package com.lookout.borderpatrol.session
 import java.util.concurrent.TimeUnit
 
 import com.lookout.borderpatrol.RoutedRequest
-import com.twitter.finagle.http.{Request => FinagleRequest}
-import com.twitter.util.{Future, Duration}
+import com.twitter.util.Duration
 import org.jboss.netty.handler.codec.http.HttpRequest
-
-import scala.util.{Success, Try}
-
 
 object SessionExpiry extends Expiry {
   val lifetime = Duration(1, TimeUnit.DAYS)
@@ -24,15 +20,19 @@ object Session {
   import SecureSession.{generator,secretStore,sessionStore}
 
   def apply(id: SessionId, originalRequest: HttpRequest, tokens: Tokens): Session =
-    sessionStore.update(ExistingSession(id, originalRequest, tokens))
+    save(ExistingSession(id, originalRequest, tokens))
 
   def apply(s: String, originalRequest: HttpRequest): Session =
-    sessionStore.get(s) getOrElse NewSession(originalRequest)
+    sessionStore.get(s) getOrElse newSession(originalRequest)
 
-  def apply(request: RoutedRequest): Session = {
-    println("Setting Session...")
-    request.borderCookie.flatMap(id => sessionStore.get(id)) getOrElse NewSession(request.httpRequest)
-  }
+  def apply(request: RoutedRequest): Session =
+    request.borderCookie.flatMap(id => sessionStore.get(id)) getOrElse newSession(request.httpRequest)
+
+  def newSession(originalRequest: HttpRequest): Session =
+    save(NewSession(originalRequest))
+
+  def save(session: Session): Session =
+    sessionStore.update(session)
 }
 
 case class NewSession(originalRequest: HttpRequest)(implicit g: SessionIdGenerator, s: SecretStoreApi) extends Session {
@@ -61,14 +61,15 @@ trait SessionStoreComponent {
 case class InMemorySessionStore(implicit marshaller: SessionIdMarshaller) extends SessionStoreApi {
   private [this] var _store = Map[String, Session]()
 
-  def get(id: String): Option[Session] =
-    (_store get id ) filterNot (_.id.expired)
+  def get(id: String): Option[Session] = {
+    (_store get id) filterNot (_.id.expired)
+  }
 
   def get(id: SessionId): Option[Session] =
     get(id.asString)
 
   def update(s: Session): Session = {
-    _store = _store.updated(s.id.asString, s)
+    _store = _store.updated(s.id.asString, ExistingSession(s.id, s.originalRequest, s.tokens))
     s
   }
 }

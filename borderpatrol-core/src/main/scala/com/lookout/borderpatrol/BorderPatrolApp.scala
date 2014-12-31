@@ -32,6 +32,12 @@ object BorderPatrolApp extends TwitterServer {
   val upstreamPipeline = basePipeline andThen upstreamFilter
 
   def main() {
+    val router = RoutingService.byPath[HttpRequest] {
+      case "/mtp" => new MtpService
+      case "/mtp/" => new MtpService
+      case "/a" => authPipeline
+      case "/a/" => authPipeline
+    }
 
     val server = ServerBuilder()
       .codec(Http())

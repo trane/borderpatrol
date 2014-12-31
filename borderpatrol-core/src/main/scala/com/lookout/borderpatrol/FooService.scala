@@ -17,7 +17,7 @@ class FooService(group: String) extends Service[HttpRequest, FinagleResponse] {
         case "/foo/good" => new Response(new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK))
         case _ => {
           println(" Token = " + request.headers().get("Auth-Token"))
-          if (request.headers().get("Auth-Token")!= null && request.headers().get("Auth-Token").contains("DEADLAKE")){
+          if (request.headers().get("Auth-Token")!= null && request.headers().get("Auth-Token").contains("LIVEKALE")){
             val resp = new Response(new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK))
             val cb: ChannelBuffer = ChannelBuffers.copiedBuffer("I am a Teapot from the MTP Service", Charset.defaultCharset())
             resp.setContent(cb)
