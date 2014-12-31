@@ -5,13 +5,9 @@ import Argonaut._
 
 import scalaz.State
 
-sealed trait Token {
-  val value: String
-}
+sealed trait Token
 
-case object EmptyToken extends Token {
-  val value = ""
-}
+case object EmptyToken extends Token
 case class MasterToken(value: String) extends Token
 case class ServiceToken(name: String, value: String) extends Token
 
@@ -92,7 +88,7 @@ object TokenState {
 object TokenJson {
 
   implicit def MasterTokenCodecJson: CodecJson[MasterToken] =
-    casecodec1(MasterToken.apply, MasterToken.unapply)("auth_tokens")
+    casecodec1(MasterToken.apply, MasterToken.unapply)("auth_service")
 
   implicit def ServiceTokensCodecJson: CodecJson[ServiceTokens] =
     casecodec1(ServiceTokens.apply, ServiceTokens.unapply)("service_tokens")
@@ -100,7 +96,7 @@ object TokenJson {
   implicit def TokenCodecJson: CodecJson[Token] =
     CodecJson(
       (t: Token) =>
-        ("auth_service" := t.value) ->:
+        ("auth_service" := t.asInstanceOf[MasterToken].value) ->:
           jEmptyObject,
       c => for {
         value <- (c --\ "auth_service").as[String]
