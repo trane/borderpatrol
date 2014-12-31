@@ -7,9 +7,9 @@ package com.lookout.borderpatrol
  * the service once more with the Authorization Token
  */
 
-import com.twitter.finagle.{Filter, SimpleFilter, Service}
-import com.twitter.util.{Future, Await}
-import com.twitter.finagle.http.{Http, Request => FinagleRequest, Response => FinagleResponse}
+import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse}
+import com.twitter.finagle.{Filter, Service}
+import com.twitter.util.Future
 import org.jboss.netty.handler.codec.http.HttpRequest
 
 

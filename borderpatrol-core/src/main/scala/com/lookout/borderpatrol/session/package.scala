@@ -1,7 +1,8 @@
 package com.lookout.borderpatrol
 
 import java.util.concurrent.TimeUnit
-import com.twitter.util.{Future, Await, Duration}
+
+import com.twitter.util.Duration
 import org.jboss.netty.handler.codec.http.HttpRequest
 
 import scala.util.Try

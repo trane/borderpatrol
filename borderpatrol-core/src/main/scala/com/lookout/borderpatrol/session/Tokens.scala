@@ -1,7 +1,7 @@
 package com.lookout.borderpatrol.session
 
+import argonaut.Argonaut._
 import argonaut._
-import Argonaut._
 
 import scalaz.State
 

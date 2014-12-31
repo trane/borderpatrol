@@ -2,10 +2,10 @@ package com.lookout.borderpatrol
 
 import com.twitter.finagle.Service
 import com.twitter.finagle.http.{Response => FinagleResponse}
-import com.twitter.util.Future
 import com.twitter.io.Charsets
-import org.jboss.netty.handler.codec.http.{HttpMethod,HttpVersion,DefaultHttpResponse,HttpResponseStatus}
+import com.twitter.util.Future
 import org.jboss.netty.buffer.ChannelBuffers.copiedBuffer
+import org.jboss.netty.handler.codec.http.{DefaultHttpResponse, HttpMethod, HttpResponseStatus, HttpVersion}
 
 /**
  * Handles call to checkpoint

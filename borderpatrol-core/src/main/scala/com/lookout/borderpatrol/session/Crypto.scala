@@ -69,7 +69,7 @@ sealed trait SecretStoreApi {
 }
 
 case class InMemorySecretStore(secrets: Secrets) extends SecretStoreApi {
-  import SecretExpiry._
+  import com.lookout.borderpatrol.session.SecretExpiry._
   private[this] var _secrets: Secrets = secrets
 
   def current = {

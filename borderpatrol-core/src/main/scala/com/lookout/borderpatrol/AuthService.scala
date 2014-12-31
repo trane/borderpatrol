@@ -1,8 +1,8 @@
 package com.lookout.borderpatrol
 
 
-import com.lookout.borderpatrol.session.{Session, MasterToken, EmptyToken}
-import com.lookout.borderpatrol.session.TokenJson.{TokensJson, ServiceTokensJson}
+import com.lookout.borderpatrol.session.MasterToken
+import com.lookout.borderpatrol.session.TokenJson.{ServiceTokensJson, TokensJson}
 import com.twitter.finagle.Service
 import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse}
 import com.twitter.io.Charsets

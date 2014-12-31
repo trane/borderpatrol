@@ -17,7 +17,7 @@ sealed trait Session {
 }
 
 object Session {
-  import SecureSession.{generator,secretStore,sessionStore}
+  import com.lookout.borderpatrol.session.SecureSession.{generator, secretStore, sessionStore}
 
   def apply(id: SessionId, originalRequest: HttpRequest, tokens: Tokens): Session =
     save(ExistingSession(id, originalRequest, tokens))
