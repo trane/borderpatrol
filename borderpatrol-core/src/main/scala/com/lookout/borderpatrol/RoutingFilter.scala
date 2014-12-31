@@ -19,7 +19,7 @@ class RoutingFilter extends Filter[HttpRequest, FinagleResponse, RoutedRequest, 
   }
 
   def serviceName(uri: String): String = uri match {
-    case "/mtp" => "l4e"
+    case "/mtp" => "foo"
     case "/a" => "checkpoint"
     case _ => "unknown"
   }

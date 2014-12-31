@@ -12,7 +12,7 @@ import org.jboss.netty.handler.codec.http.{Cookie => NettyCookie}
 class SessionFilter extends SimpleFilter[RoutedRequest, FinagleResponse] {
   implicit val marshaller = SecureSession.marshaller
 
-  def apply(request: RoutedRequest, service: Service[RoutedRequest, FinagleResponse]) ={
+  def apply(request: RoutedRequest, service: Service[RoutedRequest, FinagleResponse]) = {
     println("------------------------------ SessionFilter ----------------------------->")
     val r = service(request) map (response => responseWithCookie(response)(request))
     println("<------------------------------ SessionFilter -----------------------------")
@@ -46,9 +46,9 @@ class SessionFilter extends SimpleFilter[RoutedRequest, FinagleResponse] {
 
   def createCookie(value: String): Cookie = {
     val cookie = new Cookie(SecureSession.cookieName, value)
-    cookie.isSecure = true
+    //cookie.isSecure = true
     cookie.maxAge = SecureSession.lifetime
-    cookie.domain = "lookout.com"
+    //cookie.domain = "lookout.com"
     cookie
   }
 

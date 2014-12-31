@@ -37,8 +37,9 @@ class LoginService extends Service[RoutedRequest, FinagleResponse] {
        {
             "auth_service": "DEADBEEF",
             "service_tokens": {
-                "flexd": "LIVEKALE",
-                "mtp": "DEADCAKE"
+                "foo": "LIVEKALE",
+                "bar": "WOUNDEDCAKE",
+                "baz": "HOTCAFE"
             }
         }
     """
@@ -48,6 +49,15 @@ class LoginService extends Service[RoutedRequest, FinagleResponse] {
        <html>
         <body>
           Login Page!
+          <form action="/a/login" method="post">
+            <label for="username">Username</label>
+            <input name="username" type="text" value="user@example.com" />
+            <br />
+            <label for="password">Password</label>
+            <input name="password" type="password" value="password" />
+            <br />
+            <input name="login" type="submit" value="login" />
+          </form>
         </body>
        </html>
     """

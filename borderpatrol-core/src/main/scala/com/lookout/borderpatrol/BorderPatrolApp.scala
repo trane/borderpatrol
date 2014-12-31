@@ -31,8 +31,8 @@ object BorderPatrolApp extends TwitterServer {
   def main() {
 
     val router = RoutingService.byPath[HttpRequest] {
-      case "/mtp" => basePipeline andThen new MtpService
-      case "/mtp/" => basePipeline andThen new MtpService
+      case "/mtp" => new MtpService
+      case "/mtp/" => new MtpService
       case "/a" => authPipeline
       case "/a/" => authPipeline
     }
