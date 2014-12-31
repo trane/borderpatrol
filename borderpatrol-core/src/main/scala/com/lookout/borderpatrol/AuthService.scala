@@ -20,15 +20,18 @@ class AuthService(tokenService: Service[HttpRequest, FinagleResponse],
 
   def apply(request: RoutedRequest): Future[AuthResponse] = {
     println("----------------------------- AuthService------------------------------>")
-    val r: Future[AuthResponse] = request.session.tokens.master match {
-      case t: MasterToken => getServiceTokens(request, t) map (rrequest => TokenResponse(rrequest))
-      case _ => loginService(request) map (response => LoginResponse(response))
+    val r = request.session.tokens.master match {
+      case MasterToken(t) => getServiceTokens(request, t) map (rrequest => TokenResponse(rrequest))
+      case _ => loginService(request) map (response => TokensJson(response.getContentString()) match {
+          case Some(tokens) => TokenResponse(request ++ tokens)
+          case _ => LoginResponse(response)
+        })
     }
     println("<----------------------------- AuthService------------------------------")
     r
   }
 
-  def getServiceTokens(request: RoutedRequest, token: MasterToken): Future[RoutedRequest] = {
+  def getServiceTokens(request: RoutedRequest, token: String): Future[RoutedRequest] = {
     val url = "/api/auth/service/v1/account_token.json"
     val tokenRequest = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, url)
     tokenService(tokenRequest) map { response =>

@@ -5,13 +5,9 @@ import Argonaut._
 
 import scalaz.State
 
-sealed trait Token {
-  val value: String
-}
+sealed trait Token
 
-case object EmptyToken extends Token {
-  val value = ""
-}
+case object EmptyToken extends Token
 case class MasterToken(value: String) extends Token
 case class ServiceToken(name: String, value: String) extends Token
 
@@ -53,11 +49,11 @@ object TokenState {
    * @return
    */
   def apply(token: Token): State[Tokens, Tokens] = for {
-    _ <- State.modify((m: Tokens) => (token, m) match {
-      case (MasterToken(_), Tokens(MasterToken(_), _)) => m
-      case (ServiceToken(n, v), Tokens(_, st)) => m.copy(m.master, st + ServiceToken(n, v))
-      case (MasterToken(v), _) => m.copy(MasterToken(v), m.services)
-      case _ => m
+    _ <- State.modify((cur: Tokens) => (token, cur) match {
+      case (MasterToken(_), Tokens(MasterToken(_), _)) => cur
+      case (ServiceToken(n, v), Tokens(_, st)) => cur.copy(cur.master, st + ServiceToken(n, v))
+      case (MasterToken(v), _) => cur.copy(MasterToken(v), cur.services)
+      case _ => cur
     })
     s <- State.get
   } yield Tokens(s.master, s.services)
@@ -68,9 +64,9 @@ object TokenState {
    * @return
    */
   def apply(tokens: ServiceTokensBase): State[Tokens, Tokens] = for {
-    _ <- State.modify((m: Tokens) => (tokens, m) match {
-      case (ServiceTokens(map), _) => m.copy(m.master, m.services ++ tokens)
-      case _ => m
+    _ <- State.modify((cur: Tokens) => (tokens, cur) match {
+      case (ServiceTokens(map), _) => cur.copy(cur.master, cur.services ++ tokens)
+      case _ => cur
     })
     s <- State.get
   } yield Tokens(s.master, s.services)
@@ -81,9 +77,9 @@ object TokenState {
    * @return
    */
   def apply(tokens: Tokens): State[Tokens, Tokens] = for {
-    _ <- State.modify((m: Tokens) => m match {
-      case Tokens(mt, st) => m.copy(mt, m.services ++ st)
-      case _ => m
+    _ <- State.modify((cur: Tokens) => (tokens, cur) match {
+      case (Tokens(mt, st), _) => cur.copy(mt, cur.services ++ st)
+      case _ => cur
     })
     s <- State.get
   } yield Tokens(s.master, s.services)
@@ -92,7 +88,7 @@ object TokenState {
 object TokenJson {
 
   implicit def MasterTokenCodecJson: CodecJson[MasterToken] =
-    casecodec1(MasterToken.apply, MasterToken.unapply)("auth_tokens")
+    casecodec1(MasterToken.apply, MasterToken.unapply)("auth_service")
 
   implicit def ServiceTokensCodecJson: CodecJson[ServiceTokens] =
     casecodec1(ServiceTokens.apply, ServiceTokens.unapply)("service_tokens")
@@ -100,7 +96,7 @@ object TokenJson {
   implicit def TokenCodecJson: CodecJson[Token] =
     CodecJson(
       (t: Token) =>
-        ("auth_service" := t.value) ->:
+        ("auth_service" := t.asInstanceOf[MasterToken].value) ->:
           jEmptyObject,
       c => for {
         value <- (c --\ "auth_service").as[String]
