@@ -36,10 +36,9 @@ case class ServiceTokens(services: Map[String, String]) extends ServiceTokensBas
 
 case class Tokens(master: Token, services: ServiceTokensBase) {
   def service(name: String): Option[ServiceToken] = services.get(name)
-  def +=(token: ServiceToken): Tokens = TokenState(token).run(this)._2
-  def +=(token: MasterToken): Tokens = TokenState(token).run(this)._2
-  def ++=(other: Tokens): Tokens = TokenState(other).run(this)._2
+  def +=(token: Token): Tokens = TokenState(token).run(this)._2
   def ++=(tokens: ServiceTokensBase): Tokens = TokenState(tokens).run(this)._2
+  def ++=(other: Tokens): Tokens = TokenState(other).run(this)._2
 }
 
 object TokenState {
@@ -50,9 +49,9 @@ object TokenState {
    */
   def apply(token: Token): State[Tokens, Tokens] = for {
     _ <- State.modify((cur: Tokens) => (token, cur) match {
-      case (MasterToken(_), Tokens(MasterToken(_), _)) => cur
-      case (ServiceToken(n, v), Tokens(_, st)) => cur.copy(cur.master, st + ServiceToken(n, v))
-      case (MasterToken(v), _) => cur.copy(MasterToken(v), cur.services)
+      case (MasterToken(v), Tokens(MasterToken(w), _)) if v == w => cur
+      case (t: MasterToken, _) => cur.copy(t, cur.services)
+      case (t: ServiceToken, Tokens(_, st)) => cur.copy(cur.master, st + t)
       case _ => cur
     })
     s <- State.get
@@ -79,7 +78,6 @@ object TokenState {
   def apply(tokens: Tokens): State[Tokens, Tokens] = for {
     _ <- State.modify((cur: Tokens) => (tokens, cur) match {
       case (Tokens(mt, st), _) => cur.copy(mt, cur.services ++ st)
-      case _ => cur
     })
     s <- State.get
   } yield Tokens(s.master, s.services)
@@ -114,9 +112,9 @@ object TokenJson {
   implicit def TokensCodecJson: CodecJson[Tokens] =
     CodecJson(
       (ts: Tokens) =>
-        ("auth_service" := ts.master) ->:
-        ("service_tokens" := ts.services) ->:
-        jEmptyObject,
+        ("auth_service" := ts.master.asInstanceOf[MasterToken].value) ->:
+        ("service_tokens" := ts.services.services) ->:
+          jEmptyObject,
       c => for {
         master <- (c --\ "auth_service").as[String]
         services <- (c --\ "service_tokens").as[Map[String, String]]
