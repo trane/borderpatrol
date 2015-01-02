@@ -27,7 +27,7 @@ trait SecureSessionIdComponent {
 }
 
 sealed trait SessionId extends SessionIdExpiryComp {
-  import com.lookout.borderpatrol.session.SessionIdTypes._
+  import SessionIdTypes._
 
   val expires: Time
   val entropy: Entropy
@@ -43,13 +43,13 @@ sealed trait SessionId extends SessionIdExpiryComp {
 }
 
 class SessionIdGenerator extends SessionIdExpiryComp {
-  import com.lookout.borderpatrol.session.Constants.SessionId.entropySize
-  import com.lookout.borderpatrol.session.SessionIdTypes._
+  import Constants.SessionId.entropySize
+  import SessionIdTypes._
 
   def next(implicit store: SecretStoreApi): SessionId =
-    NextSessionId(currentExpiry, Generator(entropySize))(store.current)
+    Id(currentExpiry, Generator(entropySize))(store.current)
 
-  case class NextSessionId(expires: Time, entropy: Entropy)(secret: Secret) extends SessionId {
+  case class Id(expires: Time, entropy: Entropy)(secret: Secret) extends SessionId {
     val secretId = secret.id
     val signature = secret.sign(payload)
   }
@@ -66,8 +66,8 @@ case class SessionIdMarshaller(store: SecretStoreApi) extends Marshallable {
   def decode(s: String): Try[SessionId] = injector.sessionId2String.invert(s)
 
   object injector extends SessionIdExpiryComp {
-    import com.lookout.borderpatrol.session.Constants.SessionId.entropySize
-    import com.lookout.borderpatrol.session.SessionIdTypes._
+    import Constants.SessionId.entropySize
+    import SessionIdTypes._
 
     type BytesTuple = (Payload, TimeBytes, Entropy, SecretId, Signature)
 
@@ -103,7 +103,7 @@ case class SessionIdMarshaller(store: SecretStoreApi) extends Marshallable {
         tLong <- Injection.long2BigEndian.invert(tb.toArray)
         time <- long2Time(tLong)
         s <- store.find((s) => s.id == id && validOrThrow(s, pl, sig))
-      } yield ExistingSession(time, ent, id, sig)
+      } yield Id(time, ent, id, sig)
     }
 
     implicit lazy val sessionId2Bytes: Injection[SessionId, Array[Byte]] =
@@ -116,6 +116,6 @@ case class SessionIdMarshaller(store: SecretStoreApi) extends Marshallable {
 
     implicit lazy val sessionId2String = Injection.connect[SessionId, Array[Byte], Base64String, String]
 
-    case class ExistingSession(expires: Time, entropy: Entropy, secretId: SecretId, signature: Signature) extends SessionId
+    case class Id(expires: Time, entropy: Entropy, secretId: SecretId, signature: Signature) extends SessionId
   }
 }
