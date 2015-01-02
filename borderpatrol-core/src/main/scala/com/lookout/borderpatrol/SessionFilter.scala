@@ -1,6 +1,6 @@
 package com.lookout.borderpatrol
 
-import com.lookout.borderpatrol.session._
+import com.lookout.borderpatrol.session.SecureSession
 import com.twitter.finagle.http.{Cookie, Request => FinagleRequest, Response => FinagleResponse}
 import com.twitter.finagle.{Service, SimpleFilter}
 import org.jboss.netty.handler.codec.http.{Cookie => NettyCookie}

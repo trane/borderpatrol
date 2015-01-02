@@ -17,7 +17,7 @@ import scala.collection.JavaConversions._
 
 object BorderPatrolApp extends TwitterServer {
 
-  lazy val upstreams = getUpstreamClients()
+  lazy val upstreams = getUpstreamClients
 
   val loginPipeline = new LoginFilter andThen new LoginService
   val sessionFilter = new SessionFilter
@@ -58,27 +58,24 @@ object BorderPatrolApp extends TwitterServer {
    * gets passed to the UpstreamService, which dispatches requests based on the service name
    * @return
    */
-  def getUpstreamClients():Map[String,Service[HttpRequest, HttpResponse]] = {
-
-    val conf = ConfigFactory.parseReader(new FileReader("../borderpatrol.conf"))
+  def getUpstreamClients: Map[String, Service[HttpRequest, HttpResponse]] = {
+    val conf = ConfigFactory.parseReader(new FileReader("borderpatrol.conf"))
     val services = conf.getConfigList("services").toList
     case class ServiceConfiguration(name: String, friendlyName: String, hosts: String, rewriteRule: String) {}
 
-    val clients = services map(s=> {
-      (s.getString("name") ,
+    val clients = services map(s =>
+      (s.getString("name"),
         ClientBuilder()
           .codec(Http())
           .hosts(s.getString("hosts"))
           .hostConnectionLimit(10)
           .loadBalancer(HeapBalancerFactory.toWeighted)
           .retries(2)
-          .build())
-
-    })
+          .build()))
     clients.toMap
   }
 
-  def runMockServices(): Unit ={
+  def runMockServices: Unit = {
 
     val router1 = RoutingService.byPath[HttpRequest] {
       case "/foo" => basePipeline andThen new FooService(" group 1")

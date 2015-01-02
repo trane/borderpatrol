@@ -24,7 +24,9 @@ class SessionIdSpec extends FlatSpec with Matchers {
         }
     }
 
-  "A SessionIdGenerator" should "create valid SessionId instances" in {
+  behavior of "SessionIdGenerator"
+
+  it should "create valid SessionId instances" in {
     val sid = mockGenerator.next
     val sig = mockSecretStore.current.sign(sid.payload)
     sid.expired shouldBe false
@@ -33,7 +35,9 @@ class SessionIdSpec extends FlatSpec with Matchers {
     sid.entropy should have size Constants.SessionId.entropySize
   }
 
-  "A SessionIdMarshaller" should "create a base64 string from a SessionId" in {
+  behavior of "SessionIdMarshaller"
+
+  it should "create a base64 string from a SessionId" in {
     val sid = mockGenerator.next
     implicit lazy val bytes2String = Injection.connect[Array[Byte], Base64String, String]
     val str = bytes2String(sid.toBytes)
