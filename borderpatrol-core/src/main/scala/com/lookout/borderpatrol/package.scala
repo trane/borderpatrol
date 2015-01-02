@@ -34,7 +34,6 @@ package object borderpatrol {
     def toHttpRequest: HttpRequest = {
       addAuthHeaders
       addBorderHeaders
-      useOriginalUri
       httpRequest
     }
 
@@ -56,13 +55,6 @@ package object borderpatrol {
       cookies.getValue(SecureSession.cookieName)
   }
 
-  object RoutedRequest {
-    def apply(request: HttpRequest, name: String): RoutedRequest =
-      RoutedRequestInferSession(request, name)
-    def apply(request: HttpRequest, name: String, session: Session): RoutedRequest =
-      RoutedRequestWithSession(request, name, session)
-  }
-
   case class RoutedRequestInferSession(httpRequest: HttpRequest, service: String) extends RoutedRequest {
     val session = Session(this)
 
@@ -79,6 +71,13 @@ package object borderpatrol {
   case class RoutedRequestWithSession(httpRequest: HttpRequest, service: String, session: Session) extends RoutedRequest {
     def +=(otherSession: Session): RoutedRequest =
       copy(httpRequest, service, otherSession)
+  }
+
+  object RoutedRequest {
+    def apply(request: HttpRequest, name: String): RoutedRequest =
+      RoutedRequestInferSession(request, name)
+    def apply(request: HttpRequest, name: String, session: Session): RoutedRequest =
+      RoutedRequestWithSession(request, name, session)
   }
 
   //Unsuccessful Response

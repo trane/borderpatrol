@@ -1,32 +1,54 @@
 package com.lookout.borderpatrol.session
 
-import com.lookout.borderpatrol.session.TokenJson.TokensJson
+import com.lookout.borderpatrol.session._
 import org.scalatest.{Matchers, FlatSpec}
 
 class TokensSpec extends FlatSpec with Matchers {
 
   val mockEmptyTokens = Tokens(EmptyToken, EmptyServiceTokens)
-  val testMasterToken = MasterToken("test")
   val serviceName = "service1"
+  val mockServiceTokens = ServiceTokens(Map(serviceName -> "token"))
+  val testMasterToken = MasterToken("test")
   def mockServiceToken(name: String = serviceName, value: String = "value") =
     ServiceToken(name, value)
   def mockJsonResponse: String =
-    """
-       {
-            "auth_service": "DEADBEEF",
-            "service_tokens": {
-                "foo": "LIVEKALE",
-                "bar": "WOUNDEDCAKE",
-                "baz": "HOTCAFE"
-            }
-        }
-    """
+    """{"auth_service":"DEADBEEF","service_tokens":{"foo":"LIVEKALE","bar":"WOUNDEDCAKE","baz":"HOTCAFE"}}"""
+
+  behavior of "ServiceTokens"
+
+  it should "return itself when added to itself" in {
+    EmptyServiceTokens ++ EmptyServiceTokens shouldBe EmptyServiceTokens
+    mockServiceTokens ++ mockServiceTokens shouldBe mockServiceTokens
+  }
+
+  it should "return itself when EmptyServiceTokens are added to it" in {
+    mockServiceTokens ++ EmptyServiceTokens shouldBe mockServiceTokens
+  }
+
+  it should "add a service token" in {
+    (EmptyServiceTokens + mockServiceToken()).get(serviceName) getOrElse EmptyToken should not be EmptyToken
+  }
+
+  it should "replace an existing service token" in {
+    val value = "newtokenvalue"
+    val tok = (mockServiceTokens + mockServiceToken(serviceName, value)).get(serviceName).get
+    tok.value shouldBe value
+  }
+
+  it should "return None when service token doesn't exist" in {
+    EmptyServiceTokens.get("randomtoken") shouldBe None
+    mockServiceTokens.get("randomtoken") shouldBe None
+  }
 
   behavior of "Tokens"
 
   it should "add a master token" in {
     val t = mockEmptyTokens += testMasterToken
     t.master shouldBe testMasterToken
+  }
+
+  it should "not replace a master token with an EmptyToken" in {
+    val t = (mockEmptyTokens += testMasterToken) += EmptyToken
   }
 
   it should "add a service token" in {
@@ -47,9 +69,11 @@ class TokensSpec extends FlatSpec with Matchers {
     val st2 = mockServiceToken("otherservice")
     val tokens1 = mockEmptyTokens += st1
     val tokens2 = mockEmptyTokens += st2
-    val merged = (tokens1 ++= tokens2)
+    val merged = (tokens1 ++= tokens2.services)
+    val mergedIdentity = merged ++= EmptyServiceTokens
     (merged.service("someservice") getOrElse EmptyToken) shouldBe st1
     (merged.service("otherservice") getOrElse EmptyToken) shouldBe st2
+    mergedIdentity shouldBe merged
   }
 
   it should "replace all tokens from left with right" in {
@@ -90,5 +114,9 @@ class TokensSpec extends FlatSpec with Matchers {
 
   it should "hydrate ServiceTokens" in {
     (TokenJson.ServiceTokensJson(mockJsonResponse) getOrElse EmptyServiceTokens) should not be EmptyServiceTokens
+  }
+
+  it should "invert to the same JSON it converted from" in {
+    TokenJson.TokensJson(TokenJson.TokensCodecJson.encode(TokenJson.TokensJson(mockJsonResponse).get).toString()) shouldEqual TokenJson.TokensJson(mockJsonResponse)
   }
 }
