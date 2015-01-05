@@ -2,7 +2,7 @@ package com.lookout.borderpatrol
 
 import com.lookout.borderpatrol.session._
 import org.jboss.netty.handler.codec.http._
-import org.scalatest.{Matchers, FlatSpec}
+import org.scalatest.{FlatSpec, Matchers}
 
 class RoutedRequestSpec extends FlatSpec with Matchers {
 

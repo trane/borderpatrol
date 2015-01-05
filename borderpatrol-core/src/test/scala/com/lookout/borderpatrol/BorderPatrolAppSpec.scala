@@ -1,5 +1,4 @@
 
-import com.lookout.borderpatrol._
 /*
 class BorderPatrolAppSpec extends UnitSpec {
 

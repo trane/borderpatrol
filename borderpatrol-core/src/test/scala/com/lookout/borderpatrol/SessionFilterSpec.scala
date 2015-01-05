@@ -1,15 +1,15 @@
 package com.lookout.borderpatrol
 
-import session.Session
-import util.Combinators.tap
+import com.lookout.borderpatrol.session.Session
+import com.lookout.borderpatrol.util.Combinators.tap
 import com.twitter.finagle.Service
+import com.twitter.finagle.http.{Cookie, Response => FinagleResponse}
 import com.twitter.util.{Await, Future}
 import org.jboss.netty.handler.codec.http._
-import org.scalatest.{Matchers, FlatSpec}
-import com.twitter.finagle.http.{Cookie, Response => FinagleResponse}
+import org.scalatest.{FlatSpec, Matchers}
 
 class SessionFilterSpec extends FlatSpec with Matchers {
-  import Session.marshaller
+  import com.lookout.borderpatrol.session.Session.marshaller
 
   def mockUpstreamService(response: FinagleResponse) = new Service[RoutedRequest, FinagleResponse] {
     def apply(request: RoutedRequest) = Future.value(response)

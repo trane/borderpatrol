@@ -1,10 +1,11 @@
 package com.lookout.borderpatrol.session
 
 import java.util.concurrent.TimeUnit
+
 import com.twitter.bijection.{Base64String, Injection}
 import com.twitter.util.{Duration, Time}
 import org.scalactic.Equality
-import org.scalatest.{Matchers, FlatSpec, TryValues}
+import org.scalatest.{FlatSpec, Matchers, TryValues}
 
 class SessionIdSpec extends FlatSpec with Matchers with TryValues {
 

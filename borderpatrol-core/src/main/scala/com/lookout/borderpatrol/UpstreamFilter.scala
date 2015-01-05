@@ -10,7 +10,6 @@ package com.lookout.borderpatrol
 import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse}
 import com.twitter.finagle.{Filter, Service}
 import com.twitter.util.Future
-import org.jboss.netty.handler.codec.http.HttpRequest
 
 
 /**
@@ -35,9 +34,4 @@ class UpstreamFilter(auth: Service[RoutedRequest, FinagleResponse]) extends Filt
     println("<------------------------------ UpstreamFilter -----------------------------")
     r
   }
-
-  def loginResponseOrAuthRequest(request: RoutedRequest): Future[(FinagleResponse, RoutedRequest)] = {
-    auth(request) map (resp => (resp, request + TokenJson(resp.contentString)))
-  }
-
 }

@@ -3,7 +3,7 @@ package com.lookout.borderpatrol.session
 import java.util.concurrent.TimeUnit
 import javax.crypto.spec.SecretKeySpec
 
-import com.twitter.util.{Time, Duration}
+import com.twitter.util.{Duration, Time}
 
 object SecretExpiry extends Expiry {
   val lifetime = Duration(1, TimeUnit.DAYS)

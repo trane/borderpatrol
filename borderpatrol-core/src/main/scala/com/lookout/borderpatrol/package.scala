@@ -5,6 +5,7 @@ import java.net.{InetAddress, InetSocketAddress}
 import com.lookout.borderpatrol.session._
 import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse}
 import org.jboss.netty.handler.codec.http._
+
 import scala.collection.JavaConversions._
 
 package object borderpatrol {

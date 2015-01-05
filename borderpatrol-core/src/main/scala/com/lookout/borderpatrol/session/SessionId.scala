@@ -27,7 +27,7 @@ trait SecureSessionIdComponent {
 }
 
 sealed trait SessionId extends SessionIdExpiryComp {
-  import SessionIdTypes._
+  import com.lookout.borderpatrol.session.SessionIdTypes._
 
   val expires: Time
   val entropy: Entropy
@@ -43,8 +43,8 @@ sealed trait SessionId extends SessionIdExpiryComp {
 }
 
 class SessionIdGenerator extends SessionIdExpiryComp {
-  import Constants.SessionId.entropySize
-  import SessionIdTypes._
+  import com.lookout.borderpatrol.session.Constants.SessionId.entropySize
+  import com.lookout.borderpatrol.session.SessionIdTypes._
 
   def next(implicit store: SecretStoreApi): SessionId =
     Id(currentExpiry, Generator(entropySize))(store.current)
@@ -60,8 +60,8 @@ case class SessionIdMarshaller(store: SecretStoreApi) {
   def decode(s: String): Try[SessionId] = injector.sessionId2String.invert(s)
 
   object injector extends SessionIdExpiryComp {
-    import Constants.SessionId.entropySize
-    import SessionIdTypes._
+    import com.lookout.borderpatrol.session.Constants.SessionId.entropySize
+    import com.lookout.borderpatrol.session.SessionIdTypes._
 
     type BytesTuple = (Payload, TimeBytes, Entropy, SecretId, Signature)
 

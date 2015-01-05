@@ -1,10 +1,5 @@
-import org.scoverage.coveralls.CoverallsPlugin
-import scoverage.ScoverageSbtPlugin.ScoverageKeys.coverageExcludedPackages
+import sbt.Keys._
 import sbt._
-import Keys._
-import Tests._
-import com.typesafe.sbt.SbtSite.site
-import com.typesafe.sbt.pgp.PgpKeys._
 
 object BorderPatrol extends Build {
   val libVersion = "0.1.0"

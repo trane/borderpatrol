@@ -6,7 +6,7 @@ import java.net.InetSocketAddress
 import com.twitter.finagle._
 import com.twitter.finagle.builder.{ClientBuilder, ServerBuilder}
 import com.twitter.finagle.http.service.RoutingService
-import com.twitter.finagle.http.{Http, RichHttp, Request => FinagleRequest, Response => FinagleResponse}
+import com.twitter.finagle.http.{Http, Request => FinagleRequest, Response => FinagleResponse, RichHttp}
 import com.twitter.finagle.loadbalancer.HeapBalancerFactory
 import com.twitter.server.TwitterServer
 import com.twitter.util.Await
@@ -34,13 +34,6 @@ object BorderPatrolApp extends TwitterServer {
   val upstreamPipeline = basePipeline andThen upstreamFilter
 
   def main() {
-    val router = RoutingService.byPath[HttpRequest] {
-      case "/mtp" => new MtpService
-      case "/mtp/" => new MtpService
-      case "/a" => authPipeline
-      case "/a/" => authPipeline
-    }
-
     val server = ServerBuilder()
       .codec(Http())
       .bindTo(new InetSocketAddress(8080))

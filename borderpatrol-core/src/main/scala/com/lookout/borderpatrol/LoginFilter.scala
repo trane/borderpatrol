@@ -1,7 +1,7 @@
 package com.lookout.borderpatrol
 
 import com.lookout.borderpatrol.session.TokenJson.TokensJson
-import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse}
+import com.twitter.finagle.http.{Response => FinagleResponse}
 import com.twitter.finagle.{Filter, Service}
 import org.jboss.netty.handler.codec.http.HttpMethod
 

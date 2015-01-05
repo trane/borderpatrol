@@ -1,14 +1,11 @@
 package com.lookout.borderpatrol
 
-import com.twitter.finagle.{Filter, Service}
-import com.twitter.util.{Future, Await}
+import com.twitter.finagle.Service
+import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse}
+import com.twitter.util.{Await, Future}
 import org.jboss.netty.handler.codec.http._
-import org.scalatest.{Matchers, FlatSpec}
-import com.twitter.finagle.http.{Http, Request => FinagleRequest, Response => FinagleResponse}
+import org.scalatest.{FlatSpec, Matchers}
 
-/**
- * Created by wkimeria on 12/12/14.
- */
 class UpstreamFilterSpec extends FlatSpec with Matchers{
   def mockUpstreamService(response: FinagleResponse) = new Service[HttpRequest, FinagleResponse] {
     def apply(request: HttpRequest) = Future.value(response)

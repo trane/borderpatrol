@@ -2,10 +2,9 @@ package com.lookout.borderpatrol
 
 import java.util.concurrent.TimeUnit
 
-import com.lookout.borderpatrol.session._
+import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse}
 import com.twitter.util.Duration
-import org.jboss.netty.handler.codec.http.{HttpHeaders, HttpRequest}
-import com.twitter.finagle.http.{CookieMap, Request => FinagleRequest, Response => FinagleResponse}
+import org.jboss.netty.handler.codec.http.HttpRequest
 
 import scala.util.Try
 

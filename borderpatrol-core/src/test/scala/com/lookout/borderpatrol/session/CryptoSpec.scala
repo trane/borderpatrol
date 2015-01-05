@@ -1,7 +1,5 @@
 package com.lookout.borderpatrol.session
 
-import java.util.concurrent.TimeUnit
-import com.twitter.util.{Duration, Time}
 import org.scalatest.{FlatSpec, Matchers}
 
 class CryptoSpec extends FlatSpec with Matchers {

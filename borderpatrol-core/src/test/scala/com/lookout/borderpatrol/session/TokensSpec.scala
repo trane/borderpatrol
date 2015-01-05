@@ -1,6 +1,6 @@
 package com.lookout.borderpatrol.session
 
-import org.scalatest.{Matchers, FlatSpec}
+import org.scalatest.{FlatSpec, Matchers}
 
 class TokensSpec extends FlatSpec with Matchers {
 
