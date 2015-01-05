@@ -10,20 +10,26 @@ import org.jboss.netty.handler.codec.http._
  * @param authService
  */
 class UpstreamService(authService: Service[RoutedRequest, HttpResponse],
-                      upstreams: Map[String,Service[HttpRequest, HttpResponse]]) extends Service[HttpRequest, FinagleResponse] {
-  def apply(request: HttpRequest) = {
+                      upstreams: Map[String,Service[HttpRequest, HttpResponse]]) extends Service[RoutedRequest, FinagleResponse] {
+  def apply(request: RoutedRequest) = {
     println("------------------------------ UpstreamService " + request.getUri + "----------------------------->")
 
     //TODO: Rewrite url
     val originalUri = request.getUri
-    val mappedUrl = getRewrittenUrl(originalUri)
+    //val mappedUrl = getRewrittenUrl(originalUri)
+    val mappedUrl = originalUri
+
 
     //TODO: Change this to take a routed request in order to get the service name. HardCoded for now
-    val clientOpt = upstreams.get("foo")
+    val service = request.service
+    println("uri is " + originalUri)
+    println("re-written url is " + mappedUrl )
+    println("Service is " + service)
+    val clientOpt = upstreams.get(service)
 
     val r = clientOpt match {
       case Some(svc) => {
-        svc(request) map { resp =>
+        svc(request.toHttpRequest) map { resp =>
           resp.getStatus match {
             case HttpResponseStatus.UNAUTHORIZED => {
               println("returning a 401")

@@ -18,13 +18,13 @@ import org.jboss.netty.handler.codec.http.HttpRequest
  *
  * @param auth The auth service, to be called on an initial 401
  */
-class UpstreamFilter(auth: Service[RoutedRequest, FinagleResponse]) extends Filter[RoutedRequest, FinagleResponse, HttpRequest, FinagleResponse] {
+class UpstreamFilter(auth: Service[RoutedRequest, FinagleResponse]) extends Filter[RoutedRequest, FinagleResponse, RoutedRequest, FinagleResponse] {
 
-  def apply(request: RoutedRequest, service: Service[HttpRequest, FinagleResponse]): Future[FinagleResponse] = {
+  def apply(request: RoutedRequest, service: Service[RoutedRequest, FinagleResponse]): Future[FinagleResponse] = {
     println("------------------------------ UpstreamFilter ----------------------------->")
-    val r = service(request.toHttpRequest) flatMap (firstResponse => { firstResponse match {
+    val r = service(request) flatMap (firstResponse => { firstResponse match {
       case NeedsAuthResponse(_) => auth(request) flatMap (loginOrAuth => {loginOrAuth match {
-        case TokenResponse(req) => service(req.toHttpRequest) flatMap (lastResponse => {lastResponse match {
+        case TokenResponse(req) => service(req) flatMap (lastResponse => {lastResponse match {
           case NeedsAuthResponse(_) => auth(request.clearTokens)
           case _ => Future.value(lastResponse)
         }})

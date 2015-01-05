@@ -78,15 +78,17 @@ object BorderPatrolApp extends TwitterServer {
   def runMockServices: Unit = {
 
     val router1 = RoutingService.byPath[HttpRequest] {
-      case "/foo" => basePipeline andThen new FooService(" group 1")
-      case "/foo/" => basePipeline andThen new FooService(" group 1")
+      case "/foo" => new FooService(" group 1")
+      case "/foo/" => new FooService(" group 1")
+      case "/foo/good" => new FooService(" group 1")
       case "/a" => authPipeline
       case "/a/" => authPipeline
     }
 
     val router2 = RoutingService.byPath[HttpRequest] {
-      case "/foo" => basePipeline andThen new FooService(" group 2")
-      case "/foo/" => basePipeline andThen new FooService(" group 2")
+      case "/foo" => new FooService(" group 2")
+      case "/foo/" => new FooService(" group 2")
+      case "/foo/good" => new FooService(" group 2")
       case "/a" => authPipeline
       case "/a/" => authPipeline
     }

@@ -31,5 +31,4 @@ class FooService(group: String) extends Service[HttpRequest, FinagleResponse] {
     println("<------------------------------ FooService " + " " + group + " " + request.getUri + " -----------------------------")
     r
   }
-
 }
