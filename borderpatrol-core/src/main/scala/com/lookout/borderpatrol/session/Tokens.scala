@@ -41,6 +41,10 @@ case class Tokens(master: Token, services: ServiceTokensBase) {
   def ++=(other: Tokens): Tokens = TokenState(other).run(this)._2
 }
 
+object Tokens {
+  def empty: Tokens = Tokens(EmptyToken, EmptyServiceTokens)
+}
+
 object TokenState {
   /**
    * Add master tokens to the current tokens

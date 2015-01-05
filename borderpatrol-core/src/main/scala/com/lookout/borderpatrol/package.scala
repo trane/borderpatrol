@@ -4,29 +4,28 @@ import java.net.{InetAddress, InetSocketAddress}
 
 import com.lookout.borderpatrol.session._
 import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse}
-import com.twitter.finagle.{Service => FinagleService}
 import org.jboss.netty.handler.codec.http._
+import scala.collection.JavaConversions._
 
 package object borderpatrol {
 
-  sealed trait RoutedRequest extends FinagleRequest {
-    val service: String
-    val session: Session
+  case class RoutedRequest(httpRequest: HttpRequest, service: String, session: Session) extends FinagleRequest {
     override val remoteSocketAddress: InetSocketAddress = new InetSocketAddress(InetAddress.getLoopbackAddress, 0) //TODO: This is wrong
 
-    def +=(otherSession: Session): RoutedRequest
+    def +=(otherSession: Session): RoutedRequest =
+      copy(session = otherSession)
 
-    def +(token: MasterToken): RoutedRequest =
-      this += Session(session.id, session.originalRequest, session.tokens += token)
+    def +(token: Token): RoutedRequest =
+      this += session.copy(tokens = session.tokens += token)
 
     def ++(tokens: ServiceTokens): RoutedRequest =
-      this += Session(session.id, session.originalRequest, session.tokens ++= tokens)
+      this += session.copy(tokens = session.tokens ++= tokens)
 
     def ++(tokens: Tokens): RoutedRequest =
-      this += Session(session.id, session.originalRequest, session.tokens ++= tokens)
+      this += session.copy(tokens = session.tokens ++= tokens)
 
     def clearTokens: RoutedRequest =
-      this += Session(session.id, session.originalRequest, Tokens(EmptyToken, EmptyServiceTokens))
+      this += session.copy(tokens = Tokens.empty)
 
     def serviceToken: Option[ServiceToken] =
       session.tokens.service(service)
@@ -52,32 +51,25 @@ package object borderpatrol {
       httpRequest.setMethod(session.originalRequest.getMethod)
 
     def borderCookie: Option[String] =
-      cookies.getValue(SecureSession.cookieName)
-  }
-
-  case class RoutedRequestInferSession(httpRequest: HttpRequest, service: String) extends RoutedRequest {
-    val session = Session(this)
-
-    def +=(otherSession: Session): RoutedRequest =
-      RoutedRequest(httpRequest, service, otherSession)
-  }
-  /**
-   * The base Request type in Border Patrol
-   * It contains the session info and service information needed to do routing and rehydrate previous requests
-   * @param httpRequest Underlying netty http request
-   * @param service The service name
-   * @param session A session, where information for this and future requests lives
-   */
-  case class RoutedRequestWithSession(httpRequest: HttpRequest, service: String, session: Session) extends RoutedRequest {
-    def +=(otherSession: Session): RoutedRequest =
-      copy(httpRequest, service, otherSession)
+      cookies.getValue(Session.cookieName)
   }
 
   object RoutedRequest {
-    def apply(request: HttpRequest, name: String): RoutedRequest =
-      RoutedRequestInferSession(request, name)
-    def apply(request: HttpRequest, name: String, session: Session): RoutedRequest =
-      RoutedRequestWithSession(request, name, session)
+    val decoder = new CookieDecoder()
+
+    def apply(request: HttpRequest, name: String): RoutedRequest = {
+      val session = borderCookieValue(request).fold(Session.newSession(request))(Session(_, request))
+      RoutedRequest(request, name, session)
+    }
+
+    def borderCookieValue(request: HttpRequest): Option[String] = {
+      val cookie: Option[Cookie] = (for {
+        header <- request.headers.getAll(HttpHeaders.Names.COOKIE).toList
+        cookie <- decoder.decode(header).toSet
+        if cookie.getName == Session.cookieName
+      } yield cookie).headOption
+      cookie map (_.getValue)
+    }
   }
 
   //Unsuccessful Response

@@ -1,6 +1,6 @@
 package com.lookout.borderpatrol
 
-import com.lookout.borderpatrol.session.SecureSession
+import com.lookout.borderpatrol.session._
 import com.twitter.finagle.http.{Cookie, Request => FinagleRequest, Response => FinagleResponse}
 import com.twitter.finagle.{Service, SimpleFilter}
 import org.jboss.netty.handler.codec.http.{Cookie => NettyCookie}
@@ -10,7 +10,7 @@ import org.jboss.netty.handler.codec.http.{Cookie => NettyCookie}
  * Ensure the set-cookie header is set on the response
  */
 class SessionFilter extends SimpleFilter[RoutedRequest, FinagleResponse] {
-  implicit val marshaller = SecureSession.marshaller
+  implicit val marshall = Session.marshaller
 
   def apply(request: RoutedRequest, service: Service[RoutedRequest, FinagleResponse]) = {
     println("------------------------------ SessionFilter ----------------------------->")
@@ -27,7 +27,7 @@ class SessionFilter extends SimpleFilter[RoutedRequest, FinagleResponse] {
    */
   def responseWithCookie(response: FinagleResponse)(request: RoutedRequest): FinagleResponse = {
     val id = request.session.id.asString
-    request.cookies.get(SecureSession.cookieName) match {
+    request.cookies.get(Session.cookieName) match {
       case Some(c) if c.value == id => response
       case _ => addCookie(response, id)
     }
@@ -45,9 +45,9 @@ class SessionFilter extends SimpleFilter[RoutedRequest, FinagleResponse] {
 
 
   def createCookie(value: String): Cookie = {
-    val cookie = new Cookie(SecureSession.cookieName, value)
+    val cookie = new Cookie(Session.cookieName, value)
     //cookie.isSecure = true
-    cookie.maxAge = SecureSession.lifetime
+    cookie.maxAge = Session.lifetime
     //cookie.domain = "lookout.com"
     cookie
   }

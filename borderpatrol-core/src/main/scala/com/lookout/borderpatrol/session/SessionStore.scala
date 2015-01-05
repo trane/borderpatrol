@@ -27,7 +27,7 @@ case class InMemorySessionStore(implicit marshaller: SessionIdMarshaller) extend
     get(id.asString)
 
   def update(s: Session): Session = {
-    _store = _store.updated(s.id.asString, ExistingSession(s.id, s.originalRequest, s.tokens))
+    _store = _store.updated(s.id.asString, s)
     s
   }
 }
