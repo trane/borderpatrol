@@ -50,18 +50,12 @@ class SessionIdGenerator extends SessionIdExpiryComp {
     Id(currentExpiry, Generator(entropySize))(store.current)
 
   case class Id(expires: Time, entropy: Entropy)(secret: Secret) extends SessionId {
-    val secretId = secret.id
-    val signature = secret.sign(payload)
+    val secretId: SecretId = secret.id
+    val signature: Signature = secret.sign(payload)
   }
 }
 
-sealed trait Marshallable {
-  def encode(s: SessionId): String
-  def decode(s: String): Try[SessionId]
-}
-
-case class SessionIdMarshaller(store: SecretStoreApi) extends Marshallable {
-
+case class SessionIdMarshaller(store: SecretStoreApi) {
   def encode(s: SessionId): String = injector.sessionId2String(s)
   def decode(s: String): Try[SessionId] = injector.sessionId2String.invert(s)
 

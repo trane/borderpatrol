@@ -2,8 +2,10 @@ package com.lookout.borderpatrol
 
 import java.util.concurrent.TimeUnit
 
+import com.lookout.borderpatrol.session._
 import com.twitter.util.Duration
-import org.jboss.netty.handler.codec.http.HttpRequest
+import org.jboss.netty.handler.codec.http.{HttpHeaders, HttpRequest}
+import com.twitter.finagle.http.{CookieMap, Request => FinagleRequest, Response => FinagleResponse}
 
 import scala.util.Try
 
@@ -20,19 +22,6 @@ package object session {
     }
   }
 
-  sealed trait Session {
-    val id: SessionId
-    val originalRequest: HttpRequest
-    val tokens: Tokens
-  }
-
-  case class NewSession(originalRequest: HttpRequest)(implicit g: SessionIdGenerator, s: SecretStoreApi) extends Session {
-    lazy val id = g.next
-    val tokens = Tokens(EmptyToken, EmptyServiceTokens)
-  }
-
-  case class ExistingSession(id: SessionId, originalRequest: HttpRequest, tokens: Tokens) extends Session
-
   implicit class SessionIdSerialize(val s: SessionId) extends AnyVal {
     def asString(implicit marshaller: SessionIdMarshaller): String =
       marshaller.encode(s)
@@ -43,10 +32,24 @@ package object session {
       marshaller.decode(s)
   }
 
-  object SecureSession extends SecureSessionIdComponent
-                        with SessionIdExpiryComp
-                        with SecretStoreComponent
-                        with SessionStoreComponent {
+
+  trait SecureSession {
+    val id: SessionId
+    val originalRequest: HttpRequest
+    val tokens: Tokens
+  }
+
+  case class Session(id: SessionId, originalRequest: HttpRequest, tokens: Tokens) extends SecureSession
+
+  trait SessionFactory {
+    def apply(s: String, originalRequest: HttpRequest): Session
+    def apply(request: RoutedRequest): Session
+  }
+
+  object Session extends SessionFactory with SecureSessionIdComponent
+                                        with SessionIdExpiryComp
+                                        with SecretStoreComponent
+                                        with SessionStoreComponent {
 
     val cookieName = "border_session"
     val entropySize = Constants.SessionId.entropySize
@@ -54,15 +57,6 @@ package object session {
     implicit val marshaller = SessionIdMarshaller(secretStore)
     implicit val generator: SessionIdGenerator = new SessionIdGenerator
     val sessionStore = new InMemorySessionStore
-  }
-
-  object Session {
-    def sessionStore: SessionStoreApi = SecureSession.sessionStore
-    implicit def generator: SessionIdGenerator = SecureSession.generator
-    implicit def secretStore: SecretStoreApi = SecureSession.secretStore
-
-    def apply(id: SessionId, originalRequest: HttpRequest, tokens: Tokens): Session =
-      save(ExistingSession(id, originalRequest, tokens))
 
     def apply(s: String, originalRequest: HttpRequest): Session =
       sessionStore.get(s) getOrElse newSession(originalRequest)
@@ -71,7 +65,7 @@ package object session {
       request.borderCookie.flatMap(id => sessionStore.get(id)) getOrElse newSession(request.httpRequest)
 
     def newSession(originalRequest: HttpRequest): Session =
-      save(NewSession(originalRequest))
+      Session(generator.next, originalRequest, Tokens.empty)
 
     def save(session: Session): Session =
       sessionStore.update(session)

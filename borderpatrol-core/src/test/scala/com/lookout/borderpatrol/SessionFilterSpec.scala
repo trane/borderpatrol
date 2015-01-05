@@ -1,7 +1,7 @@
 package com.lookout.borderpatrol
 
-import com.lookout.borderpatrol.session.SecureSession
-import com.lookout.borderpatrol.util.Combinators.tap
+import session.Session
+import util.Combinators.tap
 import com.twitter.finagle.Service
 import com.twitter.util.{Await, Future}
 import org.jboss.netty.handler.codec.http._
@@ -9,7 +9,7 @@ import org.scalatest.{Matchers, FlatSpec}
 import com.twitter.finagle.http.{Cookie, Response => FinagleResponse}
 
 class SessionFilterSpec extends FlatSpec with Matchers {
-  import SecureSession.marshaller
+  import Session.marshaller
 
   def mockUpstreamService(response: FinagleResponse) = new Service[RoutedRequest, FinagleResponse] {
     def apply(request: RoutedRequest) = Future.value(response)
@@ -19,7 +19,7 @@ class SessionFilterSpec extends FlatSpec with Matchers {
   def httpRep = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK)
   def mockRequest = RoutedRequest(httpReq, "mtp")
   def mockResponse = FinagleResponse(httpRep)
-  def mockCookie(value: String): Cookie = new Cookie(SecureSession.cookieName, value)
+  def mockCookie(value: String): Cookie = new Cookie(Session.cookieName, value)
   def filter = new SessionFilter
 
   def hasSetCookie: Future[FinagleResponse] => Boolean = resp =>
