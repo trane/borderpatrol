@@ -32,7 +32,7 @@ object BorderPatrol extends Build {
 
     // This is bad news for things like com.twitter.util.Time
     parallelExecution in Test := false,
-    fork := true
+    fork := false
 
   )
 
