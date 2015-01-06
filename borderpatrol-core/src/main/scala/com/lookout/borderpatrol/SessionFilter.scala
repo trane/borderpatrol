@@ -1,6 +1,5 @@
 package com.lookout.borderpatrol
 
-import com.lookout.borderpatrol.BorderPatrolApp.RoutedRequest
 import com.lookout.borderpatrol.session._
 import com.twitter.finagle.http.{Cookie, Request => FinagleRequest, Response => FinagleResponse}
 import com.twitter.finagle.{Service, SimpleFilter}
@@ -11,16 +10,14 @@ import org.jboss.netty.handler.codec.http.{Cookie => NettyCookie}
  * Ensure the set-cookie header is set on the response
  */
 class SessionFilter extends SimpleFilter[RoutedRequest, FinagleResponse] {
-  val cookieName = "border_session"
-  implicit val marshaller = SecureSession.marshaller
+  implicit val marshall = Session.marshaller
 
-  def apply(request: RoutedRequest, service: Service[RoutedRequest, FinagleResponse]) ={
+  def apply(request: RoutedRequest, service: Service[RoutedRequest, FinagleResponse]) = {
     println("------------------------------ SessionFilter ----------------------------->")
     val r = service(request) map (response => responseWithCookie(response)(request))
     println("<------------------------------ SessionFilter -----------------------------")
     r
   }
-
 
   /**
    * Set the cookie header on the response if not set or needs to be replaced
@@ -30,8 +27,10 @@ class SessionFilter extends SimpleFilter[RoutedRequest, FinagleResponse] {
    */
   def responseWithCookie(response: FinagleResponse)(request: RoutedRequest): FinagleResponse = {
     val id = request.session.id.asString
-    request.cookies.getValue(cookieName).filter(_ != id).foreach(_ => setCookie(response, id))
-    response
+    request.cookies.get(Session.cookieName) match {
+      case Some(c) if c.value == id => response
+      case _ => addCookie(response, id)
+    }
   }
 
   /**
@@ -39,10 +38,18 @@ class SessionFilter extends SimpleFilter[RoutedRequest, FinagleResponse] {
    * @param response
    * @param value The session id string
    */
-  def setCookie(response: FinagleResponse, value: String): Unit = {
-    val cookie = new Cookie(cookieName, value)
-    cookie.isSecure = true
-    cookie.domain = "lookout.com"
-    response.addCookie(cookie)
+  def addCookie(response: FinagleResponse, value: String): FinagleResponse = {
+    response.cookies += createCookie(value)
+    response
   }
+
+
+  def createCookie(value: String): Cookie = {
+    val cookie = new Cookie(Session.cookieName, value)
+    //cookie.isSecure = true
+    cookie.maxAge = Session.lifetime
+    //cookie.domain = "lookout.com"
+    cookie
+  }
+
 }

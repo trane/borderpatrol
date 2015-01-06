@@ -1,55 +1,102 @@
 package com.lookout.borderpatrol
 
-import java.net.{InetAddress, InetSocketAddress}
+import java.io.FileReader
+import java.net.InetSocketAddress
 
-import com.lookout.borderpatrol.session._
-import com.twitter.finagle.builder.{Server, ServerBuilder}
-import com.twitter.finagle.http.{Http, Request => FinagleRequest, Response => FinagleResponse}
+import com.twitter.finagle._
+import com.twitter.finagle.builder.{ClientBuilder, ServerBuilder}
+import com.twitter.finagle.http.service.RoutingService
+import com.twitter.finagle.http.{Http, Request => FinagleRequest, Response => FinagleResponse, RichHttp}
+import com.twitter.finagle.loadbalancer.HeapBalancerFactory
 import com.twitter.server.TwitterServer
-import org.jboss.netty.handler.codec.http._
+import com.twitter.util.Await
+import com.typesafe.config.ConfigFactory
+import org.jboss.netty.handler.codec.http.{HttpRequest, HttpResponse}
+
+import scala.collection.JavaConversions._
 
 object BorderPatrolApp extends TwitterServer {
 
-  //A Request with Routing and Session Information
-  case class RoutedRequest(httpRequest: HttpRequest, service: String, session: Session) extends FinagleRequest {
-    override val remoteSocketAddress: InetSocketAddress = new InetSocketAddress(InetAddress.getLoopbackAddress, 0) //TODO: This is wrong
-    def +(s: Session): RoutedRequest = copy(httpRequest, service, s)
-    def +(t: Option[SessionTokens]) = copy(httpRequest, service, ExistingSession(session.id, session.originalRequest, t))
-    def serviceToken: Option[ServiceToken] = for(t <- session.tokens; st <- t.service(service)) yield st
-    def toHttpRequest: HttpRequest = {
-      addAuthHeaders
-      addBorderHeaders
-      httpRequest
-    }
-    /* TODO: make this more functional */
-    def addAuthHeaders: Unit =
-      serviceToken.foreach(t => httpRequest.headers.add("Auth-Token", t.value))
-    /* TODO: make this more functional */
-    def addBorderHeaders: Unit =
-      httpRequest.headers.add("Via", "Border Patrol")
-  }
+  lazy val upstreams = getUpstreamClients
 
-  //Unsuccessful Response
-  case class NeedsAuthResponse(httpResponse: HttpResponse) extends FinagleResponse //with BorderPatrolResponse
-
-  //Successful response
-  case class Response(httpResponse: HttpResponse) extends FinagleResponse //with BorderPatrolResponse
-
+  val loginPipeline = new LoginFilter andThen new LoginService
   val sessionFilter = new SessionFilter
-  var authService = new AuthService
-  val upstreamService = new UpstreamService(authService)
+  val authService = sessionFilter andThen new AuthService(new TokenService, loginPipeline)
+  val upstreamService = new UpstreamService(authService, upstreams)
   val upstreamFilter = new UpstreamFilter(authService)
   val routingFilter = new RoutingFilter
-  val loginFilter = new LoginFilter
-  val loginService = new LoginService
 
-  val orchestratorService = routingFilter andThen sessionFilter andThen upstreamFilter andThen upstreamService
+
+  val basePipeline = routingFilter andThen sessionFilter
+  val orchestratorService = basePipeline andThen upstreamFilter andThen upstreamService
+
+  val authPipeline = basePipeline andThen authService
+  val upstreamPipeline = basePipeline andThen upstreamFilter
 
   def main() {
-    val server: Server = ServerBuilder()
+    val server = ServerBuilder()
       .codec(Http())
       .bindTo(new InetSocketAddress(8080))
-      .name("BorderPatrol")
+      .name("BorderPatrol-1")
       .build(orchestratorService)
+
+    //Run Mock Services
+    runMockServices
+
+    Await.ready(adminHttpServer)
+  }
+
+  /**
+   * Build upstream clients from borderpatrol.conf. A map of the clients (where service name is the key)
+   * gets passed to the UpstreamService, which dispatches requests based on the service name
+   * @return
+   */
+  def getUpstreamClients: Map[String, Service[HttpRequest, HttpResponse]] = {
+    val conf = ConfigFactory.parseReader(new FileReader("borderpatrol.conf"))
+    val services = conf.getConfigList("services").toList
+    case class ServiceConfiguration(name: String, friendlyName: String, hosts: String, rewriteRule: String) {}
+
+    val clients = services map(s =>
+      (s.getString("name"),
+        ClientBuilder()
+          .codec(Http())
+          .hosts(s.getString("hosts"))
+          .hostConnectionLimit(10)
+          .loadBalancer(HeapBalancerFactory.toWeighted)
+          .retries(2)
+          .build()))
+    clients.toMap
+  }
+
+  def runMockServices: Unit = {
+
+    val router1 = RoutingService.byPath[HttpRequest] {
+      case "/foo" => new FooService(" group 1")
+      case "/foo/" => new FooService(" group 1")
+      case "/foo/good" => new FooService(" group 1")
+      case "/a" => authPipeline
+      case "/a/" => authPipeline
+    }
+
+    val router2 = RoutingService.byPath[HttpRequest] {
+      case "/foo" => new FooService(" group 2")
+      case "/foo/" => new FooService(" group 2")
+      case "/foo/good" => new FooService(" group 2")
+      case "/a" => authPipeline
+      case "/a/" => authPipeline
+    }
+
+    val server2 = ServerBuilder()
+      .codec(RichHttp[RoutedRequest](Http()))
+      .bindTo(new InetSocketAddress(8081))
+      .name("BorderPatrol-2")
+      .build(router1)
+
+    val server3 = ServerBuilder()
+      .codec(RichHttp[RoutedRequest](Http()))
+      .bindTo(new InetSocketAddress(8082))
+      .name("BorderPatrol-3")
+      .build(router2)
+
   }
 }

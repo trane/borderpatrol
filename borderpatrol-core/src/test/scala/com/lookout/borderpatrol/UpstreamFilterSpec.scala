@@ -1,21 +1,29 @@
 package com.lookout.borderpatrol
 
-import com.lookout.borderpatrol.BorderPatrolApp._
-import com.twitter.finagle.{Filter, Service}
-import com.twitter.util.{Future, Await}
+import com.twitter.finagle.Service
+import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse}
+import com.twitter.util.{Await, Future}
 import org.jboss.netty.handler.codec.http._
-import org.scalatest.{Matchers, FlatSpec}
-import com.twitter.finagle.http.{Http, Request => FinagleRequest, Response => FinagleResponse}
+import org.scalatest.{FlatSpec, Matchers}
 
-/**
- * Created by wkimeria on 12/12/14.
- */
 class UpstreamFilterSpec extends FlatSpec with Matchers{
-  def mockUpstreamService(response: String) = new Service[HttpRequest, String] {
+  def mockUpstreamService(response: FinagleResponse) = new Service[HttpRequest, FinagleResponse] {
     def apply(request: HttpRequest) = Future.value(response)
   }
 
-  def mockRequest = new RoutedRequest(new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET,"/upstream"), new Session())
+  def MockTokenService(response: FinagleResponse) = new Service[HttpRequest, FinagleResponse] {
+    def apply(request: HttpRequest) = Future.value(response)
+  }
+
+  def mockLoginService(response: FinagleResponse) = new Service[RoutedRequest, FinagleResponse] {
+    def apply(request: RoutedRequest) = Future.value(new LoginResponse(new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK)))
+  }
+
+  def httpReq = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/good")
+  def httpRep = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK)
+  def mockRequest = RoutedRequest(httpReq, "foo")
+  def mockRequestWithMasterSession = RoutedRequest(httpReq, "foo")
+  def mockResponse = FinagleResponse(httpRep)
 
   def mockUpService200  = new Service [HttpRequest, FinagleResponse]{
     def apply(request: HttpRequest) = {
@@ -23,14 +31,28 @@ class UpstreamFilterSpec extends FlatSpec with Matchers{
     }
   }
 
-  def mockUpService403  = new Service [HttpRequest, FinagleResponse]{
+  def mockUpService401  = new Service [HttpRequest, FinagleResponse]{
     def apply(request: HttpRequest) = {
-      Future.value(new NeedsAuthResponse(new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.FORBIDDEN)))
+      Future.value(new NeedsAuthResponse(new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.UNAUTHORIZED)))
     }
   }
 
-  "An UpstreamFilter" should "route appropriately" in {
-    Await.result(new UpstreamFilter(None, Some(mockUpService200)).apply(mockRequest, mockUpService200)) shouldBe a [Response]
-    Await.result(new UpstreamFilter(None, Some(mockUpService403)).apply(mockRequest, mockUpService403)) shouldBe a [NeedsAuthResponse]
+ //TODO: Test that the first 401 redirects to AuthService
+
+  //TODO: Test that with a Master Token and Auth Service mocked to return service token, we get a 200 from Upstream
+
+
+  "An UpstreamFilter" should "route to Upstream service successfully" in {
+    Await.result(
+      new UpstreamFilter(
+        new AuthService(MockTokenService(mockResponse),
+          mockLoginService(mockResponse))).apply(mockRequest, mockUpService200)) shouldBe a [Response]
+  }
+
+  "An UpstreamFilter" should "return login page" in {
+    Await.result(
+      new UpstreamFilter(
+        new AuthService(MockTokenService(mockResponse),
+          mockLoginService(mockResponse))).apply(mockRequest, mockUpService401)) shouldBe a [LoginResponse]
   }
 }
