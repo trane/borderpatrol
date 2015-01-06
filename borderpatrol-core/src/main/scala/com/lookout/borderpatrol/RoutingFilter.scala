@@ -17,13 +17,14 @@ class RoutingFilter extends Filter[HttpRequest, FinagleResponse, RoutedRequest, 
     r
   }
 
-  //TODO: use pattern matching + Regex
-  def serviceName(uri: String): String = uri match {
-    case "/foo" => "foo"
-    case "/foo/good" => "foo"
-    case "/bar" => "bar"
-    case "/baz" => "baz"
-    case _ => "unknown"
+  def serviceName(uri: String): String = {
+    val uriPrefix = uri.split("/")(1)
+    uriPrefix match {
+      case "foo" => "foo"
+      case "bar" => "bar"
+      case "baz" => "baz"
+      case _ => "unknown"
+    }
   }
 }
 

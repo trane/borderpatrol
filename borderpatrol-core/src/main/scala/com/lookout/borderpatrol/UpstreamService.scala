@@ -13,20 +13,10 @@ class UpstreamService(authService: Service[RoutedRequest, HttpResponse],
                       upstreams: Map[String,Service[HttpRequest, HttpResponse]]) extends Service[RoutedRequest, FinagleResponse] {
   def apply(request: RoutedRequest) = {
     println("------------------------------ UpstreamService " + request.getUri + "----------------------------->")
-
-    //TODO: Rewrite url
-    val originalUri = request.getUri
-    //val mappedUrl = getRewrittenUrl(originalUri)
-    val mappedUrl = originalUri
-
-
-    //TODO: Change this to take a routed request in order to get the service name. HardCoded for now
     val service = request.service
-    println("uri is " + originalUri)
-    println("re-written url is " + mappedUrl )
+    println("uri is " + request.getUri)
     println("Service is " + service)
     val clientOpt = upstreams.get(service)
-
     val r = clientOpt match {
       case Some(svc) => {
         svc(request.toHttpRequest) map { resp =>
@@ -46,10 +36,5 @@ class UpstreamService(authService: Service[RoutedRequest, HttpResponse],
     }
     println("<----------------------------- UpstreamService ------------------------------")
     r
-  }
-
-  def getRewrittenUrl(url:String):String = {
-    val dTab: Dtab = Dtab.read("/mtp=>/")
-    dTab.lookup(Path.read(url)).sample().show
   }
 }

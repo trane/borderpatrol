@@ -68,9 +68,12 @@ object BorderPatrolApp extends TwitterServer {
     clients.toMap
   }
 
+  /**
+   * Run Mock Services
+   */
   def runMockServices: Unit = {
 
-    val router1 = RoutingService.byPath[HttpRequest] {
+    val router = RoutingService.byPath[HttpRequest] {
       case "/foo" => new FooService(" group 1")
       case "/foo/" => new FooService(" group 1")
       case "/foo/good" => new FooService(" group 1")
@@ -78,25 +81,11 @@ object BorderPatrolApp extends TwitterServer {
       case "/a/" => authPipeline
     }
 
-    val router2 = RoutingService.byPath[HttpRequest] {
-      case "/foo" => new FooService(" group 2")
-      case "/foo/" => new FooService(" group 2")
-      case "/foo/good" => new FooService(" group 2")
-      case "/a" => authPipeline
-      case "/a/" => authPipeline
-    }
-
-    val server2 = ServerBuilder()
+    val server = ServerBuilder()
       .codec(RichHttp[RoutedRequest](Http()))
       .bindTo(new InetSocketAddress(8081))
       .name("BorderPatrol-2")
-      .build(router1)
-
-    val server3 = ServerBuilder()
-      .codec(RichHttp[RoutedRequest](Http()))
-      .bindTo(new InetSocketAddress(8082))
-      .name("BorderPatrol-3")
-      .build(router2)
+      .build(router)
 
   }
 }
