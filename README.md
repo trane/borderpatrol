@@ -1,5 +1,7 @@
 # BorderPatrol
 
+[![Coverage Status](https://coveralls.io/repos/lookout/borderpatrol/badge.png)](https://coveralls.io/r/lookout/borderpatrol)
+
 BorderPatrol is an authentication and session management service that
 lives at the border of your network.
 
