@@ -1,5 +1,7 @@
 # BorderPatrol
 
+[![Build Status](https://travis-ci.org/lookout/borderpatrol.png)](https://travis-ci.org/lookout/borderpatrol)
+
 [![Coverage Status](https://coveralls.io/repos/lookout/borderpatrol/badge.png)](https://coveralls.io/r/lookout/borderpatrol)
 
 BorderPatrol is an authentication and session management service that
