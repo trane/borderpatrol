@@ -1,9 +1,14 @@
 package com.lookout
 
+import java.io.FileReader
 import java.net.{InetAddress, InetSocketAddress}
 
 import com.lookout.borderpatrol.session._
-import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse}
+import com.twitter.finagle.Service
+import com.twitter.finagle.builder.ClientBuilder
+import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse, Http}
+import com.twitter.finagle.loadbalancer.HeapBalancerFactory
+import com.typesafe.config.ConfigFactory
 import org.jboss.netty.handler.codec.http._
 
 import scala.collection.JavaConversions._
@@ -75,13 +80,35 @@ package object borderpatrol {
 
   object Responses {
     object NotFound {
-      def apply(httpVersion: HttpVersion = HttpVersion.HTTP_1_1): Response =
-        Response(new DefaultHttpResponse(httpVersion, HttpResponseStatus.NOT_FOUND))
+      def apply(httpVersion: HttpVersion = HttpVersion.HTTP_1_1): HttpResponse =
+        new DefaultHttpResponse(httpVersion, HttpResponseStatus.NOT_FOUND)
     }
     object OK {
-      def apply(httpVersion: HttpVersion = HttpVersion.HTTP_1_1): Response =
-        Response(new DefaultHttpResponse(httpVersion, HttpResponseStatus.OK))
+      def apply(httpVersion: HttpVersion = HttpVersion.HTTP_1_1): HttpResponse =
+        new DefaultHttpResponse(httpVersion, HttpResponseStatus.OK)
     }
+  }
+
+  /**
+   * Build upstream clients from borderpatrol.conf. A map of the clients (where service name is the key)
+   * gets passed to the UpstreamService, which dispatches requests based on the service name
+   * @return
+   */
+  def getUpstreamClients: Map[String, Service[HttpRequest, HttpResponse]] = {
+    val conf = ConfigFactory.parseReader(new FileReader("borderpatrol.conf"))
+    val services = conf.getConfigList("services").toList
+    case class ServiceConfiguration(name: String, friendlyName: String, hosts: String, rewriteRule: String) {}
+
+    val clients = services map(s =>
+      (s.getString("name"),
+        ClientBuilder()
+          .codec(Http())
+          .hosts(s.getString("hosts"))
+          .hostConnectionLimit(10)
+          .loadBalancer(HeapBalancerFactory.toWeighted)
+          .retries(2)
+          .build()))
+    clients.toMap
   }
 
   //Unsuccessful Response
@@ -90,4 +117,5 @@ package object borderpatrol {
   //Successful response
   case class Response(httpResponse: HttpResponse) extends FinagleResponse //with BorderPatrolResponse
 
+  implicit val upstreams = getUpstreamClients
 }

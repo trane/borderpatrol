@@ -17,12 +17,11 @@ import scala.collection.JavaConversions._
 
 object BorderPatrolApp extends TwitterServer {
 
-  lazy val upstreams = getUpstreamClients
 
   val loginPipeline = new LoginFilter andThen new LoginService
   val sessionFilter = new SessionFilter
   val authService = sessionFilter andThen new AuthService(new TokenService, loginPipeline)
-  val upstreamService = new UpstreamService(authService, upstreams)
+  val upstreamService = new UpstreamService(authService)
   val upstreamFilter = new UpstreamFilter(authService)
   val routingFilter = new RoutingFilter
 
@@ -32,6 +31,8 @@ object BorderPatrolApp extends TwitterServer {
 
   val authPipeline = basePipeline andThen authService
   val upstreamPipeline = basePipeline andThen upstreamFilter
+
+
 
   def main() {
     val server = ServerBuilder()
@@ -44,28 +45,6 @@ object BorderPatrolApp extends TwitterServer {
     runMockServices
 
     Await.ready(adminHttpServer)
-  }
-
-  /**
-   * Build upstream clients from borderpatrol.conf. A map of the clients (where service name is the key)
-   * gets passed to the UpstreamService, which dispatches requests based on the service name
-   * @return
-   */
-  def getUpstreamClients: Map[String, Service[HttpRequest, HttpResponse]] = {
-    val conf = ConfigFactory.parseReader(new FileReader("borderpatrol.conf"))
-    val services = conf.getConfigList("services").toList
-    case class ServiceConfiguration(name: String, friendlyName: String, hosts: String, rewriteRule: String) {}
-
-    val clients = services map(s =>
-      (s.getString("name"),
-        ClientBuilder()
-          .codec(Http())
-          .hosts(s.getString("hosts"))
-          .hostConnectionLimit(10)
-          .loadBalancer(HeapBalancerFactory.toWeighted)
-          .retries(2)
-          .build()))
-    clients.toMap
   }
 
   /**
