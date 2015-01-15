@@ -10,11 +10,11 @@ import scala.util.{Failure, Success, Try}
 object SessionIdTypes {
   type Seconds = Long
   type Size = Int
-  type TimeBytes = Seq[Byte]
-  type Entropy = Seq[Byte]
+  type TimeBytes = List[Byte]
+  type Entropy = List[Byte]
   type SecretId = Byte
-  type Signature = Seq[Byte]
-  type Payload = Seq[Byte]
+  type Signature = List[Byte]
+  type Payload = List[Byte]
 }
 
 trait SessionIdExpiryComp extends Expiry {
@@ -38,7 +38,7 @@ sealed trait SessionId extends SessionIdExpiryComp {
   lazy val toSeq: Seq[Byte] = payload ++ signature
   lazy val toBytes: Array[Byte] = toSeq.toArray
 
-  def timeBytes: TimeBytes = Injection.long2BigEndian(expires.inLongSeconds)
+  def timeBytes: TimeBytes = Injection.long2BigEndian(expires.inLongSeconds).toList
   def expired: Boolean = expires < Time.now || expires > currentExpiry
 }
 
@@ -47,17 +47,18 @@ class SessionIdGenerator extends SessionIdExpiryComp {
   import com.lookout.borderpatrol.session.SessionIdTypes._
 
   def next(implicit store: SecretStoreApi): SessionId =
-    Id(currentExpiry, Generator(entropySize))(store.current)
+    Id(currentExpiry, Generator(entropySize).toList)(store.current)
 
   case class Id(expires: Time, entropy: Entropy)(secret: Secret) extends SessionId {
     val secretId: SecretId = secret.id
-    val signature: Signature = secret.sign(payload)
+    val signature: Signature = secret.sign(payload).toList
   }
 }
 
 case class SessionIdMarshaller(store: SecretStoreApi) {
-  def encode(s: SessionId): String = injector.sessionId2String(s)
-  def decode(s: String): Try[SessionId] = injector.sessionId2String.invert(s)
+  def encode(s: SessionId): String = injector.idAndSecret2String((s, null))
+  def decode(s: String): Try[SessionId] = injector.idAndSecret2String.invert(s).map(_._1)
+  def decodeWithSecret(s: String): Try[(SessionId, Secret)] = injector.idAndSecret2String.invert(s)
 
   object injector extends SessionIdExpiryComp {
     import com.lookout.borderpatrol.session.Constants.SessionId.entropySize
@@ -81,7 +82,7 @@ case class SessionIdMarshaller(store: SecretStoreApi) {
       if (s.sign(p) == sig) true
       else throw new Exception("Invalid signature")
 
-    def parseBytes(bytes: Seq[Byte]): Try[BytesTuple] = bytes match {
+    def parseBytes(bytes: List[Byte]): Try[BytesTuple] = bytes match {
       case a if a.size == expectedSize => {
         val (pl, sig) = a.splitAt(payloadSize)
         val (tb, tail) = pl.splitAt(timeBytesSize)
@@ -91,24 +92,34 @@ case class SessionIdMarshaller(store: SecretStoreApi) {
       case _ => Failure(new Exception("Not a session string"))
     }
 
-    def sessionId(tuple: BytesTuple): Try[SessionId] = {
+    def sessionId(tuple: BytesTuple): Try[(SessionId, Secret)] = {
       val (pl, tb, ent, id, sig) = tuple
       for {
         tLong <- Injection.long2BigEndian.invert(tb.toArray)
         time <- long2Time(tLong)
-        s <- store.find((s) => s.id == id && validOrThrow(s, pl, sig))
-      } yield Id(time, ent, id, sig)
+        sec <- store.find((s) => s.id == id && validOrThrow(s, pl, sig))
+      } yield (Id(time, ent, id, sig), sec)
     }
 
-    implicit lazy val sessionId2Bytes: Injection[SessionId, Array[Byte]] =
-      new AbstractInjection[SessionId, Array[Byte]] {
-        def apply(sid: SessionId): Array[Byte] = sid.toBytes.toArray
+    implicit lazy val secretAndSessionId2SessionId: Injection[(SessionId, Secret), SessionId] =
+      new AbstractInjection[(SessionId, Secret), SessionId] {
+        def apply(t: (SessionId, Secret)): SessionId = t._1
 
-        override def invert(bytes: Array[Byte]): Try[SessionId] =
-          for (t <- parseBytes(bytes); s <- sessionId(t)) yield s
+        override def invert(sid: SessionId): Try[(SessionId, Secret)] =
+          for (s <- store.find((s) => s.id == sid.secretId && validOrThrow(s, sid.payload, sid.signature))) yield (sid, s)
       }
 
-    implicit lazy val sessionId2String = Injection.connect[SessionId, Array[Byte], Base64String, String]
+    implicit lazy val sessionIdAndSecret2Bytes: Injection[(SessionId, Secret), Array[Byte]] =
+      new AbstractInjection[(SessionId, Secret), Array[Byte]] {
+
+        def apply(t: (SessionId, Secret)): Array[Byte] = t._1.toBytes.toArray
+
+        override def invert(bytes: Array[Byte]): Try[(SessionId, Secret)] =
+          for (t <- parseBytes(bytes.toList); s <- sessionId(t)) yield s
+      }
+
+    implicit lazy val idAndSecret2String = Injection.connect[(SessionId, Secret), Array[Byte], Base64String, String]
+    implicit lazy val idAndSecret2Id = Injection.connect[(SessionId, Secret), SessionId]
 
     case class Id(expires: Time, entropy: Entropy, secretId: SecretId, signature: Signature) extends SessionId
   }

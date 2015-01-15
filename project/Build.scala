@@ -16,7 +16,8 @@ object BorderPatrol extends Build {
       "org.scalatest" %% "scalatest" % "2.2.2" % "test",
       "org.scalamock" %% "scalamock-scalatest-support" % "3.2.1" % "test",
       "org.skife.com.typesafe.config" % "typesafe-config" % "0.3.0",
-      "org.json4s" %% "json4s-jackson" % "3.2.11"
+      "org.json4s" %% "json4s-jackson" % "3.2.11",
+      "org.bouncycastle" % "bcprov-jdk15on" % "1.51"
     ),
 
     scalacOptions ++= Seq("-encoding", "utf8"),
