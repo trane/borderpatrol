@@ -3,8 +3,13 @@ package com.lookout.borderpatrol
 import java.util.concurrent.TimeUnit
 
 import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse}
-import com.twitter.util.Duration
+import com.twitter.util.{Time, Await, Duration}
 import org.jboss.netty.handler.codec.http.HttpRequest
+
+import org.json4s._
+import org.json4s.jackson.Serialization
+import org.json4s.jackson.Serialization.{read, write}
+
 
 import scala.util.Try
 
@@ -31,6 +36,17 @@ package object session {
       marshaller.decode(s)
   }
 
+  implicit val formats = Serialization.formats(NoTypeHints)
+
+  implicit class SecretsJsonEncode(val ss: Secrets) extends AnyVal {
+    def asJson(implicit formats: Formats): String =
+      write(ss)
+  }
+
+  implicit class SecretsJsonDecode(val json: String) extends AnyVal {
+    def asSecrets: Secrets =
+      read[Secrets](json)
+  }
 
   trait SecureSession {
     val id: SessionId
@@ -52,7 +68,7 @@ package object session {
 
     val cookieName = "border_session"
     val entropySize = Constants.SessionId.entropySize
-    implicit val secretStore = InMemorySecretStore(Secrets(Current(currentExpiry), None))
+    implicit val secretStore = InMemorySecretStore(Secrets(Secret(currentExpiry), Secret(Time.fromSeconds(100))))
     implicit val marshaller = SessionIdMarshaller(secretStore)
     implicit val generator: SessionIdGenerator = new SessionIdGenerator
     val sessionStore = new InMemorySessionStore
@@ -69,4 +85,5 @@ package object session {
     def save(session: Session): Session =
       sessionStore.update(session)
   }
+
 }

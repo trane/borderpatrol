@@ -15,7 +15,8 @@ object BorderPatrol extends Build {
       "io.argonaut" %% "argonaut" % "6.0.4",
       "org.scalatest" %% "scalatest" % "2.2.2" % "test",
       "org.scalamock" %% "scalamock-scalatest-support" % "3.2.1" % "test",
-      "org.skife.com.typesafe.config" % "typesafe-config" % "0.3.0"
+      "org.skife.com.typesafe.config" % "typesafe-config" % "0.3.0",
+      "org.json4s" %% "json4s-jackson" % "3.2.11"
     ),
 
     scalacOptions ++= Seq("-encoding", "utf8"),

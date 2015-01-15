@@ -14,8 +14,8 @@ import scala.util.{Failure, Success, Try}
  * on change, while an external service handles writing new secrets.
  */
 sealed trait SecretStoreApi {
-  def current: Current
-  def previous: Option[Previous]
+  def current: Secret
+  def previous: Secret
   def find(f: (Secret) => Boolean): Try[Secret]
 }
 
@@ -27,8 +27,8 @@ case class InMemorySecretStore(secrets: Secrets) extends SecretStoreApi {
     val c = _secrets.current
     if (c.expiry > Time.now && c.expiry <= currentExpiry) c
     else {
-      val c2 = Current(currentExpiry)
-      _secrets = Secrets(c2, Some(Previous(c)))
+      val c2 = Secret(currentExpiry)
+      _secrets = Secrets(c2, c)
       c2
     }
   }
@@ -37,10 +37,8 @@ case class InMemorySecretStore(secrets: Secrets) extends SecretStoreApi {
 
   def find(f: (Secret) => Boolean) =
     if (f(current)) Success(current)
-    else previous match {
-      case Some(p) if f(p) => Success(p)
-      case _ => Failure(new Exception("No matching secrets found"))
-    }
+    else if (f(previous)) Success(previous)
+    else Failure(new Exception("No matching secrets found"))
 }
 
 trait SecretStoreComponent {

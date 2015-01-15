@@ -13,27 +13,28 @@ class SecretStoreSpec extends FlatSpec with Matchers {
   behavior of "SecretStore"
 
   it should "never give an expired Secret with .current" in {
-    val cur = Current(expiredExpiry)
-    val ss = InMemorySecretStore(Secrets(cur, None))
+    val cur = Secret(expiredExpiry)
+    val ss = InMemorySecretStore(Secrets(cur, Secret(Time.fromSeconds(0))))
     cur.expiry < Time.now shouldBe true
     ss.current should not equal cur
     ss.current.expiry > Time.now shouldBe true
   }
 
   it should "place the previously expired current into previous" in {
-    val cur = Current(expiredExpiry)
-    val ss = InMemorySecretStore(Secrets(cur, None))
+    val cur = Secret(expiredExpiry)
+    val prev = Secret(Time.fromSeconds(0))
+    val ss = InMemorySecretStore(Secrets(cur, prev))
     ss.current should not equal cur
-    ss.previous.forall(p => p.key == cur.key && p.expiry == cur.expiry) shouldBe true
+    (ss.previous.key == cur.key && ss.previous.expiry == cur.expiry) shouldBe true
   }
 
   it should "find the proper secret based on a predicate" in {
-    val cur = Current(currentExpiry)
-    val prev = Previous(Current(currentExpiry))
-    val ss = InMemorySecretStore(Secrets(cur, Some(prev)))
+    val cur = Secret(currentExpiry)
+    val prev = Secret(currentExpiry)
+    val ss = InMemorySecretStore(Secrets(cur, prev))
     val g = Generator(1)
     val s1 = ss.current.sign(g)
-    val s2 = ss.previous.get.sign(g)
+    val s2 = ss.previous.sign(g)
     ss.find(_.sign(g).sameElements(s1)).get shouldBe cur
     ss.find(_.sign(g).sameElements(s2)).get shouldBe prev
   }
