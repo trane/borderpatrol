@@ -2,14 +2,14 @@ package com.lookout.borderpatrol
 
 import java.util.concurrent.TimeUnit
 
-import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse}
-import com.twitter.util.{Time, Await, Duration}
-import org.jboss.netty.handler.codec.http.HttpRequest
+import argonaut.Argonaut._
+import argonaut.CodecJson
+import com.twitter.util.{Time, Duration}
+import org.jboss.netty.buffer.ChannelBuffers
+import com.lookout.borderpatrol.util.Combinators.tap
+import org.jboss.netty.handler.codec.http.{DefaultHttpRequest, HttpMethod, HttpVersion, HttpRequest}
 
-import org.json4s._
-import org.json4s.jackson.Serialization
-import org.json4s.jackson.Serialization.{read, write}
-
+import scala.collection.JavaConversions._
 
 import scala.util.Try
 
@@ -36,25 +36,87 @@ package object session {
       marshaller.decode(s)
   }
 
-  implicit val formats = Serialization.formats(NoTypeHints)
+  implicit def ByteCodecJson: CodecJson[Byte] =
+    CodecJson(
+      (b: Byte) => jNumber(b.toInt),
+      c => for (b <- c.as[Int]) yield b.toByte
+    )
+
+  implicit def TimeCodecJson: CodecJson[Time] =
+    CodecJson(
+      (t: Time) =>
+        ("ms" := t.inMilliseconds) ->: jEmptyObject,
+      c => for {
+        s <- (c --\ "ms").as[Long]
+      } yield Time.fromMilliseconds(s))
+
+  implicit def SessionIdCodecJson: CodecJson[SessionId] =
+    casecodec4(SessionId.apply, SessionId.unapply)("expires", "entropy", "secretId", "signature")
+
+  implicit def SecretCodecJson: CodecJson[Secret] =
+    casecodec3(Secret.apply, Secret.unapply)("expiry", "id", "entropy")
+
+  implicit def SecretsCodecJson: CodecJson[Secrets] =
+    casecodec2(Secrets.apply, Secrets.unapply)("current", "previous")
+
+  implicit def HttpRequestCodecJson: CodecJson[HttpRequest] =
+    CodecJson(
+      (r: HttpRequest) =>
+        ("u" := r.getUri) ->:
+        ("m" := r.getMethod.getName) ->:
+        ("v" := r.getProtocolVersion.getText) ->:
+        ("c" := r.getContent.array.toList) ->:
+        ("h" := r.headers.names.toList.map(n => Map[String, String](n -> r.headers.get(n)))) ->:
+          jEmptyObject,
+      c => for {
+        uri <- (c --\ "u").as[String]
+        meth <- (c --\ "m").as[String]
+        ver <- (c --\ "v").as[String]
+        heads <- (c --\ "h").as[List[Map[String, String]]]
+        cont <- (c --\ "c").as[List[Byte]]
+      } yield tap(new DefaultHttpRequest(HttpVersion.valueOf(ver), HttpMethod.valueOf(meth), uri))(req => {
+          heads.foreach(head => head.foreach(kv => req.headers.add(kv._1, kv._2)))
+          req.setContent(ChannelBuffers.copiedBuffer(cont.toArray))
+        })
+    )
+
+  import TokenJson.TokensCodecJson
+
+  implicit def SessionCodecJson: CodecJson[Session] =
+    casecodec3(Session.apply, Session.unapply)("id", "req", "tokens")
 
   implicit class SecretsJsonEncode(val ss: Secrets) extends AnyVal {
-    def asJson(implicit formats: Formats): String =
-      write(ss)
+    def asJson: String =
+      SecretsCodecJson.encode(ss).toString
   }
 
-  implicit class SecretsJsonDecode(val json: String) extends AnyVal {
-    def asSecrets: Secrets =
-      read[Secrets](json)
+  implicit class SecretsJsonDecode(val s: String) extends AnyVal {
+    def asSecrets: Option[Secrets] =
+      s.decodeOption[Secrets]
+  }
+
+  implicit class SessionJsonEncode(val s: Session) extends AnyVal {
+    def asJson: String =
+      SessionCodecJson.encode(s).toString
+  }
+
+  implicit class SessionJsonDecode(val s: String) extends AnyVal {
+    def asSession: Option[Session] =
+      s.decodeOption[Session]
   }
 
   trait SecureSession {
     val id: SessionId
     val originalRequest: HttpRequest
     val tokens: Tokens
+
   }
 
-  case class Session(id: SessionId, originalRequest: HttpRequest, tokens: Tokens) extends SecureSession
+  case class Session(id: SessionId, originalRequest: HttpRequest, tokens: Tokens) extends SecureSession {
+    def equals(o: SecureSession): Boolean =
+      id == o.id && tokens == o.tokens && (originalRequest.getUri == o.originalRequest.getUri &&
+                                           originalRequest.getMethod == o.originalRequest.getMethod)
+  }
 
   trait SessionFactory {
     def apply(s: String, originalRequest: HttpRequest): Session

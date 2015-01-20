@@ -73,6 +73,17 @@ package object borderpatrol {
     }
   }
 
+  object Responses {
+    object NotFound {
+      def apply(httpVersion: HttpVersion = HttpVersion.HTTP_1_1): Response =
+        Response(new DefaultHttpResponse(httpVersion, HttpResponseStatus.NOT_FOUND))
+    }
+    object OK {
+      def apply(httpVersion: HttpVersion = HttpVersion.HTTP_1_1): Response =
+        Response(new DefaultHttpResponse(httpVersion, HttpResponseStatus.OK))
+    }
+  }
+
   //Unsuccessful Response
   case class NeedsAuthResponse(httpResponse: HttpResponse) extends FinagleResponse //with BorderPatrolResponse
 

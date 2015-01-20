@@ -5,9 +5,13 @@ import argonaut._
 
 import scalaz.State
 
-sealed trait Token
+sealed trait Token {
+  val value: String
+}
 
-case object EmptyToken extends Token
+case object EmptyToken extends Token {
+  val value = ""
+}
 case class MasterToken(value: String) extends Token
 case class ServiceToken(name: String, value: String) extends Token
 
@@ -90,39 +94,25 @@ object TokenState {
 object TokenJson {
 
   implicit def MasterTokenCodecJson: CodecJson[MasterToken] =
-    casecodec1(MasterToken.apply, MasterToken.unapply)("auth_service")
+    casecodec1(MasterToken.apply, MasterToken.unapply)("value")
+
+  implicit def ServiceTokenCodecJson: CodecJson[ServiceToken] =
+    casecodec2(ServiceToken.apply, ServiceToken.unapply)("name", "value")
 
   implicit def ServiceTokensCodecJson: CodecJson[ServiceTokens] =
     casecodec1(ServiceTokens.apply, ServiceTokens.unapply)("service_tokens")
 
-  implicit def TokenCodecJson: CodecJson[Token] =
-    CodecJson(
-      (t: Token) =>
-        ("auth_service" := t.asInstanceOf[MasterToken].value) ->:
-          jEmptyObject,
-      c => for {
-        value <- (c --\ "auth_service").as[String]
-      } yield MasterToken(value))
-
-  implicit def ServiceTokensBaseCodecJson: CodecJson[ServiceTokensBase] =
-    CodecJson(
-      (t: ServiceTokensBase) =>
-        ("service_tokens" := t.services) ->:
-          jEmptyObject,
-      c => for {
-        tokens <- (c --\ "auth_service").as[Map[String,String]]
-      } yield ServiceTokens(tokens))
-
   implicit def TokensCodecJson: CodecJson[Tokens] =
     CodecJson(
       (ts: Tokens) =>
-        ("auth_service" := ts.master.asInstanceOf[MasterToken].value) ->:
+        ("auth_service" := ts.master.value) ->:
         ("service_tokens" := ts.services.services) ->:
           jEmptyObject,
       c => for {
         master <- (c --\ "auth_service").as[String]
         services <- (c --\ "service_tokens").as[Map[String, String]]
-      } yield Tokens(MasterToken(master), ServiceTokens(services)))
+      } yield Tokens(if (master.value.isEmpty) EmptyToken else MasterToken(master),
+                     if (services.isEmpty) EmptyServiceTokens else ServiceTokens(services)))
 
   object MasterTokenJson {
     def apply(s: String) =
