@@ -38,7 +38,7 @@ package object session {
 
   implicit def ByteCodecJson: CodecJson[Byte] =
     CodecJson(
-      (b: Byte) => jNumber(b.toInt),
+      (b: Byte) => jNumberOrNull(b.toInt),
       c => for (b <- c.as[Int]) yield b.toByte
     )
 

@@ -9,12 +9,12 @@ import org.scalatest.{FlatSpec, Matchers, TryValues}
 
 class SessionIdSpec extends FlatSpec with Matchers with TryValues {
 
-  def currentExpiry: Time = Time.now + Duration(1, TimeUnit.DAYS)
+  import com.lookout.borderpatrol.session.SecretExpiry._
   def expiredExpiry: Time = Time.fromSeconds(42)
 
   def mockSecret = Secret(currentExpiry)
-  def mockGenerator = new SessionIdGenerator
   implicit val mockSecretStore = new InMemorySecretStore(Secrets(mockSecret, Secret(expiredExpiry)))
+  def mockGenerator = new SessionIdGenerator
   implicit val marshaller = SessionIdMarshaller(mockSecretStore)
   implicit val sessionIdEq =
     new Equality[SessionId] {
@@ -29,7 +29,7 @@ class SessionIdSpec extends FlatSpec with Matchers with TryValues {
 
   it should "create valid SessionId instances" in {
     val sid = mockGenerator.next
-    val sig = mockSecretStore.current.sign(sid.payload)
+    val sig = mockSecretStore.current.sign(sid.payload).toVector
     sid.expired shouldBe false
     sid.signature shouldEqual sig
     sid.secretId shouldEqual mockSecretStore.current.id
@@ -71,7 +71,7 @@ class SessionIdSpec extends FlatSpec with Matchers with TryValues {
 
   it should "fail to create a session id when signature is invalid" in {
     val sid = mockGenerator.next
-    val invalidSignature = Secret(Time.now).sign(sid.entropy).toList
+    val invalidSignature = Secret(Time.now).sign(sid.entropy).toVector
     val invalidSid = SessionId(sid.expires, sid.entropy, sid.secretId, invalidSignature)
     val decoded = marshaller.decode(invalidSid.asString)
     decoded.failure.exception should have message "Invalid signature"
