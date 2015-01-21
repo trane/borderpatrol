@@ -25,9 +25,6 @@ sealed trait SecretStoreApi {
 
 case class ConsulSecretStore(watcher: SecretsWatcherApi) extends SecretStoreApi {
   //During initialization, we want this to be a hard failure that prevents server from starting
-  //private[this] var _secrets: Secrets = Await.result[Secrets]( watcher.getSecrets,Duration(2000, MILLISECONDS))
-
-  //If we unable to get secrets. Hard fail
   private[this] var _secrets: Secrets = watcher.initialSecrets match {
     case Success(secrets) => secrets
     case Failure(f) => {
@@ -44,7 +41,7 @@ case class ConsulSecretStore(watcher: SecretsWatcherApi) extends SecretStoreApi 
       case Success(newSecrets) => newSecrets
       case Failure(f) => {
         //Do something indicating we got an error
-        println(s"Unable to get new secrets, logging.........................>$f")
+        println(s"Unable to get new secrets: Exception $f")
         _secrets
       }
     }
@@ -54,7 +51,7 @@ case class ConsulSecretStore(watcher: SecretsWatcherApi) extends SecretStoreApi 
     val c = _secrets.current
     if (c.expiry > Time.now && c.expiry <= SecretExpiry.currentExpiry) c
     else {
-      println("Secrets have expired..................................................................................>")
+      println("Secrets have expired")
       _secrets = nextSecrets
     }
     _secrets.current
