@@ -9,12 +9,12 @@ import org.scalatest.{FlatSpec, Matchers, TryValues}
 
 class SessionIdSpec extends FlatSpec with Matchers with TryValues {
 
-  def currentExpiry: Time = Time.now + Duration(1, TimeUnit.DAYS)
+  import com.lookout.borderpatrol.session.SecretExpiry._
   def expiredExpiry: Time = Time.fromSeconds(42)
 
-  def mockSecret = Current(currentExpiry)
+  def mockSecret = Secret(currentExpiry)
+  implicit val mockSecretStore = new InMemorySecretStore(Secrets(mockSecret, Secret(expiredExpiry)))
   def mockGenerator = new SessionIdGenerator
-  implicit val mockSecretStore = new InMemorySecretStore(Secrets(mockSecret, None))
   implicit val marshaller = SessionIdMarshaller(mockSecretStore)
   implicit val sessionIdEq =
     new Equality[SessionId] {
@@ -29,7 +29,7 @@ class SessionIdSpec extends FlatSpec with Matchers with TryValues {
 
   it should "create valid SessionId instances" in {
     val sid = mockGenerator.next
-    val sig = mockSecretStore.current.sign(sid.payload)
+    val sig = mockSecretStore.current.sign(sid.payload).toVector
     sid.expired shouldBe false
     sid.signature shouldEqual sig
     sid.secretId shouldEqual mockSecretStore.current.id
@@ -56,14 +56,14 @@ class SessionIdSpec extends FlatSpec with Matchers with TryValues {
 
   it should "fail to create a session id if expired" in {
     val sid = mockGenerator.next
-    val expiredSid = marshaller.injector.Id(Time.fromSeconds(0), sid.entropy, sid.secretId, sid.signature)
+    val expiredSid = SessionId(Time.fromSeconds(0), sid.entropy, sid.secretId, sid.signature)
     val decoded = marshaller.decode(expiredSid.asString)
     decoded.failure.exception should have message "Time has expired"
   }
 
   it should "fail to create a session id if no valid secret was found" in {
-    val invalidSecret = Current(Time.fromSeconds(0))
-    implicit val store = InMemorySecretStore(Secrets(invalidSecret, None))
+    val invalidSecret = Secret(Time.fromSeconds(0))
+    implicit val store = InMemorySecretStore(Secrets(invalidSecret, Secret(expiredExpiry)))
     val sid = mockGenerator.next(store)
     val decoded = marshaller.decode(sid.asString)
     decoded.failure.exception should have message "No matching secrets found"
@@ -71,8 +71,8 @@ class SessionIdSpec extends FlatSpec with Matchers with TryValues {
 
   it should "fail to create a session id when signature is invalid" in {
     val sid = mockGenerator.next
-    val invalidSignature = Current(Time.now).sign(sid.entropy)
-    val invalidSid = marshaller.injector.Id(sid.expires, sid.entropy, sid.secretId, invalidSignature)
+    val invalidSignature = Secret(Time.now).sign(sid.entropy).toVector
+    val invalidSid = SessionId(sid.expires, sid.entropy, sid.secretId, invalidSignature)
     val decoded = marshaller.decode(invalidSid.asString)
     decoded.failure.exception should have message "Invalid signature"
   }

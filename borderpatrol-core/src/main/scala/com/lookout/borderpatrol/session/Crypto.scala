@@ -33,3 +33,9 @@ trait Signer {
   def sign(bytes: Seq[Byte]): Seq[Byte] =
     hmac.doFinal(bytes.toArray)
 }
+
+trait CryptKey {
+  val key: Key
+  def encrypt(bytes: Seq[Byte]): Seq[Byte]
+  def decrypt(bytes: Seq[Byte]): Seq[Byte]
+}

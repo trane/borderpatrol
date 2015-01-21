@@ -8,16 +8,16 @@ object BorderPatrol extends Build {
   val sharedSettings = Seq(
     version := libVersion,
     organization := "com.lookout",
-    scalaVersion := "2.10.4",
+    scalaVersion := "2.11.5",
     libraryDependencies ++= Seq(
       "com.twitter" %% "twitter-server" % twitter_server,
       "com.twitter" %% "bijection-core" % "0.7.0",
-      "io.argonaut" %% "argonaut" % "6.0.4",
+      "io.argonaut" %% "argonaut" % "6.1-M5",
       "org.scalatest" %% "scalatest" % "2.2.2" % "test",
       "org.scalamock" %% "scalamock-scalatest-support" % "3.2.1" % "test",
-      "org.skife.com.typesafe.config" % "typesafe-config" % "0.3.0"
+      "org.skife.com.typesafe.config" % "typesafe-config" % "0.3.0",
+      "org.bouncycastle" % "bcprov-jdk15on" % "1.51"
     ),
-
     scalacOptions ++= Seq("-encoding", "utf8"),
     scalacOptions += "-deprecation",
     javacOptions ++= Seq("-source", "1.6", "-target", "1.6"),
@@ -34,7 +34,7 @@ object BorderPatrol extends Build {
   lazy val borderPatrolCore = Project(
     id = "borderpatrol-core",
     base = file("borderpatrol-core"),
-    settings = Project.defaultSettings ++ sharedSettings
+    settings = Defaults.coreDefaultSettings ++ sharedSettings
   ).settings(
     name := "borderpatrol-core"
   )

@@ -108,11 +108,11 @@ class TokensSpec extends FlatSpec with Matchers {
   }
 
   it should "hydrate MasterToken" in {
-    (TokenJson.MasterTokenJson(mockJsonResponse) getOrElse EmptyToken) should not be EmptyToken
+    (TokenJson.MasterTokenJson("""{"value": "master"}""") getOrElse EmptyToken) should not be EmptyToken
   }
 
   it should "hydrate ServiceTokens" in {
-    (TokenJson.ServiceTokensJson(mockJsonResponse) getOrElse EmptyServiceTokens) should not be EmptyServiceTokens
+    (TokenJson.ServiceTokensJson("""{"service_tokens":{"service1": "token", "service2": "token2"}}""") getOrElse EmptyServiceTokens) should not be EmptyServiceTokens
   }
 
   it should "invert to the same JSON it converted from" in {
