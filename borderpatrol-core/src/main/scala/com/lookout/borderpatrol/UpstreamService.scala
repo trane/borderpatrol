@@ -9,8 +9,7 @@ import org.jboss.netty.handler.codec.http._
  * Generic upstream service
  * @param authService
  */
-class UpstreamService(authService: Service[RoutedRequest, HttpResponse],
-                      upstreams: Map[String,Service[HttpRequest, HttpResponse]]) extends Service[RoutedRequest, FinagleResponse] {
+class UpstreamService(authService: Service[RoutedRequest, HttpResponse]) extends Service[RoutedRequest, FinagleResponse] {
   def apply(request: RoutedRequest) = {
     println("------------------------------ UpstreamService " + request.getUri + "----------------------------->")
     val service = request.service
