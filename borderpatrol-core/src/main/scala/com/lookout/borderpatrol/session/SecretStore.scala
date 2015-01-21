@@ -25,12 +25,7 @@ sealed trait SecretStoreApi {
 
 case class ConsulSecretStore(watcher: SecretsWatcherApi) extends SecretStoreApi {
   //During initialization, we want this to be a hard failure that prevents server from starting
-  private[this] var _secrets: Secrets = watcher.initialSecrets match {
-    case Success(secrets) => secrets
-    case Failure(f) => {
-      throw new IllegalArgumentException(f)
-    }
-  }
+  private[this] var _secrets: Secrets = watcher.initialSecrets
 
   /**
    * Get Next secrets

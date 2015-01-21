@@ -1,5 +1,7 @@
 package com.lookout.borderpatrol.session
 
+import java.util.concurrent.TimeoutException
+
 import argonaut.Argonaut._
 import argonaut._
 import com.lookout.borderpatrol.ConsulService
@@ -11,35 +13,42 @@ import scala.concurrent.{Await, Future => ScalaFuture, Promise => ScalaPromise}
 import scala.util.Try
 
 sealed trait SecretsWatcherApi {
-  def initialSecrets: Try[Secrets]
+  def initialSecrets: Secrets
 
   def getNext: Try[Secrets]
 }
 
 object ConsulSecretsWatcher extends SecretsWatcherApi {
 
+  val Timeout: Int = 1000
+  val BaseUrl: String = "/v1/kv/borderpatrol/secrets"
+  val WaitInterval: String = "48h"
+
   val consulService = new ConsulService
   var currentModifyIndex: Int = 0
   var _nextSecrets: ScalaFuture[Secrets] = ScalaPromise[Secrets]().future
 
-  def initialSecrets: Try[Secrets] = {
-    Try {
-      val secrets = Await.result[Secrets](getSecrets, Duration(3000, MILLISECONDS))
+  def initialSecrets: Secrets = {
+    try {
+      val secrets = Await.result[Secrets](getSecrets, Duration(Timeout, MILLISECONDS))
       _nextSecrets = getSecrets
       secrets
+    } catch {
+      case e: TimeoutException => throw new Exception("Timeout occurred trying to retrieve secrets: " + e)
+      case e: Exception => throw new Exception("Unable to retrieve Secrets: " + e)
     }
   }
 
   def getNext: Try[Secrets] = {
     val next = _nextSecrets
     _nextSecrets = getSecrets
-    Try(Await.result[Secrets](next, Duration(2500, MILLISECONDS)))
+    Try(Await.result[Secrets](next, Duration(Timeout, MILLISECONDS)))
   }
 
   private def getSecrets: ScalaFuture[Secrets] = {
     var promise = ScalaPromise[Secrets]()
     //Use a ridiculously long timeout (48 hrs)
-    val request = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, s"/v1/kv/borderpatrol/secrets?wait=48h&index=$currentModifyIndex")
+    val request = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, s"$BaseUrl?wait=$WaitInterval&index=$currentModifyIndex")
     consulService(request).onSuccess { resp =>
       handleResponse(resp) match {
         case Left(response) => promise.failure(new IllegalStateException("An error occurred getting secrets from the Data Store:" + resp.getStatus))
@@ -85,7 +94,6 @@ object ConsulSecretsWatcher extends SecretsWatcherApi {
    * @return
    */
   def getSecretInformation(s: String): Option[SecretData] = {
-    implicit def SecretDataCodecJson = casecodec6(SecretData.apply, SecretData.unapply)("CreateIndex", "ModifyIndex", "LockIndex", "Key", "Flags", "Value")
     for {
       res <- Parse.decodeOption[List[SecretData]](s)
       sData <- res.headOption

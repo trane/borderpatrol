@@ -4,6 +4,7 @@ import java.util.concurrent.TimeUnit
 
 import argonaut.Argonaut._
 import argonaut.CodecJson
+import com.lookout.borderpatrol.session.ConsulSecretsWatcher.SecretData
 import com.twitter.util.{Time, Duration}
 import org.jboss.netty.buffer.ChannelBuffers
 import com.lookout.borderpatrol.util.Combinators.tap
@@ -151,5 +152,8 @@ package object session {
   //TODO: This should be configurable(should be Memory for unit tests, and consul in run mode
   //def getSecretStore: SecretStoreApi = ConsulSecretStore(ConsulSecretsWatcher)
   def getSecretStore: SecretStoreApi = InMemorySecretStore(Secrets(Secret(SecretExpiry.currentExpiry), Secret(Time.fromSeconds(100))))
+
+  implicit def SecretDataCodecJson = casecodec6(SecretData.apply, SecretData.unapply)("CreateIndex", "ModifyIndex", "LockIndex", "Key", "Flags", "Value")
+
 
 }
