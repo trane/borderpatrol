@@ -16,6 +16,7 @@ class SessionIdSpec extends FlatSpec with Matchers with TryValues {
   implicit val mockSecretStore = new InMemorySecretStore(Secrets(mockSecret, Secret(expiredExpiry)))
   def mockGenerator = new SessionIdGenerator
   implicit val marshaller = SessionIdMarshaller(mockSecretStore)
+  /*
   implicit val sessionIdEq =
     new Equality[SessionId] {
       def areEqual(a: SessionId, b: Any): Boolean =
@@ -24,6 +25,7 @@ class SessionIdSpec extends FlatSpec with Matchers with TryValues {
           case _ => false
         }
     }
+    */
 
   behavior of "SessionIdGenerator"
 
@@ -54,6 +56,12 @@ class SessionIdSpec extends FlatSpec with Matchers with TryValues {
     sidPrime shouldEqual sid
   }
 
+  it should "create a (SessionId,Secret) from a valid base64 string" in {
+    val sid = mockGenerator.next
+    val sidPrime = marshaller.decodeWithSecret(marshaller.encode(sid)).get
+    sidPrime shouldEqual (sid, mockSecretStore.current)
+  }
+
   it should "fail to create a session id if expired" in {
     val sid = mockGenerator.next
     val expiredSid = SessionId(Time.fromSeconds(0), sid.entropy, sid.secretId, sid.signature)
@@ -80,5 +88,18 @@ class SessionIdSpec extends FlatSpec with Matchers with TryValues {
   it should "fail to create a session id when decoded value is invalid" in {
     val decoded = marshaller.decode("123abcd")
     decoded.failure.exception should have message "Not a session string"
+  }
+
+  it should "have identity property for valid sessionid and secret values" in {
+    val sid = mockGenerator.next
+    marshaller.injector.idAndSecret2Id.invert(
+      marshaller.injector.idAndSecret2Id(sid, mockSecretStore.current)).success.value shouldBe (sid, mockSecretStore.current)
+  }
+
+  it should "fail to create a (SessionId, Secret) from a sessionId with an invalid secret" in {
+    val sid = mockGenerator.next
+    val invalidSecretId = ~sid.secretId
+    val invalid = SessionId(sid.expires, sid.entropy, invalidSecretId.toByte, sid.signature)
+    marshaller.injector.idAndSecret2Id.invert(invalid).failure.exception should have message "No matching secrets found"
   }
 }

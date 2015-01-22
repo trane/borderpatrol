@@ -33,7 +33,7 @@ trait Signer {
   lazy val hmac: Mac = tap(Mac.getInstance(algo))(mac => mac.init(key))
 
   def sign(bytes: Seq[Byte]): Seq[Byte] =
-    hmac doFinal (bytes.toArray)
+    hmac.doFinal(bytes.toArray)
 }
 
 trait SymmetricKey {

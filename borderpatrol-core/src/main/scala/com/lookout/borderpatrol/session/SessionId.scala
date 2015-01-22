@@ -126,7 +126,7 @@ case class SessionIdMarshaller(store: SecretStoreApi) {
         def apply(t: (SessionId, Secret)): Array[Byte] = t._1.toBytes.toArray
 
         override def invert(bytes: Array[Byte]): Try[(SessionId, Secret)] =
-          for (t <- parseBytes(bytes.toList); s <- sessionId(t)) yield s
+          for (t <- parseBytes(bytes.toVector); s <- sessionId(t)) yield s
       }
 
     implicit lazy val idAndSecret2String = Injection.connect[(SessionId, Secret), Array[Byte], Base64String, String]

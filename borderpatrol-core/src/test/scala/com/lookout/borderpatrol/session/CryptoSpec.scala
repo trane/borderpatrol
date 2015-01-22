@@ -16,4 +16,19 @@ class CryptoSpec extends FlatSpec with Matchers {
     g1 should not equal g2
   }
 
+  behavior of "CryptKey"
+  import Session._
+  val id = generator.next
+  val bytes = Generator(16)
+
+  it should "encrypt a sequence" in {
+    val cryptKey = CryptKey.apply(id, secretStore.current)
+    cryptKey.encrypt(bytes) should not equal (bytes)
+    cryptKey.encrypt(bytes).size should be > bytes.size
+  }
+
+  it should "have the same output as input when decrypting what it encrypted" in {
+    val cryptKey = CryptKey.apply(id, secretStore.current)
+    cryptKey.decrypt(cryptKey.encrypt(bytes)) shouldEqual (bytes)
+  }
 }
