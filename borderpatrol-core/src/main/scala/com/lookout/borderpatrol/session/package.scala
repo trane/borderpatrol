@@ -5,6 +5,7 @@ import java.util.concurrent.TimeUnit
 import argonaut.Argonaut._
 import argonaut.CodecJson
 import com.lookout.borderpatrol.session.ConsulSecretsWatcher.SecretData
+import com.twitter.bijection.codec.Base64
 import com.twitter.util.{Time, Duration}
 import org.jboss.netty.buffer.ChannelBuffers
 import com.lookout.borderpatrol.util.Combinators.tap
@@ -85,6 +86,16 @@ package object session {
 
   implicit def SessionCodecJson: CodecJson[Session] =
     casecodec3(Session.apply, Session.unapply)("id", "req", "tokens")
+
+  implicit class SessionIdAndSecretDeserialize(val s: String) extends AnyVal {
+    def asSessionIdAndSecret(implicit marshaller: SessionIdMarshaller): Try[(SessionId, Secret)] =
+      marshaller.decodeWithSecret(s)
+  }
+
+  implicit class SessionIdAndSecret(val s: SessionId) extends AnyVal {
+    def asSessionIdAndSecret(implicit marshaller: SessionIdMarshaller): Try[(SessionId, Secret)] =
+      marshaller.injector.idAndSecret2Id.invert(s)
+  }
 
   implicit class SecretsJsonEncode(val ss: Secrets) extends AnyVal {
     def asJson: String =

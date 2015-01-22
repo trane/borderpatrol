@@ -1,7 +1,9 @@
 package com.lookout.borderpatrol.session
 
-import java.security.{Key, SecureRandom}
-import javax.crypto.Mac
+import java.security.{Provider, Security, Key, SecureRandom}
+import javax.crypto.spec.{IvParameterSpec, SecretKeySpec}
+import javax.crypto.{SecretKey, Cipher,  Mac}
+import org.bouncycastle.jce.provider.BouncyCastleProvider
 
 import com.lookout.borderpatrol.util.Combinators.tap
 import com.twitter.util.{Duration, Time}
@@ -34,8 +36,35 @@ trait Signer {
     hmac.doFinal(bytes.toArray)
 }
 
-trait CryptKey {
-  val key: Key
+trait SymmetricKey {
+  val keyAlgo: String = "PBKDF2WithHmacSHA1"
+  val cipherAlgo: String = "AES/GCM/NoPadding"
+  val provider: Provider
+  val key: SecretKey
+  val iv: IvParameterSpec
+
+  def cipher(mode: Int): Cipher =
+    tap(Cipher.getInstance(cipherAlgo, provider.getName))(_.init(mode, key, iv))
+
   def encrypt(bytes: Seq[Byte]): Seq[Byte]
+
   def decrypt(bytes: Seq[Byte]): Seq[Byte]
+}
+
+case class CryptKey(keyBytes: Array[Byte], ivBytes: Array[Byte], provider: Provider = new BouncyCastleProvider) extends SymmetricKey {
+  Security.addProvider(provider)
+
+  val key = new SecretKeySpec(keyBytes, keyAlgo)
+  val iv = new IvParameterSpec(ivBytes)
+
+  def encrypt(bytes: Seq[Byte]): Seq[Byte] =
+    cipher(Cipher.ENCRYPT_MODE).doFinal(bytes.toArray)
+
+  def decrypt(bytes: Seq[Byte]): Seq[Byte] =
+    cipher(Cipher.DECRYPT_MODE).doFinal(bytes.toArray)
+}
+
+object CryptKey {
+  def apply(id: SessionId, secret: Secret): CryptKey =
+    CryptKey(id.entropy.toArray, secret.entropy.toArray)
 }
