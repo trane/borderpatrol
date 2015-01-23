@@ -2,7 +2,6 @@ package com.lookout.borderpatrol.session
 
 import argonaut._
 import argonaut.Argonaut._
-import com.lookout.borderpatrol.session.secret.ConsulSecretsWatcher.SecretData
 
 package object secret {
 

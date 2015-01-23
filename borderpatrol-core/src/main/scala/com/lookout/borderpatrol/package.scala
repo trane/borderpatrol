@@ -95,6 +95,7 @@ package object borderpatrol {
    * @return
    */
   def getUpstreamClients: Map[String, Service[HttpRequest, HttpResponse]] = {
+
     val conf = ConfigFactory.parseReader(new FileReader("borderpatrol.conf"))
     val services = conf.getConfigList("services").toList
     case class ServiceConfiguration(name: String, friendlyName: String, hosts: String, rewriteRule: String) {}

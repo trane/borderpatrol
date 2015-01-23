@@ -4,6 +4,7 @@ import java.util.concurrent.TimeUnit
 
 import argonaut.Argonaut._
 import argonaut.CodecJson
+import com.lookout.borderpatrol.session.secret.{SecretStoreApi, SecretData, InMemorySecretStore}
 import com.lookout.borderpatrol.session.tokens._
 import com.lookout.borderpatrol.session.id._
 import com.twitter.util.{Time, Duration}
@@ -44,10 +45,10 @@ package object session {
     CodecJson(
       (r: HttpRequest) =>
         ("u" := r.getUri) ->:
-        ("m" := r.getMethod.getName) ->:
-        ("v" := r.getProtocolVersion.getText) ->:
-        ("c" := r.getContent.array.toList) ->:
-        ("h" := r.headers.names.toList.map(n => Map[String, String](n -> r.headers.get(n)))) ->:
+          ("m" := r.getMethod.getName) ->:
+          ("v" := r.getProtocolVersion.getText) ->:
+          ("c" := r.getContent.array.toList) ->:
+          ("h" := r.headers.names.toList.map(n => Map[String, String](n -> r.headers.get(n)))) ->:
           jEmptyObject,
       c => for {
         uri <- (c --\ "u").as[String]
@@ -74,4 +75,9 @@ package object session {
       s.decodeOption[Session]
   }
 
+  //TODO: This should be configurable(should be Memory for unit tests, and consul in run mode
+  //def getSecretStore: SecretStoreApi = ConsulSecretStore(ConsulSecretsWatcher(new ConsulService))
+  def getSecretStore: SecretStoreApi = InMemorySecretStore(Secrets(Secret(SecretExpiry.currentExpiry), Secret(Time.fromSeconds(100))))
+
 }
+
