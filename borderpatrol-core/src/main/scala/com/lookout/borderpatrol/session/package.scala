@@ -4,16 +4,14 @@ import java.util.concurrent.TimeUnit
 
 import argonaut.Argonaut._
 import argonaut.CodecJson
-import com.lookout.borderpatrol.session.ConsulSecretsWatcher.SecretData
-import com.twitter.bijection.codec.Base64
+import com.lookout.borderpatrol.session.tokens._
+import com.lookout.borderpatrol.session.id._
 import com.twitter.util.{Time, Duration}
 import org.jboss.netty.buffer.ChannelBuffers
 import com.lookout.borderpatrol.util.Combinators.tap
 import org.jboss.netty.handler.codec.http.{DefaultHttpRequest, HttpMethod, HttpVersion, HttpRequest}
 
 import scala.collection.JavaConversions._
-
-import scala.util.Try
 
 package object session {
   object Constants {
@@ -26,16 +24,6 @@ package object session {
       val entropySize = 16
       val lifetime = Duration(1, TimeUnit.DAYS)
     }
-  }
-
-  implicit class SessionIdSerialize(val s: SessionId) extends AnyVal {
-    def asString(implicit marshaller: SessionIdMarshaller): String =
-      marshaller.encode(s)
-  }
-
-  implicit class SessionIdDeserialize(val s: String) extends AnyVal {
-    def asSessionId(implicit marshaller: SessionIdMarshaller): Try[SessionId] =
-      marshaller.decode(s)
   }
 
   implicit def ByteCodecJson: CodecJson[Byte] =
@@ -51,15 +39,6 @@ package object session {
       c => for {
         s <- (c --\ "ms").as[Long]
       } yield Time.fromMilliseconds(s))
-
-  implicit def SessionIdCodecJson: CodecJson[SessionId] =
-    casecodec4(SessionId.apply, SessionId.unapply)("expires", "entropy", "secretId", "signature")
-
-  implicit def SecretCodecJson: CodecJson[Secret] =
-    casecodec3(Secret.apply, Secret.unapply)("expiry", "id", "entropy")
-
-  implicit def SecretsCodecJson: CodecJson[Secrets] =
-    casecodec2(Secrets.apply, Secrets.unapply)("current", "previous")
 
   implicit def HttpRequestCodecJson: CodecJson[HttpRequest] =
     CodecJson(
@@ -82,30 +61,8 @@ package object session {
         })
     )
 
-  import TokenJson.TokensCodecJson
-
   implicit def SessionCodecJson: CodecJson[Session] =
     casecodec3(Session.apply, Session.unapply)("id", "req", "tokens")
-
-  implicit class SessionIdAndSecretDeserialize(val s: String) extends AnyVal {
-    def asSessionIdAndSecret(implicit marshaller: SessionIdMarshaller): Try[(SessionId, Secret)] =
-      marshaller.decodeWithSecret(s)
-  }
-
-  implicit class SessionIdAndSecret(val s: SessionId) extends AnyVal {
-    def asSessionIdAndSecret(implicit marshaller: SessionIdMarshaller): Try[(SessionId, Secret)] =
-      marshaller.injector.idAndSecret2Id.invert(s)
-  }
-
-  implicit class SecretsJsonEncode(val ss: Secrets) extends AnyVal {
-    def asJson: String =
-      SecretsCodecJson.encode(ss).toString
-  }
-
-  implicit class SecretsJsonDecode(val s: String) extends AnyVal {
-    def asSecrets: Option[Secrets] =
-      s.decodeOption[Secrets]
-  }
 
   implicit class SessionJsonEncode(val s: Session) extends AnyVal {
     def asJson: String =
@@ -116,55 +73,5 @@ package object session {
     def asSession: Option[Session] =
       s.decodeOption[Session]
   }
-
-  trait SecureSession {
-    val id: SessionId
-    val originalRequest: HttpRequest
-    val tokens: Tokens
-
-  }
-
-  case class Session(id: SessionId, originalRequest: HttpRequest, tokens: Tokens) extends SecureSession {
-    def equals(o: SecureSession): Boolean =
-      id == o.id && tokens == o.tokens && (originalRequest.getUri == o.originalRequest.getUri &&
-                                           originalRequest.getMethod == o.originalRequest.getMethod)
-  }
-
-  trait SessionFactory {
-    def apply(s: String, originalRequest: HttpRequest): Session
-    def apply(request: RoutedRequest): Session
-  }
-
-  object Session extends SessionFactory with SecureSessionIdComponent
-                                        with SessionIdExpiryComp
-                                        with SecretStoreComponent
-                                        with SessionStoreComponent {
-
-    val cookieName = "border_session"
-    val entropySize = Constants.SessionId.entropySize
-    implicit val secretStore = getSecretStore
-    implicit val marshaller = SessionIdMarshaller(secretStore)
-    implicit val generator: SessionIdGenerator = new SessionIdGenerator
-    val sessionStore = new InMemorySessionStore
-
-    def apply(s: String, originalRequest: HttpRequest): Session =
-      sessionStore.get(s) getOrElse newSession(originalRequest)
-
-    def apply(request: RoutedRequest): Session =
-      request.borderCookie.flatMap(id => sessionStore.get(id)) getOrElse newSession(request.httpRequest)
-
-    def newSession(originalRequest: HttpRequest): Session =
-      Session(generator.next, originalRequest, Tokens.empty)
-
-    def save(session: Session): Session =
-      sessionStore.update(session)
-  }
-
-  //TODO: This should be configurable(should be Memory for unit tests, and consul in run mode
-  //def getSecretStore: SecretStoreApi = ConsulSecretStore(ConsulSecretsWatcher)
-  def getSecretStore: SecretStoreApi = InMemorySecretStore(Secrets(Secret(SecretExpiry.currentExpiry), Secret(Time.fromSeconds(100))))
-
-  implicit def SecretDataCodecJson = casecodec6(SecretData.apply, SecretData.unapply)("CreateIndex", "ModifyIndex", "LockIndex", "Key", "Flags", "Value")
-
 
 }

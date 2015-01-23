@@ -1,14 +1,17 @@
 package com.lookout.borderpatrol.session
 
-import com.lookout.borderpatrol.session._
+import com.lookout.borderpatrol.Session
+import com.lookout.borderpatrol.session.id.{Marshaller, Generator => IdGenerator}
+import com.lookout.borderpatrol.session.secret.InMemorySecretStore
+import com.lookout.borderpatrol.session.store.InMemorySessionStore
 import org.jboss.netty.handler.codec.http.{HttpMethod, HttpVersion, DefaultHttpRequest}
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.OptionValues._
 
 class SessionSpec extends FlatSpec with Matchers {
   implicit val secretStore = InMemorySecretStore(Secrets(Secret(SecretExpiry.currentExpiry), Secret(SecretExpiry.currentExpiry)))
-  implicit val marshaller = SessionIdMarshaller(secretStore)
-  implicit val generator: SessionIdGenerator = new SessionIdGenerator
+  implicit val marshaller = Marshaller(secretStore)
+  implicit val generator = new IdGenerator
   def mockSessionStore = new InMemorySessionStore
 
   behavior of "Session"

@@ -2,6 +2,7 @@ package com.lookout.borderpatrol.session
 
 import java.util.concurrent.TimeUnit
 
+import com.lookout.borderpatrol.session.secret.InMemorySecretStore
 import com.twitter.util.{Duration, Time}
 import org.scalatest.{FlatSpec, Matchers}
 

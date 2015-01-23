@@ -2,6 +2,8 @@ package com.lookout.borderpatrol.session
 
 import java.util.concurrent.TimeUnit
 
+import com.lookout.borderpatrol.session.id.{Marshaller, Generator => IdGenerator}
+import com.lookout.borderpatrol.session.secret.InMemorySecretStore
 import com.twitter.bijection.{Base64String, Injection}
 import com.twitter.util.{Duration, Time}
 import org.scalactic.Equality
@@ -14,8 +16,8 @@ class SessionIdSpec extends FlatSpec with Matchers with TryValues {
 
   def mockSecret = Secret(currentExpiry)
   implicit val mockSecretStore = new InMemorySecretStore(Secrets(mockSecret, Secret(expiredExpiry)))
-  def mockGenerator = new SessionIdGenerator
-  implicit val marshaller = SessionIdMarshaller(mockSecretStore)
+  def mockGenerator = new IdGenerator
+  implicit val marshaller = Marshaller(mockSecretStore)
   /*
   implicit val sessionIdEq =
     new Equality[SessionId] {
@@ -27,7 +29,7 @@ class SessionIdSpec extends FlatSpec with Matchers with TryValues {
     }
     */
 
-  behavior of "SessionIdGenerator"
+  behavior of "Generator"
 
   it should "create valid SessionId instances" in {
     val sid = mockGenerator.next
@@ -38,7 +40,7 @@ class SessionIdSpec extends FlatSpec with Matchers with TryValues {
     sid.entropy should have size Constants.SessionId.entropySize
   }
 
-  behavior of "SessionIdMarshaller"
+  behavior of "Marshaller"
 
   it should "create a base64 string from a SessionId" in {
     val sid = mockGenerator.next

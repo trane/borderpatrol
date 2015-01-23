@@ -1,6 +1,6 @@
 package com.lookout.borderpatrol
 
-import com.lookout.borderpatrol.session.{EmptyToken, Session}
+import com.lookout.borderpatrol.session.EmptyToken
 import com.twitter.finagle.http.{Cookie, Response => FinagleResponse}
 import com.twitter.util.Await
 import org.jboss.netty.handler.codec.http._

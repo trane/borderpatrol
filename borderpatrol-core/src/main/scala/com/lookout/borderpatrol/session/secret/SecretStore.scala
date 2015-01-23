@@ -1,12 +1,10 @@
-package com.lookout.borderpatrol.session
+package com.lookout.borderpatrol.session.secret
 
-import com.twitter.util.{Throw, Time}
-import scala.concurrent.duration.Duration
-import scala.concurrent.{Future => ScalaFuture, Promise => ScalaPromise, Await}
-import scala.concurrent.duration._
-import scala.util.{Failure, Success, Try}
 import com.lookout.borderpatrol.session._
-import concurrent.ExecutionContext.Implicits.global
+import com.twitter.util.Time
+
+import scala.concurrent.{Future => ScalaFuture, Promise => ScalaPromise}
+import scala.util.{Failure, Success, Try}
 
 /**
  * This prototypes out an API for the SecretStore, keeping secrets in memory

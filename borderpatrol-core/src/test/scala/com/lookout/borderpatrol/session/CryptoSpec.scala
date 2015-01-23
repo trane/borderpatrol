@@ -1,6 +1,8 @@
 package com.lookout.borderpatrol.session
 
+import com.lookout.borderpatrol.session.secret.InMemorySecretStore
 import org.scalatest.{FlatSpec, Matchers}
+import com.lookout.borderpatrol.session.id.{Generator => IdGenerator}
 
 class CryptoSpec extends FlatSpec with Matchers {
 
@@ -17,8 +19,10 @@ class CryptoSpec extends FlatSpec with Matchers {
   }
 
   behavior of "CryptKey"
-  import Session._
-  val id = generator.next
+  implicit val secretStore = new InMemorySecretStore(Secrets.mockSecrets)
+  val idGenerator = new IdGenerator
+
+  val id = idGenerator.next
   val bytes = Generator(16)
 
   it should "encrypt a sequence" in {
