@@ -1,5 +1,6 @@
 package com.lookout.borderpatrol.session
 
+import com.lookout.borderpatrol.session.tokens._
 import org.scalatest.{FlatSpec, Matchers}
 
 class TokensSpec extends FlatSpec with Matchers {
@@ -104,18 +105,18 @@ class TokensSpec extends FlatSpec with Matchers {
   behavior of "TokensJson"
 
   it should "hydrate Tokens" in {
-    (TokenJson.TokensJson(mockJsonResponse) getOrElse mockEmptyTokens) should not be mockEmptyTokens
+    (mockJsonResponse.asTokens getOrElse mockEmptyTokens) should not be mockEmptyTokens
   }
 
   it should "hydrate MasterToken" in {
-    (TokenJson.MasterTokenJson("""{"value": "master"}""") getOrElse EmptyToken) should not be EmptyToken
+    ("""{"value": "master"}""".asMasterToken getOrElse EmptyToken) should not be EmptyToken
   }
 
   it should "hydrate ServiceTokens" in {
-    (TokenJson.ServiceTokensJson("""{"service_tokens":{"service1": "token", "service2": "token2"}}""") getOrElse EmptyServiceTokens) should not be EmptyServiceTokens
+    ("""{"service_tokens":{"service1": "token", "service2": "token2"}}""".asServiceTokens getOrElse EmptyServiceTokens) should not be EmptyServiceTokens
   }
 
   it should "invert to the same JSON it converted from" in {
-    TokenJson.TokensJson(TokenJson.TokensCodecJson.encode(TokenJson.TokensJson(mockJsonResponse).get).toString()) shouldEqual TokenJson.TokensJson(mockJsonResponse)
+    mockJsonResponse.asTokens.get.asJson.asTokens shouldEqual mockJsonResponse.asTokens
   }
 }

@@ -1,6 +1,9 @@
-package com.lookout.borderpatrol.session
+package com.lookout.borderpatrol.session.store
 
-import com.twitter.bijection.{Bijection, Base64String, Injection}
+import com.lookout.borderpatrol.Session
+import com.lookout.borderpatrol.session.id._
+import com.lookout.borderpatrol.session._
+import com.twitter.bijection.{Base64String, Injection}
 
 import scala.util.Try
 
@@ -23,11 +26,11 @@ trait EncryptedSessions {
 }
 
 trait SessionStoreComponent {
-  implicit val marshaller: SessionIdMarshaller
+  implicit val marshaller: Marshaller
   val sessionStore: SessionStoreApi
 }
 
-case class InMemorySessionStore(implicit marshaller: SessionIdMarshaller) extends SessionStoreApi {
+case class InMemorySessionStore(implicit marshaller: Marshaller) extends SessionStoreApi {
   private [this] var _store = Map[String, Session]()
 
   def get(id: String): Option[Session] = {
@@ -43,7 +46,7 @@ case class InMemorySessionStore(implicit marshaller: SessionIdMarshaller) extend
   }
 }
 
-case class InMemoryEncryptedSessionStore(implicit marshaller: SessionIdMarshaller) extends SessionStoreApi with EncryptedSessions {
+case class InMemoryEncryptedSessionStore(implicit marshaller: Marshaller) extends SessionStoreApi with EncryptedSessions {
   private [this] var json2bytes = Injection.connect[String, Array[Byte]]
   private [this] var bytes264 = Injection.connect[Array[Byte], Base64String, String]
   private [this] var _store = Map[Seq[Byte], String]()
@@ -73,8 +76,9 @@ case class InMemoryEncryptedSessionStore(implicit marshaller: SessionIdMarshalle
     get(id.asString)
 
   def update(s: Session): Session =
-    s.id.asSessionIdAndSecret.toOption map ( t => {
-      val encrypted = cryptKey(t._1, t._2).encrypt(toBytes(s))
+    s.id.asSessionIdAndSecret.toOption map (t => {
+      val key = cryptKey(t._1, t._2)
+      val encrypted = key.encrypt(toBytes(s))
       val encoded = bytes264(encrypted.toArray)
       _store = _store.updated(s.id.signature, encoded)
       s

@@ -1,10 +1,10 @@
-package com.lookout.borderpatrol.session
+package com.lookout.borderpatrol.session.secret
 
 import java.util.concurrent.TimeoutException
 
-import argonaut.Argonaut._
 import argonaut._
 import com.lookout.borderpatrol.ConsulService
+import com.lookout.borderpatrol.session.Secrets
 import com.twitter.io.Charsets
 import org.jboss.netty.handler.codec.http._
 

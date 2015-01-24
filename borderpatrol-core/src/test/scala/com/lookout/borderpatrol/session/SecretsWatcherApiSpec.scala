@@ -10,10 +10,8 @@ import com.twitter.util.{Duration, Time}
 import org.jboss.netty.buffer.ChannelBuffers._
 import org.jboss.netty.handler.codec.http._
 import org.scalatest.{FlatSpec, Matchers}
+import secret._
 
-/**
- * Created by wkimeria on 1/15/15.
- */
 class SecretsWatcherApiSpec extends FlatSpec with Matchers{
 
   behavior of "SecretWatcherApi"

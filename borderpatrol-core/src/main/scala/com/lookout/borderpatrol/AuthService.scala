@@ -2,7 +2,7 @@ package com.lookout.borderpatrol
 
 
 import com.lookout.borderpatrol.session.MasterToken
-import com.lookout.borderpatrol.session.TokenJson.{ServiceTokensJson, TokensJson}
+import com.lookout.borderpatrol.session.tokens._
 import com.twitter.finagle.Service
 import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse}
 import com.twitter.io.Charsets
@@ -22,7 +22,7 @@ class AuthService(tokenService: Service[HttpRequest, FinagleResponse],
     println("----------------------------- AuthService------------------------------>")
     val r = request.session.tokens.master match {
       case MasterToken(t) => getServiceTokens(request, t) map (rrequest => TokenResponse(rrequest))
-      case _ => loginService(request) map (response => TokensJson(response.getContentString()) match {
+      case _ => loginService(request) map (response => response.getContentString().asTokens match {
           case Some(tokens) => TokenResponse(request ++ tokens)
           case _ => LoginResponse(response)
         })
@@ -36,7 +36,7 @@ class AuthService(tokenService: Service[HttpRequest, FinagleResponse],
     val tokenRequest = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, url)
     tokenService(tokenRequest) map { response =>
       val json = response.getContent.toString(Charsets.Utf8)
-      ServiceTokensJson(json).foldRight(request)((tokens, req) => req ++ tokens)
+      json.asServiceTokens.foldRight(request)((tokens, req) => req ++ tokens)
     }
   }
 
@@ -45,7 +45,7 @@ class AuthService(tokenService: Service[HttpRequest, FinagleResponse],
     val tokenRequest = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, url)
     tokenService(tokenRequest) map { response =>
       val json = response.getContent.toString(Charsets.Utf8)
-      TokensJson(json).foldRight(request)((tokens, req) => req ++ tokens)
+      json.asTokens.foldRight(request)((tokens, req) => req ++ tokens)
     }
   }
 }

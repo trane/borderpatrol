@@ -24,3 +24,8 @@ case class Secret(expiry: Time,
                   entropy: List[Byte] = Generator(16).toList) extends ASecret
 
 case class Secrets(current: Secret, previous: Secret)
+
+object Secrets {
+  def mockSecrets: Secrets =
+    Secrets(Secret(Time.now), Secret(Time.fromMilliseconds(0)))
+}
