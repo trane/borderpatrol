@@ -12,6 +12,7 @@ import org.jboss.netty.handler.codec.http._
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future => ScalaFuture, Promise => ScalaPromise}
 import scala.util.Try
+import com.twitter.bijection._
 
 sealed trait SecretsWatcherApi {
   def initialSecrets: Secrets

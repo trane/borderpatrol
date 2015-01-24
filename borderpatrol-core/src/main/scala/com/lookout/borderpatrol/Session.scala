@@ -1,7 +1,7 @@
 package com.lookout.borderpatrol
 
 import com.lookout.borderpatrol.session.id.{SignerComponent, ExpiryComponent, Marshaller, Generator}
-import com.lookout.borderpatrol.session.secret.{InMemorySecretStore, SecretStoreComponent}
+import com.lookout.borderpatrol.session.secret._
 import com.lookout.borderpatrol.session.store.{InMemorySessionStore, SessionStoreComponent}
 import com.lookout.borderpatrol.session._
 import com.twitter.util.Time
@@ -32,7 +32,7 @@ object Session extends SessionFactory with SignerComponent
 
   val cookieName = "border_session"
   val entropySize = Constants.SessionId.entropySize
-  implicit val secretStore = InMemorySecretStore(Secrets(Secret(SecretExpiry.currentExpiry), Secret(Time.fromSeconds(100))))
+  implicit val secretStore = getSecretStore
   implicit val marshaller = Marshaller(secretStore)
   implicit val generator: Generator = new Generator
   val sessionStore = new InMemorySessionStore
@@ -48,4 +48,8 @@ object Session extends SessionFactory with SignerComponent
 
   def save(session: Session): Session =
     sessionStore.update(session)
+
+  //TODO: This should be configurable(should be Memory for unit tests, and consul in run mode
+  //def getSecretStore: SecretStoreApi = ConsulSecretStore(ConsulSecretsWatcher(new ConsulService))
+  def getSecretStore: SecretStoreApi = InMemorySecretStore(Secrets(Secret(SecretExpiry.currentExpiry), Secret(Time.fromSeconds(100))))
 }
