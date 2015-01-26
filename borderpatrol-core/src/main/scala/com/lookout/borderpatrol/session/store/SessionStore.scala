@@ -4,6 +4,11 @@ import com.lookout.borderpatrol.Session
 import com.lookout.borderpatrol.session.id._
 import com.lookout.borderpatrol.session._
 import com.twitter.bijection.{Base64String, Injection}
+import com.twitter.finagle.Memcached
+import com.twitter.io.Charsets
+import com.twitter.util.{Duration, Await}
+import org.jboss.netty.buffer.ChannelBuffers
+import com.lookout.borderpatrol.util.Combinators.tap
 
 import scala.util.Try
 
@@ -47,8 +52,8 @@ case class InMemorySessionStore(implicit marshaller: Marshaller) extends Session
 }
 
 case class InMemoryEncryptedSessionStore(implicit marshaller: Marshaller) extends SessionStoreApi with EncryptedSessions {
-  private [this] var json2bytes = Injection.connect[String, Array[Byte]]
-  private [this] var bytes264 = Injection.connect[Array[Byte], Base64String, String]
+  private [this] lazy val json2bytes = Injection.connect[String, Array[Byte]]
+  private [this] lazy val bytes264 = Injection.connect[Array[Byte], Base64String, String]
   private [this] var _store = Map[Seq[Byte], String]()
 
   def cryptKey(id: String): Try[CryptKey] =
@@ -83,4 +88,27 @@ case class InMemoryEncryptedSessionStore(implicit marshaller: Marshaller) extend
       _store = _store.updated(s.id.signature, encoded)
       s
     }) get
+
+}
+
+case class MemcachedSessionStore(dest: String, timeout: Duration)(implicit marshaller: Marshaller) extends SessionStoreApi {
+  private [this] lazy val json2bytes = Injection.connect[String, Array[Byte]]
+  val store = Memcached.newRichClient(dest)
+
+  def get(s: String): Option[Session] = {
+    val tryBuf = Await.result(store.get(s).liftToTry, timeout)
+    tryBuf.onFailure(e => println(e))
+    for {
+      maybeBuf <- tryBuf.toOption
+      cbuf <- maybeBuf
+      session <- cbuf.toString(Charsets.Utf8).asSession
+      if !session.id.expired
+    } yield session
+  }
+
+  def get(id: SessionId): Option[Session] =
+    get(id.asString)
+
+  def update(s: Session): Session =
+    tap(s)(s => Await.result(store.set(s.id.asString, 0, s.id.expires, ChannelBuffers.copiedBuffer(json2bytes(s.asJson)))))
 }

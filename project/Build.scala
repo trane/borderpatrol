@@ -11,6 +11,7 @@ object BorderPatrol extends Build {
     scalaVersion := "2.11.5",
     libraryDependencies ++= Seq(
       "com.twitter" %% "twitter-server" % twitter_server,
+      "com.twitter" %% "finagle-memcached" % "6.24.0",
       "com.twitter" %% "bijection-core" % "0.7.0",
       "io.argonaut" %% "argonaut" % "6.1-M5",
       "org.scalatest" %% "scalatest" % "2.2.2" % "test",

@@ -3,16 +3,15 @@ package com.lookout.borderpatrol.session
 import com.lookout.borderpatrol.Session
 import com.lookout.borderpatrol.session.id.{Marshaller, Generator => IdGenerator}
 import com.lookout.borderpatrol.session.secret.InMemorySecretStore
-import com.lookout.borderpatrol.session.store.InMemoryEncryptedSessionStore
+import com.lookout.borderpatrol.session.store.{MemcachedSessionStore, InMemoryEncryptedSessionStore}
 import org.jboss.netty.handler.codec.http.{HttpRequest, DefaultHttpRequest, HttpMethod, HttpVersion}
 import org.scalatest.{FlatSpec, Matchers}
 
 class SessionStoreSpec extends FlatSpec with Matchers {
   import org.scalatest.OptionValues._
 
-  implicit val store = new InMemorySecretStore(Secrets.mockSecrets)
-  implicit val marshaller = new Marshaller(store)
-  val encryptedStore = new InMemoryEncryptedSessionStore
+  implicit val secStore = new InMemorySecretStore(Secrets.mockSecrets)
+  implicit val marshaller = new Marshaller(secStore)
   val idGenerator = new IdGenerator
 
   def defaultReq: HttpRequest =
@@ -21,6 +20,8 @@ class SessionStoreSpec extends FlatSpec with Matchers {
     Session(idGenerator.next, defaultReq, Tokens.empty)
 
   behavior of "InMemoryEncryptedSessionStore"
+
+  val encryptedStore = new InMemoryEncryptedSessionStore
 
   it should "store and retrieve sessions" in {
     val s = mockSession
@@ -41,4 +42,15 @@ class SessionStoreSpec extends FlatSpec with Matchers {
     encryptedStore.cryptKey(id).isFailure shouldBe true
     encryptedStore.cryptKey(id.asString).isFailure shouldBe true
   }
+
+  behavior of "MemcachedSessionStore"
+
+  val memcachedStore = MemcachedSessionStore("localhost:11211", Session.lifetime)
+
+  it should "store and retrieve sessions" in {
+    val s = mockSession
+    memcachedStore.update(s)
+    memcachedStore.get(s.id).value.equals(s) shouldBe true
+  }
+
 }
