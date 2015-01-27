@@ -79,14 +79,17 @@ package object borderpatrol {
   }
 
   object Responses {
+
     object NotFound {
       def apply(httpVersion: HttpVersion = HttpVersion.HTTP_1_1): HttpResponse =
         new DefaultHttpResponse(httpVersion, HttpResponseStatus.NOT_FOUND)
     }
+
     object OK {
       def apply(httpVersion: HttpVersion = HttpVersion.HTTP_1_1): HttpResponse =
         new DefaultHttpResponse(httpVersion, HttpResponseStatus.OK)
     }
+
   }
 
   /**
@@ -95,11 +98,12 @@ package object borderpatrol {
    * @return
    */
   def getUpstreamClients: Map[String, Service[HttpRequest, HttpResponse]] = {
+
     val conf = ConfigFactory.parseReader(new FileReader("borderpatrol.conf"))
     val services = conf.getConfigList("services").toList
     case class ServiceConfiguration(name: String, friendlyName: String, hosts: String, rewriteRule: String) {}
 
-    val clients = services map(s =>
+    val clients = services map (s =>
       (s.getString("name"),
         ClientBuilder()
           .codec(Http())
@@ -111,11 +115,8 @@ package object borderpatrol {
     clients.toMap
   }
 
-  //Unsuccessful Response
-  case class NeedsAuthResponse(httpResponse: HttpResponse) extends FinagleResponse //with BorderPatrolResponse
-
-  //Successful response
-  case class Response(httpResponse: HttpResponse) extends FinagleResponse //with BorderPatrolResponse
+  case class NeedsAuthResponse(httpResponse: HttpResponse) extends FinagleResponse
+  case class Response(httpResponse: HttpResponse) extends FinagleResponse
 
   implicit val upstreams = getUpstreamClients
 }

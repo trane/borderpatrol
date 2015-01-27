@@ -5,12 +5,14 @@ import java.util.concurrent.TimeoutException
 import argonaut._
 import com.lookout.borderpatrol.ConsulService
 import com.lookout.borderpatrol.session.Secrets
+import com.twitter.bijection.{Injection, Base64String}
 import com.twitter.io.Charsets
 import org.jboss.netty.handler.codec.http._
 
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future => ScalaFuture, Promise => ScalaPromise}
 import scala.util.Try
+import com.twitter.bijection._
 
 sealed trait SecretsWatcherApi {
   def initialSecrets: Secrets
@@ -18,13 +20,11 @@ sealed trait SecretsWatcherApi {
   def getNext: Try[Secrets]
 }
 
-object ConsulSecretsWatcher extends SecretsWatcherApi {
+case class ConsulSecretsWatcher(consulService: ConsulService) extends SecretsWatcherApi {
 
-  val Timeout: Int = 1000
+  val Timeout: Int = 2000
   val BaseUrl: String = "/v1/kv/borderpatrol/secrets"
   val WaitInterval: String = "48h"
-
-  val consulService = new ConsulService
   var currentModifyIndex: Int = 0
   var _nextSecrets: ScalaFuture[Secrets] = ScalaPromise[Secrets]().future
 
@@ -65,14 +65,14 @@ object ConsulSecretsWatcher extends SecretsWatcherApi {
   }
 
   private def newSecrets(secrets: SecretData): Option[Secrets] = {
-    if (currentModifyIndex == 0 || secrets.ModifyIndex > currentModifyIndex)
-      decode(secrets.Value).asSecrets
+    println(s"currentModify=$currentModifyIndex and modifyIndex = ${secrets.ModifyIndex}")
+    if (currentModifyIndex == 0 || secrets.ModifyIndex > currentModifyIndex) {
+      currentModifyIndex = secrets.ModifyIndex
+      val coder = Injection.connect[String, Array[Byte], Base64String, String]
+      coder.invert(secrets.Value).get.asSecrets
+    }
     else
       None
-  }
-
-  private def decode(secret: String): String = {
-    new String(new sun.misc.BASE64Decoder().decodeBuffer(secret))
   }
 
   /**
@@ -99,20 +99,19 @@ object ConsulSecretsWatcher extends SecretsWatcherApi {
       sData <- res.headOption
     } yield sData
   }
-
-  /**
-   * The SecretData class represents a row of data coming back from the Secret Store back-end (Consul)
-   * The JSON Data structure looks like below (value is Base64 Encoded)
-   * [{"CreateIndex":66,"ModifyIndex":68,"LockIndex":0,"Key":"borderpatrol/currentSecret","Flags":0,"Value":"YmJiYmJi......"}]
-   * THE Value is Base64 encoded, when decoded, it looks like
-   * {"current":{"expiry":{"nanos":100000000000},"id":-29,"entropy":[67,93,65,26,89,123,-88,-59,-82,103,-81,-43,-113,-98,-21,-19]},
-   * "previous":{"expiry":{"nanos":100000000000},"id":-96,"entropy":[-66,5,60,86,12,62,-85,67,72,57,-19,-5,-47,-26,-101,63]}}
-   */
-  case class SecretData(val CreateIndex: Int,
-                        val ModifyIndex: Int,
-                        val LockIndex: Int,
-                        val Key: String,
-                        val Flags: Int,
-                        val Value: String)
-
 }
+
+/**
+ * The SecretData class represents a row of data coming back from the Secret Store back-end (Consul)
+ * The JSON Data structure looks like below (value is Base64 Encoded)
+ * [{"CreateIndex":66,"ModifyIndex":68,"LockIndex":0,"Key":"borderpatrol/currentSecret","Flags":0,"Value":"YmJiYmJi......"}]
+ * THE Value is Base64 encoded, when decoded, it looks like
+ * {"current":{"expiry":{"nanos":100000000000},"id":-29,"entropy":[67,93,65,26,89,123,-88,-59,-82,103,-81,-43,-113,-98,-21,-19]},
+ * "previous":{"expiry":{"nanos":100000000000},"id":-96,"entropy":[-66,5,60,86,12,62,-85,67,72,57,-19,-5,-47,-26,-101,63]}}
+ */
+case class SecretData(val CreateIndex: Int,
+                      val ModifyIndex: Int,
+                      val LockIndex: Int,
+                      val Key: String,
+                      val Flags: Int,
+                      val Value: String)

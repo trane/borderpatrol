@@ -4,6 +4,7 @@ import java.util.concurrent.TimeUnit
 
 import argonaut.Argonaut._
 import argonaut.CodecJson
+import com.lookout.borderpatrol.session.secret._
 import com.lookout.borderpatrol.session.tokens._
 import com.lookout.borderpatrol.session.id._
 import com.twitter.util.{Time, Duration}
@@ -14,7 +15,9 @@ import org.jboss.netty.handler.codec.http.{DefaultHttpRequest, HttpMethod, HttpV
 import scala.collection.JavaConversions._
 
 package object session {
+
   object Constants {
+
     object SessionId {
       val entropySize = 16
       val lifetime = Duration(1, TimeUnit.DAYS)
@@ -24,6 +27,7 @@ package object session {
       val entropySize = 16
       val lifetime = Duration(1, TimeUnit.DAYS)
     }
+
   }
 
   implicit def ByteCodecJson: CodecJson[Byte] =
@@ -44,10 +48,10 @@ package object session {
     CodecJson(
       (r: HttpRequest) =>
         ("u" := r.getUri) ->:
-        ("m" := r.getMethod.getName) ->:
-        ("v" := r.getProtocolVersion.getText) ->:
-        ("c" := r.getContent.array.toList) ->:
-        ("h" := r.headers.names.toList.map(n => Map[String, String](n -> r.headers.get(n)))) ->:
+          ("m" := r.getMethod.getName) ->:
+          ("v" := r.getProtocolVersion.getText) ->:
+          ("c" := r.getContent.array.toList) ->:
+          ("h" := r.headers.names.toList.map(n => Map[String, String](n -> r.headers.get(n)))) ->:
           jEmptyObject,
       c => for {
         uri <- (c --\ "u").as[String]
@@ -75,3 +79,4 @@ package object session {
   }
 
 }
+
