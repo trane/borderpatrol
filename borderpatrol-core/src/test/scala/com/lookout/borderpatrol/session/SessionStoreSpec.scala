@@ -1,13 +1,20 @@
 package com.lookout.borderpatrol.session
 
+import java.util.concurrent.TimeUnit
+
 import com.lookout.borderpatrol.Session
 import com.lookout.borderpatrol.session.id.{Marshaller, Generator => IdGenerator}
 import com.lookout.borderpatrol.session.secret.InMemorySecretStore
 import com.lookout.borderpatrol.session.store.{MemcachedSessionStore, InMemoryEncryptedSessionStore}
+import com.twitter.finagle.memcached
+import com.twitter.io.Charsets
+import com.twitter.util.{Duration, Future}
+import org.jboss.netty.buffer.{ChannelBuffers, ChannelBuffer}
 import org.jboss.netty.handler.codec.http.{HttpRequest, DefaultHttpRequest, HttpMethod, HttpVersion}
+import org.scalamock.scalatest.MockFactory
 import org.scalatest.{FlatSpec, Matchers}
 
-class SessionStoreSpec extends FlatSpec with Matchers {
+class SessionStoreSpec extends FlatSpec with Matchers with MockFactory {
   import org.scalatest.OptionValues._
 
   implicit val secStore = new InMemorySecretStore(Secrets.mockSecrets)
@@ -45,12 +52,33 @@ class SessionStoreSpec extends FlatSpec with Matchers {
 
   behavior of "MemcachedSessionStore"
 
-  val memcachedStore = MemcachedSessionStore("localhost:11211", Session.lifetime)
+  def toCb(s: String): ChannelBuffer =
+    ChannelBuffers.copiedBuffer(s.getBytes(Charsets.Utf8))
+
+  class MemcachedMockSessionStore(client: memcached.BaseClient[String]) extends MemcachedSessionStore(dest = "", timeout = Duration(1, TimeUnit.SECONDS)) {
+    override val store = client
+  }
 
   it should "store and retrieve sessions" in {
     val s = mockSession
-    memcachedStore.update(s)
-    memcachedStore.get(s.id).value.equals(s) shouldBe true
+    val memcachedClient = mock[memcached.BaseClient[String]]
+
+    val flag = 0 // meaningless part of the protocol
+
+    /* re-enable after https://github.com/paulbutcher/ScalaMock/issues/39#issuecomment-71727931
+    (memcachedClient.set(_: String, _: Int, _: Time, _: String))
+      .expects(s.id.asString, flag, Time.now, s.asJson)
+      .returns(Future.value((): Unit))
+    */
+
+    (memcachedClient.get(_: String))
+      .expects(s.id.asString)
+      .returning(Future.value(Some(s.asJson)))
+
+    val memcachedStore = new MemcachedMockSessionStore(memcachedClient)
+
+    // memcachedStore.update(s) // re-enable after https://github.com/paulbutcher/ScalaMock/issues/39#issuecomment-71727931
+    memcachedStore.get(s).value.equals(s) shouldBe true
   }
 
 }

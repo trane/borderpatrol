@@ -6,8 +6,8 @@ import com.lookout.borderpatrol.session._
 import com.twitter.bijection.{Base64String, Injection}
 import com.twitter.finagle.Memcached
 import com.twitter.io.Charsets
-import com.twitter.util.{Duration, Await}
-import org.jboss.netty.buffer.ChannelBuffers
+import com.twitter.util.{Future, Duration, Await}
+import org.jboss.netty.buffer.{ChannelBuffer, ChannelBuffers}
 import com.lookout.borderpatrol.util.Combinators.tap
 
 import scala.util.Try
@@ -92,23 +92,23 @@ case class InMemoryEncryptedSessionStore(implicit marshaller: Marshaller) extend
 }
 
 case class MemcachedSessionStore(dest: String, timeout: Duration)(implicit marshaller: Marshaller) extends SessionStoreApi {
-  private [this] lazy val json2bytes = Injection.connect[String, Array[Byte]]
-  val store = Memcached.newRichClient(dest)
+  val store = Memcached.newRichClient(dest).withStrings
 
   def get(s: String): Option[Session] = {
-    val tryBuf = Await.result(store.get(s).liftToTry, timeout)
-    tryBuf.onFailure(e => println(e))
     for {
-      maybeBuf <- tryBuf.toOption
-      cbuf <- maybeBuf
-      session <- cbuf.toString(Charsets.Utf8).asSession
+      res <- Await.result(store.get(s).liftToTry, timeout).toOption
+      json <- res
+      session <- json.asSession
       if !session.id.expired
     } yield session
   }
 
-  def get(id: SessionId): Option[Session] =
-    get(id.asString)
+  def get(s: Session): Option[Session] =
+    get(s.id.asString)
 
   def update(s: Session): Session =
-    tap(s)(s => Await.result(store.set(s.id.asString, 0, s.id.expires, ChannelBuffers.copiedBuffer(json2bytes(s.asJson)))))
+    tap(s)(s => Await.result(store.set(s.id.asString, 0, s.id.expires, s.asJson)))
+
+  def updated(s: Session): Future[Unit] =
+    store.set(s.id.asString, 0, s.id.expires, s.asJson)
 }
