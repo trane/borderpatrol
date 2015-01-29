@@ -6,7 +6,7 @@ import com.lookout.borderpatrol.Session
 import com.lookout.borderpatrol.session.id.{Marshaller, Generator => IdGenerator}
 import com.lookout.borderpatrol.session.secret.InMemorySecretStore
 import com.lookout.borderpatrol.session.store.{MemcachedSessionStore, InMemoryEncryptedSessionStore}
-import com.twitter.finagle.memcached
+import com.twitter.finagle.memcachedx
 import com.twitter.io.Charsets
 import com.twitter.util.{Duration, Future}
 import org.jboss.netty.buffer.{ChannelBuffers, ChannelBuffer}
@@ -55,13 +55,13 @@ class SessionStoreSpec extends FlatSpec with Matchers with MockFactory {
   def toCb(s: String): ChannelBuffer =
     ChannelBuffers.copiedBuffer(s.getBytes(Charsets.Utf8))
 
-  class MemcachedMockSessionStore(client: memcached.BaseClient[String]) extends MemcachedSessionStore(dest = "", timeout = Duration(1, TimeUnit.SECONDS)) {
+  class MemcachedMockSessionStore(client: memcachedx.BaseClient[String]) extends MemcachedSessionStore(dest = "", timeout = Duration(1, TimeUnit.SECONDS)) {
     override val store = client
   }
 
   it should "store and retrieve sessions" in {
     val s = mockSession
-    val memcachedClient = mock[memcached.BaseClient[String]]
+    val memcachedClient = mock[memcachedx.BaseClient[String]]
 
     val flag = 0 // meaningless part of the protocol
 

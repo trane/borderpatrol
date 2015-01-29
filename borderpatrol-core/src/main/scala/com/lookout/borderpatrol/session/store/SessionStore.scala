@@ -4,7 +4,7 @@ import com.lookout.borderpatrol.Session
 import com.lookout.borderpatrol.session.id._
 import com.lookout.borderpatrol.session._
 import com.twitter.bijection.{Base64String, Injection}
-import com.twitter.finagle.Memcached
+import com.twitter.finagle.Memcachedx
 import com.twitter.io.Charsets
 import com.twitter.util.{Future, Duration, Await}
 import org.jboss.netty.buffer.{ChannelBuffer, ChannelBuffers}
@@ -92,7 +92,7 @@ case class InMemoryEncryptedSessionStore(implicit marshaller: Marshaller) extend
 }
 
 case class MemcachedSessionStore(dest: String, timeout: Duration)(implicit marshaller: Marshaller) extends SessionStoreApi {
-  val store = Memcached.newRichClient(dest).withStrings
+  val store = Memcachedx.newKetamaClient(dest).withStrings
 
   def get(s: String): Option[Session] = {
     for {
