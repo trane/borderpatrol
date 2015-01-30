@@ -46,9 +46,9 @@ trait SymmetricKey {
   def cipher(mode: Int): Cipher =
     tap(Cipher.getInstance(cipherAlgo, provider.getName))(_.init(mode, key, iv))
 
-  def encrypt(bytes: Seq[Byte]): Seq[Byte]
+  def encrypt(bytes: Seq[Byte]): Array[Byte]
 
-  def decrypt(bytes: Seq[Byte]): Seq[Byte]
+  def decrypt(bytes: Seq[Byte]): Array[Byte]
 }
 
 case class CryptKey(keyBytes: Array[Byte], ivBytes: Array[Byte], provider: Provider = new BouncyCastleProvider) extends SymmetricKey {
@@ -57,10 +57,10 @@ case class CryptKey(keyBytes: Array[Byte], ivBytes: Array[Byte], provider: Provi
   val key = new SecretKeySpec(keyBytes, keyAlgo)
   val iv = new IvParameterSpec(ivBytes)
 
-  def encrypt(bytes: Seq[Byte]): Seq[Byte] =
+  def encrypt(bytes: Seq[Byte]): Array[Byte] =
     cipher(Cipher.ENCRYPT_MODE).doFinal(bytes.toArray)
 
-  def decrypt(bytes: Seq[Byte]): Seq[Byte] =
+  def decrypt(bytes: Seq[Byte]): Array[Byte] =
     cipher(Cipher.DECRYPT_MODE).doFinal(bytes.toArray)
 }
 
