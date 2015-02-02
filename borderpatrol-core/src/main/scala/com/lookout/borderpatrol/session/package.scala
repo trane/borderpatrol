@@ -7,6 +7,7 @@ import argonaut.CodecJson
 import com.lookout.borderpatrol.session.secret._
 import com.lookout.borderpatrol.session.tokens._
 import com.lookout.borderpatrol.session.id._
+import com.twitter.bijection.{Base64String, Injection}
 import com.twitter.util.{Time, Duration}
 import org.jboss.netty.buffer.ChannelBuffers
 import com.lookout.borderpatrol.util.Combinators.tap
@@ -77,6 +78,9 @@ package object session {
     def asSession: Option[Session] =
       s.decodeOption[Session]
   }
+
+  lazy val bytes264 = Injection.connect[Array[Byte], Base64String, String]
+  lazy val json2bytes = Injection.connect[String, Array[Byte]]
 
 }
 
