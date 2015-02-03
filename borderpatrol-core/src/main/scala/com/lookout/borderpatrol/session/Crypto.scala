@@ -37,8 +37,8 @@ trait Signer {
 }
 
 trait SymmetricKey {
-  val keyAlgo: String = "PBKDF2WithHmacSHA1"
-  val cipherAlgo: String = "AES/GCM/NoPadding"
+  val keyAlgo: String
+  val cipherAlgo: String
   val provider: Provider
   val key: SecretKey
   val iv: IvParameterSpec
@@ -46,21 +46,23 @@ trait SymmetricKey {
   def cipher(mode: Int): Cipher =
     tap(Cipher.getInstance(cipherAlgo, provider.getName))(_.init(mode, key, iv))
 
-  def encrypt(bytes: Seq[Byte]): Array[Byte]
+  def encrypt(bytes: Array[Byte]): Array[Byte]
 
-  def decrypt(bytes: Seq[Byte]): Array[Byte]
+  def decrypt(bytes: Array[Byte]): Array[Byte]
 }
 
 case class CryptKey(keyBytes: Array[Byte], ivBytes: Array[Byte], provider: Provider = new BouncyCastleProvider) extends SymmetricKey {
   Security.addProvider(provider)
 
+  val keyAlgo: String = "PBKDF2WithHmacSHA1"
+  val cipherAlgo: String = "AES/GCM/NoPadding"
   val key = new SecretKeySpec(keyBytes, keyAlgo)
   val iv = new IvParameterSpec(ivBytes)
 
-  def encrypt(bytes: Seq[Byte]): Array[Byte] =
+  def encrypt(bytes: Array[Byte]): Array[Byte] =
     cipher(Cipher.ENCRYPT_MODE).doFinal(bytes.toArray)
 
-  def decrypt(bytes: Seq[Byte]): Array[Byte] =
+  def decrypt(bytes: Array[Byte]): Array[Byte] =
     cipher(Cipher.DECRYPT_MODE).doFinal(bytes.toArray)
 }
 

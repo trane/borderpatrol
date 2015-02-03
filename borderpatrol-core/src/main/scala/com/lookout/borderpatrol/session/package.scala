@@ -8,6 +8,7 @@ import com.lookout.borderpatrol.session.secret._
 import com.lookout.borderpatrol.session.tokens._
 import com.lookout.borderpatrol.session.id._
 import com.twitter.bijection.{Base64String, Injection}
+import com.twitter.io.Buf
 import com.twitter.util.{Time, Duration}
 import org.jboss.netty.buffer.ChannelBuffers
 import com.lookout.borderpatrol.util.Combinators.tap
@@ -30,6 +31,9 @@ package object session {
     }
 
   }
+
+  lazy val bytes264 = Injection.connect[Array[Byte], Base64String, String]
+  lazy val json2bytes = Injection.connect[String, Array[Byte]]
 
   implicit def ByteCodecJson: CodecJson[Byte] =
     CodecJson(
@@ -69,18 +73,39 @@ package object session {
   implicit def SessionCodecJson: CodecJson[Session] =
     casecodec3(Session.apply, Session.unapply)("id", "req", "tokens")
 
-  implicit class SessionJsonEncode(val s: Session) extends AnyVal {
+  implicit class SessionOps(val s: Session) extends AnyVal {
     def asJson: String =
       SessionCodecJson.encode(s).toString
+
+    def asBytes: Array[Byte] =
+      json2bytes(s.asJson)
   }
 
-  implicit class SessionJsonDecode(val s: String) extends AnyVal {
+  implicit class ArrayOps(val a: Array[Byte]) extends AnyVal {
+    def asSession: Option[Session] =
+      json2bytes.invert(a).toOption flatMap (_.asSession)
+
+    def asBase64: String =
+      bytes264(a)
+
+    def asBuf: Buf =
+      Buf.ByteArray.Owned(a)
+  }
+
+  implicit class BufOps(val buf: Buf) extends AnyVal {
+    def asArray: Array[Byte] =
+      Buf.ByteArray.Owned.extract(buf)
+  }
+
+  implicit class IndexedSeqOps(val seq: IndexedSeq[Byte]) extends AnyVal {
+    def asBase64: String =
+      bytes264(seq.toArray)
+  }
+
+  implicit class StringOpsSession(val s: String) extends AnyVal {
     def asSession: Option[Session] =
       s.decodeOption[Session]
   }
-
-  lazy val bytes264 = Injection.connect[Array[Byte], Base64String, String]
-  lazy val json2bytes = Injection.connect[String, Array[Byte]]
 
 }
 

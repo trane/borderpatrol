@@ -20,7 +20,4 @@ package object secret {
     def asSecrets: Option[Secrets] =
       s.decodeOption[Secrets]
   }
-
-  implicit def SecretDataCodecJson: CodecJson[SecretData] =
-    casecodec6(SecretData.apply, SecretData.unapply)("CreateIndex", "ModifyIndex", "LockIndex", "Key", "Flags", "Value")
 }

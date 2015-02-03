@@ -36,16 +36,11 @@ class SessionStoreSpec extends FlatSpec with Matchers with MockFactory {
     encryptedStore.get(s.id.asString).value.equals(s) shouldBe true
   }
 
-  it should "create a CryptKey for a session" in {
-    val s = mockSession
-    encryptedStore.cryptKey(s.id).isSuccess shouldBe true
-  }
-
   it should "fail to create a CryptKey for an invalid session" in {
     val s = mockSession
     val invalidSecretId = ~s.id.secretId
     val id = SessionId(s.id.expires, s.id.entropy, invalidSecretId.toByte, s.id.signature)
-    encryptedStore.cryptKey(id).isFailure shouldBe true
+    id.deriveCryptKey shouldBe None
   }
 
   behavior of "MemcachedSessionStore"
@@ -89,7 +84,8 @@ class SessionStoreSpec extends FlatSpec with Matchers with MockFactory {
     val s = mockSession
     val memcachedClient = mock[memcachedx.BaseClient[Buf]]
     val memcachedStore = new MockMemcachedEncryptSessionStore(memcachedClient)
-    val cryptKey = memcachedStore.cryptKey(s.id).get
+    val (sid, secret) = s.id.asSessionIdAndSecret.get
+    val cryptKey = sid.deriveCryptKey.get
 
     val flag = 0 // meaningless part of the protocol
 
@@ -100,8 +96,8 @@ class SessionStoreSpec extends FlatSpec with Matchers with MockFactory {
     */
 
     (memcachedClient.get(_: String))
-      .expects(bytes264(s.id.signature.toArray))
-      .returning(Future.value(Some(Buf.ByteArray.Owned(cryptKey.encrypt(json2bytes(s.asJson))))))
+      .expects(sid.signature.asBase64)
+      .returning(Future.value(Some(Buf.ByteArray.Owned(cryptKey.encrypt(s.asBytes)))))
 
 
     // memcachedStore.update(s) // re-enable after https://github.com/paulbutcher/ScalaMock/issues/39#issuecomment-71727931

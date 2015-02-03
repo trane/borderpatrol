@@ -6,6 +6,8 @@ import com.lookout.borderpatrol.session.store.{InMemorySessionStore, SessionStor
 import com.lookout.borderpatrol.session._
 import com.twitter.util.Time
 import org.jboss.netty.handler.codec.http.HttpRequest
+import com.twitter.finagle.httpx.Request
+import com.twitter.finagle.httpx.netty.Bijections
 
 trait SecureSession {
   val id: SessionId
@@ -37,14 +39,20 @@ object Session extends SessionFactory with SignerComponent
   implicit val generator: Generator = new Generator
   val sessionStore = new InMemorySessionStore
 
-  def apply(s: String, originalRequest: HttpRequest): Session =
-    sessionStore.get(s) getOrElse newSession(originalRequest)
+  def apply(request: Request): Session =
+    request.cookies.getValue(cookieName).flatMap(id => sessionStore.get(id)) getOrElse newSession(request)
 
-  def apply(request: RoutedRequest): Session =
-    request.borderCookie.flatMap(id => sessionStore.get(id)) getOrElse newSession(request.httpRequest)
+  def apply(key: String, httpRequest: HttpRequest): Session =
+    Session(key, Bijections.requestFromNetty(httpRequest))
 
-  def newSession(originalRequest: HttpRequest): Session =
-    Session(generator.next, originalRequest, Tokens.empty)
+  def apply(key: String, request: Request): Session =
+    sessionStore.get(key) getOrElse newSession(request)
+
+  def apply(rrequest: RoutedRequest): Session =
+    rrequest.borderCookie.flatMap(id => sessionStore.get(id)) getOrElse newSession(rrequest.request)
+
+  def newSession(request: Request): Session =
+    Session(generator.next, Bijections.requestToNetty(request), Tokens.empty)
 
   def save(session: Session): Session =
     sessionStore.update(session)

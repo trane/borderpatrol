@@ -1,6 +1,7 @@
 package com.lookout.borderpatrol.session.store
 
 import com.lookout.borderpatrol.Session
+import com.lookout.borderpatrol.session.id.Types.Signature
 import com.lookout.borderpatrol.session.id._
 import com.lookout.borderpatrol.session._
 import com.twitter.bijection.{Base64String, Injection}
@@ -28,12 +29,8 @@ sealed trait SessionStoreApi {
 }
 
 sealed trait EncryptedSessions[A] {
-
-  def cryptKey(id: SessionId, secret: Secret): CryptKey =
-    CryptKey(id, secret)
-
-  def encrypt(s: Session, c: CryptKey): A
   def decrypt(a: A, c: CryptKey): Option[Session]
+  def encrypt(s: Session, c: CryptKey): A
 }
 
 /**
@@ -45,95 +42,60 @@ sealed trait EncryptedSessions[A] {
  */
 case class MemcachedEncryptedSessionStore(dest: String, timeout: Duration)(implicit marshaller: Marshaller) extends SessionStoreApi with EncryptedSessions[Buf] {
   val store: memcachedx.BaseClient[Buf] = Memcachedx.newKetamaClient(dest)
+  val flag = 0 // ignored flag required by memcached api
 
-  def decrypt(buf: Buf, c: CryptKey): Option[Session] = {
-    val encBytes = toArray(buf)
-    val decBytes = c.decrypt(encBytes)
-    ((json2bytes invert decBytes) toOption) flatMap (_ asSession)
-  }
+  def decrypt(buf: Buf, c: CryptKey): Option[Session] =
+    c.decrypt(buf.asArray).asSession
 
-  def encrypt(s: Session, c: CryptKey): Buf = {
-    val bytes = json2bytes (s asJson)
-    val encBytes = c.encrypt(bytes)
-    toBuf(encBytes)
-  }
+  def encrypt(s: Session, c: CryptKey): Buf =
+    c.encrypt(s.asBytes).asBuf
 
   def get(s: String): Option[Session] =
     for {
       (sid, sec) <- s.asSessionIdAndSecret.toOption
-      buf <- Await.result(store.get(bytes264(sid.signature.toArray)), timeout)
-      session <- decrypt(buf, cryptKey(sid, sec))
+      key <- sid.deriveCryptKey
+      buf <- get(sid)
+      session <- decrypt(buf, key)
     } yield session
 
   def update(s: Session): Session =
-    s.id.asSessionIdAndSecret.toOption map {t =>
-      val encKey = cryptKey(t._1, t._2)
-      val value = encrypt(s, encKey)
-      val key = bytes264(s.id.signature.toArray)
-      set(key, s.id.expires, value)
-      s
+    s.id.deriveCryptKey map {key =>
+      tap(s)(s_ => set(s.id, encrypt(s, key)))
     } get
 
-  def cryptKey(id: String): Try[CryptKey] =
-    id.asSessionIdAndSecret map (t => CryptKey(t._1, t._2))
+  private[this] def get(id: SessionId): Option[Buf] =
+    Await.result(store.get(id.signature.asBase64), timeout)
 
-  def cryptKey(id: SessionId): Try[CryptKey] =
-    id.asSessionIdAndSecret map (t => CryptKey(t._1, t._2))
-
-  def toArray(buf: Buf): Array[Byte] =
-    Buf.ByteArray.Owned.extract(buf)
-
-  def toBuf(bytes: Array[Byte]): Buf =
-    Buf.ByteArray.Owned(bytes)
-
-  def set(key: String, expiry: Time, value: Buf): Future[Unit] =
-    store.set(key, 0, expiry, value)
+  private[this] def set(id: SessionId, value: Buf): Future[Unit] =
+    store.set(id.signature.asBase64, flag, id.expires, value)
       .onFailure(err => println(s"Failed ${err}"))
-      .onSuccess(suc => println(s"Success ${key}"))
+      .onSuccess(suc => println(s"Success ${id}"))
 
 }
 
 case class InMemoryEncryptedSessionStore(implicit marshaller: Marshaller) extends SessionStoreApi with EncryptedSessions[Buf] {
-  private [this] lazy val json2bytes = Injection.connect[String, Array[Byte]]
-  private [this] lazy val bytes264 = Injection.connect[Array[Byte], Base64String, String]
   private [this] var _store = Map[String, Buf]()
 
-  def decrypt(buf: Buf, c: CryptKey): Option[Session] = {
-    val encBytes = toArray(buf)
-    val decBytes = c.decrypt(encBytes)
-    ((json2bytes invert decBytes) toOption) flatMap (_ asSession)
-  }
+  def decrypt(buf: Buf, c: CryptKey): Option[Session] =
+    c.decrypt(buf.asArray).asSession
 
-  def encrypt(s: Session, c: CryptKey): Buf = {
-    val bytes = json2bytes (s asJson)
-    val encBytes = c.encrypt(bytes)
-    toBuf(encBytes)
-  }
+  def encrypt(s: Session, c: CryptKey): Buf =
+    c.encrypt(s.asBytes).asBuf
 
   def get(s: String): Option[Session] =
     for {
       (sid, sec) <- s.asSessionIdAndSecret.toOption
-      buf <- _store.get(bytes264(sid.signature.toArray))
-      session <- decrypt(buf, cryptKey(sid, sec))
+      buf <- _store.get(sid.signature.asBase64)
+      session <- decrypt(buf, CryptKey(sid, sec))
     } yield session
 
   def update(s: Session): Session =
-    cryptKey(s.id) map { encKey =>
+    s.id.deriveCryptKey map { encKey =>
       val value = encrypt(s, encKey)
-      val key = bytes264(s.id.signature.toArray)
+      val key = s.id.signature.asBase64
       _store = _store.updated(key, value)
       s
     } get
-
-  def cryptKey(id: SessionId): Try[CryptKey] =
-    id.asSessionIdAndSecret map (t => CryptKey(t._1, t._2))
-
-  def toArray(buf: Buf): Array[Byte] =
-    Buf.ByteArray.Owned.extract(buf)
-
-  def toBuf(bytes: Array[Byte]): Buf =
-    Buf.ByteArray.Owned(bytes)
-
 }
 
 case class InMemorySessionStore(implicit marshaller: Marshaller) extends SessionStoreApi {

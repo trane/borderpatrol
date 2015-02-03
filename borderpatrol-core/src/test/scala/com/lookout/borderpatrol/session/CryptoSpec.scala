@@ -27,12 +27,12 @@ class CryptoSpec extends FlatSpec with Matchers {
 
   it should "encrypt a sequence" in {
     val cryptKey = CryptKey.apply(id, secretStore.current)
-    cryptKey.encrypt(bytes) should not equal (bytes)
-    cryptKey.encrypt(bytes).size should be > bytes.size
+    cryptKey.encrypt(bytes.toArray) should not equal (bytes)
+    cryptKey.encrypt(bytes.toArray).size should be > bytes.size
   }
 
   it should "have the same output as input when decrypting what it encrypted" in {
     val cryptKey = CryptKey.apply(id, secretStore.current)
-    cryptKey.decrypt(cryptKey.encrypt(bytes)) shouldEqual (bytes)
+    cryptKey.decrypt(cryptKey.encrypt(bytes.toArray)) shouldEqual (bytes)
   }
 }
