@@ -12,6 +12,7 @@ object BorderPatrol extends Build {
     libraryDependencies ++= Seq(
       "com.twitter" %% "twitter-server" % twitter_server,
       "com.twitter" %% "finagle-memcachedx" % "6.24.0",
+      "com.twitter" %% "finagle-httpx" % "6.24.0",
       "com.twitter" %% "bijection-core" % "0.7.0",
       "io.argonaut" %% "argonaut" % "6.1-M5",
       "org.scalatest" %% "scalatest" % "2.2.2" % "test",
@@ -39,4 +40,18 @@ object BorderPatrol extends Build {
   ).settings(
     name := "borderpatrol-core"
   )
+
+  lazy val borderPatrolExample = Project(
+    id = "borderpatrol-example",
+    base = file("borderpatrol-example"),
+    settings = Defaults.coreDefaultSettings ++ sharedSettings
+  ).settings(
+      name := "borderpatrol-example"
+  ).dependsOn(borderPatrolCore)
+
+  lazy val borderPatrol = Project(
+    id = "borderpatrol",
+    base = file("."),
+    settings = Defaults.coreDefaultSettings ++ sharedSettings
+  ) aggregate (borderPatrolCore, borderPatrolExample)
 }

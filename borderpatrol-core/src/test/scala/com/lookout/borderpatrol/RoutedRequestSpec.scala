@@ -1,6 +1,7 @@
 package com.lookout.borderpatrol
 
 import com.lookout.borderpatrol.session._
+import com.twitter.finagle.httpx.{Method, Version, Request}
 import org.jboss.netty.handler.codec.http._
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -8,7 +9,7 @@ class RoutedRequestSpec extends FlatSpec with Matchers {
 
   implicit val marshaller = Session.marshaller
   def serviceName = "testservice"
-  def mockHttpRequest = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "localhost")
+  def mockHttpRequest = Request(Version.Http11, Method.Get, "localhost")
   def mockSessionStore = Session.sessionStore
   def mockSession = Session.newSession(mockHttpRequest)
   def mockTokens = Tokens(EmptyToken, EmptyServiceTokens)
@@ -19,7 +20,7 @@ class RoutedRequestSpec extends FlatSpec with Matchers {
   it should "give the value of the border patrol cookie if present" in {
     val req = mockHttpRequest
     val session = mockSession
-    req.headers.add(HttpHeaders.Names.COOKIE, s"${Session.cookieName}=${session.id.asString}")
+    req.headerMap.add(HttpHeaders.Names.COOKIE, s"${Session.cookieName}=${session.id.asString}")
     val rReq = RoutedRequest(req, serviceName)
     rReq.borderCookie.get shouldBe session.id.asString
     RoutedRequest(mockHttpRequest, serviceName).borderCookie shouldBe None
@@ -34,7 +35,7 @@ class RoutedRequestSpec extends FlatSpec with Matchers {
     val session = mockSession
     mockSessionStore.update(session)
     val req = mockHttpRequest
-    req.headers.add(HttpHeaders.Names.COOKIE, s"${Session.cookieName}=${session.id.asString}")
+    req.headerMap.add(HttpHeaders.Names.COOKIE, s"${Session.cookieName}=${session.id.asString}")
     val rReq = RoutedRequest(req, serviceName)
     rReq.session shouldBe session
   }
@@ -45,7 +46,7 @@ class RoutedRequestSpec extends FlatSpec with Matchers {
     val updatedReq = req += newSession
     updatedReq.session should not be req.session
     updatedReq.session shouldBe newSession
-    updatedReq.httpRequest shouldBe req.httpRequest
+    updatedReq.request shouldBe req.request
     updatedReq.service shouldBe req.service
   }
 
@@ -55,7 +56,7 @@ class RoutedRequestSpec extends FlatSpec with Matchers {
     val updatedReq = req + master
     updatedReq.session.id shouldBe req.session.id
     updatedReq.session.tokens.master shouldBe master
-    updatedReq.httpRequest shouldBe req.httpRequest
+    updatedReq.request shouldBe req.request
     updatedReq.service shouldBe req.service
   }
 
@@ -68,7 +69,7 @@ class RoutedRequestSpec extends FlatSpec with Matchers {
     updatedReq.session.tokens.master shouldBe req.session.tokens.master
     updatedReq.session.tokens.service(serviceName).get shouldBe serviceToken1
     (updatedReq + serviceToken2).session.tokens.service(serviceName).get shouldBe serviceToken2
-    updatedReq.httpRequest shouldBe req.httpRequest
+    updatedReq.request shouldBe req.request
     updatedReq.service shouldBe req.service
   }
 
@@ -79,7 +80,7 @@ class RoutedRequestSpec extends FlatSpec with Matchers {
     updatedReq.session.id shouldBe req.session.id
     updatedReq.session.tokens.master shouldBe req.session.tokens.master
     updatedReq.session.tokens.service(serviceName).get shouldBe serviceTokens.get(serviceName).get
-    updatedReq.httpRequest shouldBe req.httpRequest
+    updatedReq.request shouldBe req.request
     updatedReq.service shouldBe req.service
   }
 
@@ -92,7 +93,7 @@ class RoutedRequestSpec extends FlatSpec with Matchers {
     updatedReq.session.id shouldBe req.session.id
     updatedReq.session.tokens.master shouldBe masterToken
     updatedReq.session.tokens.service(serviceName).get shouldBe serviceTokens.get(serviceName).get
-    updatedReq.httpRequest shouldBe req.httpRequest
+    updatedReq.request shouldBe req.request
     updatedReq.service shouldBe req.service
   }
 

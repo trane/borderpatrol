@@ -31,19 +31,9 @@ package object tokens {
       TokensCodecJson.encode(t).toString
   }
 
-  implicit class TokensJsonDecode(val s: String) extends AnyVal {
-    def asTokens: Option[Tokens] =
-      s.decodeOption[Tokens]
-  }
-
   implicit class MasterTokenJsonEncode(val t: MasterToken) extends AnyVal {
     def asJson: String =
       MasterTokenCodecJson.encode(t).toString
-  }
-
-  implicit class MasterTokenJsonDecode(val s: String) extends AnyVal {
-    def asMasterToken: Option[MasterToken] =
-      s.decodeOption[MasterToken]
   }
 
   implicit class ServiceTokenJsonEncode(val t: ServiceToken) extends AnyVal {
@@ -51,18 +41,24 @@ package object tokens {
       ServiceTokenCodecJson.encode(t).toString
   }
 
-  implicit class ServiceTokenJsonDecode(val s: String) extends AnyVal {
-    def asServiceToken: Option[ServiceToken] =
-      s.decodeOption[ServiceToken]
-  }
-
   implicit class ServiceTokensJsonEncode(val t: ServiceTokens) extends AnyVal {
     def asJson: String =
       ServiceTokensCodecJson.encode(t).toString
   }
 
-  implicit class ServiceTokensJsonDecode(val s: String) extends AnyVal {
+  implicit class StringOpsTokens(val s: String) extends AnyVal {
+
+    def asMasterToken: Option[MasterToken] =
+      s.decodeOption[MasterToken]
+
+    def asServiceToken: Option[ServiceToken] =
+      s.decodeOption[ServiceToken]
+
     def asServiceTokens: Option[ServiceTokens] =
       s.decodeOption[ServiceTokens]
+
+    def asTokens: Option[Tokens] =
+      s.decodeOption[Tokens]
   }
+
 }

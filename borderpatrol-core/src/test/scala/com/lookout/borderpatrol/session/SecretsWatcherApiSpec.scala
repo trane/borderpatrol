@@ -2,20 +2,17 @@ package com.lookout.borderpatrol.session
 
 import java.util.concurrent.TimeUnit
 import com.lookout.borderpatrol.session.secret._
-import com.lookout.borderpatrol.session.secret.{SecretData, SecretsWatcherApi, ConsulSecretsWatcher}
-import com.lookout.borderpatrol.{ConsulService, Response}
+import com.lookout.borderpatrol.session.secret.watcher.consul.{SecretDataCodecJson, SecretData, ConsulSecretsWatcher, ConsulService}
+import com.lookout.borderpatrol.session.secret.SecretsWatcherApi
 import com.twitter.bijection.{Base64String, Injection}
-import com.twitter.io.Charsets
+import com.twitter.finagle.httpx.netty.Bijections
+import com.twitter.finagle.httpx.{Status, Response}
 import com.twitter.util.{Duration, Future, Time}
-import org.jboss.netty.buffer.ChannelBuffers._
 import org.jboss.netty.handler.codec.http._
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.util.{Failure, Success}
 
-/**
- * Created by wkimeria on 1/15/15.
- */
 class SecretsWatcherApiSpec extends FlatSpec with Matchers {
 
   behavior of "SecretWatcherApi"
@@ -29,23 +26,23 @@ class SecretsWatcherApiSpec extends FlatSpec with Matchers {
   }
 
   case class MockConsulService(f: Response => HttpResponse) extends ConsulService {
-    override def apply(request: HttpRequest) = {
-      Future.value(f(new Response(new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK))))
+    def apply(request: HttpRequest) = {
+      Future.value(f(Response(Status.Ok)))
     }
   }
 
   def respondWithGoodSecrets(secrets: Secrets)(response: Response): HttpResponse = {
     val sData = coder(secrets.asJson)
     val json = "[" + SecretDataCodecJson.encode(SecretData(1, 1, 1, "secrets", 1, sData)) + "]"
-    response.setContent(copiedBuffer(json.toString(), Charsets.Utf8))
-    response
+    response.contentString = json.toString
+    Bijections.responseToNetty(response)
   }
 
   def respondWithBadSecrets(response: Response): HttpResponse = {
     val sData = coder("{'not_secrets': 'bad'}")
     val json = "[" + SecretDataCodecJson.encode(SecretData(1, 1, 1, "secrets", 1, sData)) + "]"
-    response.setContent(copiedBuffer(json.toString(), Charsets.Utf8))
-    response
+    response.contentString = json.toString
+    Bijections.responseToNetty(response)
   }
 
   it should "get valid initial secrets" in {
