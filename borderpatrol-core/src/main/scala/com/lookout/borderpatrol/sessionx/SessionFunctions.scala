@@ -22,11 +22,11 @@
  * THE SOFTWARE.
  */
 
-package com.lookout.borderpatrol
+package com.lookout.borderpatrol.sessionx
 
-import com.twitter.finagle.Service
-import com.twitter.finagle.httpx.{Response, Request}
-import com.twitter.util.Future
+import com.twitter.finagle.httpx.Cookie
 
-package object auth extends AuthFunctions {
+trait SessionFunctions extends SessionImplicits {
+  def generateCookie(id: SessionId): Cookie =
+    new Cookie("border_session", id)
 }

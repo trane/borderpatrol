@@ -1,39 +1,29 @@
 package com.lookout.borderpatrol.example
 
+import com.lookout.borderpatrol.sessionx
 import com.lookout.borderpatrol.util.Combinators.tap
-import com.lookout.borderpatrol.auth._
-import BasicAuth._
-import com.lookout.borderpatrol._
-import com.twitter.finagle.httpx.path._
-import com.twitter.finagle.httpx.service.RoutingService
-
-import com.twitter.finagle.{Service, httpx}
-import com.twitter.io.Charsets
+import com.twitter.finagle._
 import com.twitter.server.TwitterServer
-import com.twitter.util.{Base64StringEncoder, Await}
+import com.twitter.util.{Future}
+import io.finch.{Endpoint => _, _}
+import io.finch.{HttpRequest, HttpResponse}
 
-object BorderPatrolApp extends TwitterServer {
+object Main extends TwitterServer {
+  import model._
+  import reader._
+  import endpoint._
+  import sessionx._
+  import io.finch.AnyOps
 
-  val basicAuth = BasicAuthFilter
-
-  val basicAuthService = new Service[BorderRequest[Basic], httpx.Response] {
-    def apply(request: BorderRequest[Basic]) = {
-      val cred = request.authInfo.info.credential.get
-      val body = s"You have authenticated with $cred"
-      println(body)
-      tap(httpx.Response(httpx.Status.Ok))(r => r.contentString = body).toFuture
-    }
+  val printer = new SimpleFilter[HttpRequest, HttpResponse] {
+    def apply(req: HttpRequest, service: Service[HttpRequest, HttpResponse]): Future[HttpResponse] =
+      for {
+        sesReq <- Session(req)
+        res <- service(req)
+        if res.status == httpx.Status.Unauthorized
+      } yield tap(res)(_.addCookie(generateCookie(sesReq.id)))
   }
 
-  val backend = RoutingService.byPathObject {
-    case Root / "hello" => basicAuth andThen basicAuthService
-  }
-
-  def testExample(u: String, p: String) = {
-    val req = httpx.Request(httpx.Method.Get, "/hello")
-    val auth = Base64StringEncoder.encode(s"$u:$p".getBytes(Charsets.Utf8))
-    req.authorization = s"Basic $auth"
-    backend(req)
-  }
+  val server = Httpx.serve(":8080", routes.toService)
 
 }

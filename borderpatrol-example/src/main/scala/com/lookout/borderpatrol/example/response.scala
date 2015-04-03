@@ -22,11 +22,8 @@
  * THE SOFTWARE.
  */
 
-package com.lookout.borderpatrol
+package com.lookout.borderpatrol.example
 
-import com.twitter.finagle.Service
-import com.twitter.finagle.httpx.{Response, Request}
-import com.twitter.util.Future
+object response {
 
-package object auth extends AuthFunctions {
 }

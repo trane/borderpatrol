@@ -22,11 +22,25 @@
  * THE SOFTWARE.
  */
 
-package com.lookout.borderpatrol
+package com.lookout.borderpatrol.example
 
+import argonaut._
+import Argonaut._
 import com.twitter.finagle.Service
-import com.twitter.finagle.httpx.{Response, Request}
-import com.twitter.util.Future
+import com.twitter.finagle.httpx.{Request, Response}
+import com.twitter.io.Charsets
+import com.twitter.util.{Future, Base64StringEncoder}
+import io.finch.request.PRequestReader
+import io.finch.request.items.{MultipleItems, RequestItem}
+import io.finch.{HttpResponse, HttpRequest}
+import com.lookout.borderpatrol.sessionx._
 
-package object auth extends AuthFunctions {
+object model {
+  case class User(e: String, p: String)
+  case class Token(s: String, u: User)
+  object Token {
+    def generate(user: User): Token =
+      Token(s"supersecret${user.e}", user)
+  }
+
 }

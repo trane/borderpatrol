@@ -22,11 +22,21 @@
  * THE SOFTWARE.
  */
 
-package com.lookout.borderpatrol
+package com.lookout.borderpatrol.example
 
-import com.twitter.finagle.Service
-import com.twitter.finagle.httpx.{Response, Request}
-import com.twitter.util.Future
+import argonaut._, Argonaut._
+import io.finch.HttpRequest
+import io.finch.response.Ok
+import io.finch.route._
 
-package object auth extends AuthFunctions {
+object endpoint {
+  import model._
+  import service._
+
+  val routes =
+    (Get / "login" /> LoginService.ok) :+:
+    (Post / "login" /> LoginService) :+:
+    (* / "service1" /> service1) :+:
+    (* / "service2" /> service2)
+
 }
