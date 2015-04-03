@@ -6,7 +6,7 @@ import com.lookout.borderpatrol.session.secret.watcher.consul.{SecretDataCodecJs
 import com.lookout.borderpatrol.session.secret.SecretsWatcherApi
 import com.twitter.bijection.{Base64String, Injection}
 import com.twitter.finagle.httpx.netty.Bijections
-import com.twitter.finagle.httpx.{Status, Response}
+import com.twitter.finagle.httpx.{Request, Status, Response}
 import com.twitter.util.{Duration, Future, Time}
 import org.jboss.netty.handler.codec.http._
 import org.scalatest.{FlatSpec, Matchers}
@@ -25,24 +25,24 @@ class SecretsWatcherApiSpec extends FlatSpec with Matchers {
     Secrets(mockSecret, mockSecret)
   }
 
-  case class MockConsulService(f: Response => HttpResponse) extends ConsulService {
-    def apply(request: HttpRequest) = {
+  case class MockConsulService(f: Response => Response) extends ConsulService {
+    override def apply(request: Request) = {
       Future.value(f(Response(Status.Ok)))
     }
   }
 
-  def respondWithGoodSecrets(secrets: Secrets)(response: Response): HttpResponse = {
+  def respondWithGoodSecrets(secrets: Secrets)(response: Response): Response = {
     val sData = coder(secrets.asJson)
     val json = "[" + SecretDataCodecJson.encode(SecretData(1, 1, 1, "secrets", 1, sData)) + "]"
     response.contentString = json.toString
-    Bijections.responseToNetty(response)
+    response
   }
 
-  def respondWithBadSecrets(response: Response): HttpResponse = {
+  def respondWithBadSecrets(response: Response): Response = {
     val sData = coder("{'not_secrets': 'bad'}")
     val json = "[" + SecretDataCodecJson.encode(SecretData(1, 1, 1, "secrets", 1, sData)) + "]"
     response.contentString = json.toString
-    Bijections.responseToNetty(response)
+    response
   }
 
   it should "get valid initial secrets" in {
