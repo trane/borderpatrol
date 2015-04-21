@@ -6,7 +6,7 @@ import scalaz.State
 
 object TokenState {
   /**
-   * Add master tokens to the current tokens
+   * Add master data to the current data
    * @param token A master token
    * @return
    */
@@ -21,7 +21,7 @@ object TokenState {
   } yield Tokens(s.master, s.services)
 
   /**
-   * Add service tokens to the current tokens
+   * Add service data to the current data
    * @param tokens A master token
    * @return
    */
@@ -34,7 +34,7 @@ object TokenState {
   } yield Tokens(s.master, s.services)
 
   /**
-   * Converge new tokens with the current tokens
+   * Converge new data with the current data
    * @param tokens A master token
    * @return
    */

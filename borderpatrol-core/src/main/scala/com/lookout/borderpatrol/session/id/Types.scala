@@ -1,8 +1,5 @@
 package com.lookout.borderpatrol.session.id
 
-/**
- * Created by akuhnhausen on 1/22/15.
- */
 object Types {
   type Seconds = Long
   type Size = Int

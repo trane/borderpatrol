@@ -22,37 +22,11 @@
  * THE SOFTWARE.
  */
 
-package com.lookout.borderpatrol.auth
+package com.lookout.borderpatrol.sessionx
 
-import com.twitter.util.Future
-import com.twitter.finagle.{Service, Filter, httpx}
-
-trait AuthTypeClasses extends AuthTypes {
-
-  trait Authable[A] {
-    def validate(request: AuthRequest[A]): Future[AuthResult[A]]
-    def identify(request: AuthResourceRequest[A]): Future[AuthInfo[A]]
-  }
-
-  trait AuthErrorHandler {
-    def handle(e: BorderError): httpx.Response
-  }
-
-  trait BorderAuth[A] {
-    def authenticate[A : Authable](request: httpx.Request): Future[AuthResult[A]] =
-      implicitly[Authable[A]].validate(AuthRequest(request))
-
-    def identify[A : Authable](request: httpx.Request): Future[AuthInfo[A]] =
-      implicitly[Authable[A]].identify(AuthResourceRequest(request))
-  }
-
-  trait BorderFilter[+A]
-      extends Filter[httpx.Request, httpx.Response, BorderRequest[A], httpx.Response]
-      with BorderAuth[A] with AuthErrorHandler {
-
-    def apply(request: httpx.Request, service: Service[BorderRequest[A], httpx.Response]): Future[httpx.Response]
-
-    def handle(e: BorderError): httpx.Response =
-      httpx.Response(e.status)
-  }
+trait SessionTypes {
+  abstract class BorderSessionError(val description: String) extends Exception
+  class UpdateStoreException(description: String = "") extends BorderSessionError(description)
+  class SessionIdException(description: String = "") extends BorderSessionError(description)
+  class DecodeSessionJsonException(description: String = "") extends BorderSessionError(description)
 }

@@ -2,12 +2,15 @@ package com.lookout.borderpatrol
 
 import java.util.concurrent.TimeUnit
 
+
 import argonaut.Argonaut._
-import argonaut.CodecJson
+import argonaut.{Json, CodecJson}
 import com.lookout.borderpatrol.session.secret._
 import com.lookout.borderpatrol.session.tokens._
 import com.lookout.borderpatrol.session.id._
 import com.twitter.bijection.{Base64String, Injection}
+import com.twitter.finagle.httpx
+import com.twitter.finagle.httpx.netty.Bijections
 import com.twitter.io.Buf
 import com.twitter.util.{Time, Duration}
 import org.jboss.netty.buffer.ChannelBuffers
@@ -31,9 +34,6 @@ package object session {
     }
 
   }
-
-  lazy val bytes264 = Injection.connect[Array[Byte], Base64String, String]
-  lazy val json2bytes = Injection.connect[String, Array[Byte]]
 
   implicit def ByteCodecJson: CodecJson[Byte] =
     CodecJson(
@@ -70,12 +70,21 @@ package object session {
         })
     )
 
+  implicit def HttpxRequestCodecJson: CodecJson[httpx.Request] =
+    CodecJson(
+      (r: httpx.Request) => HttpRequestCodecJson.encode(Bijections.requestToNetty(r)),
+      c => for (r <- HttpRequestCodecJson.decode(c)) yield Bijections.requestFromNetty(r)
+    )
+
   implicit def SessionCodecJson: CodecJson[Session] =
-    casecodec3(Session.apply, Session.unapply)("id", "req", "tokens")
+    casecodec3(Session.apply, Session.unapply)("id", "req", "data")
 
   implicit class SessionOps(val s: Session) extends AnyVal {
-    def asJson: String =
-      SessionCodecJson.encode(s).toString
+    def asJson: Json =
+      SessionCodecJson.encode(s)
+
+    def asString: String =
+      s.asJson.toString
 
     def asBytes: Array[Byte] =
       json2bytes(s.asJson)
@@ -83,10 +92,10 @@ package object session {
 
   implicit class ArrayOps(val a: Array[Byte]) extends AnyVal {
     def asSession: Option[Session] =
-      json2bytes.invert(a).toOption flatMap (_.asSession)
+      json2bytes.invert(a).toOption.flatMap(json => json.as[Session].toOption)
 
     def asBase64: String =
-      bytes264(a)
+      bytes2b64str(a)
 
     def asBuf: Buf =
       Buf.ByteArray.Owned(a)
@@ -99,7 +108,7 @@ package object session {
 
   implicit class IndexedSeqOps(val seq: IndexedSeq[Byte]) extends AnyVal {
     def asBase64: String =
-      bytes264(seq.toArray)
+      bytes2b64str(seq.toArray)
   }
 
   implicit class StringOpsSession(val s: String) extends AnyVal {

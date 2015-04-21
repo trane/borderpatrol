@@ -7,7 +7,7 @@ REQUIRED_PARAMS = [:e, :p, :s]
 # Get a service token by itself
 # wget -S --post-data "e=user@example.com&p=password&s=smb" http://localhost:9081/api/auth/service/v1/account_master_token.json
 
-# Get a list of service tokens (using a username and password)
+# Get a list of service data (using a username and password)
 # wget -S --post-data "e=user@example.com&p=password&s=smb,flexd" http://localhost:9081/api/auth/service/v1/account_master_token.json
 post '/api/auth/service/v1/account_master_token.json' do
   $stderr.write "apiserver #{request.url} params = #{params}\n"

@@ -23,8 +23,8 @@ class SessionSpec extends FlatSpec with Matchers {
     val deser = sOption.value
 
     deser.id shouldEqual(orig.id)
-    deser.tokens shouldEqual(orig.tokens)
-    deser.originalRequest should not equal(orig.originalRequest) // mutable values
+    deser.data shouldEqual(orig.data)
+    deser.request should not equal(orig.request) // mutable values
     deser.equals(orig) shouldBe true // overridden
   }
 }

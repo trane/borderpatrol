@@ -11,22 +11,22 @@ case class RoutedRequest(request: Request, service: String, session: Session) {
     copy(session = otherSession)
 
   def +(token: Token): RoutedRequest =
-    this += session.copy(tokens = session.tokens += token)
+    this += session.copy(tokens = session.data += token)
 
   def ++(tokens: ServiceTokens): RoutedRequest =
-    this += session.copy(tokens = session.tokens ++= tokens)
+    this += session.copy(tokens = session.data ++= tokens)
 
   def ++(tokens: Tokens): RoutedRequest =
-    this += session.copy(tokens = session.tokens ++= tokens)
+    this += session.copy(tokens = session.data ++= tokens)
 
   def clearTokens: RoutedRequest =
     this += session.copy(tokens = Tokens.empty)
 
   def serviceToken: Option[ServiceToken] =
-    session.tokens.service(service)
+    session.data.service(service)
 
   def masterToken: Token =
-    session.tokens.master
+    session.data.master
 
   def injectHeaders: RoutedRequest = {
     addAuthHeaders
@@ -42,10 +42,10 @@ case class RoutedRequest(request: Request, service: String, session: Session) {
     request.headerMap.add("Via", "Border Patrol")
 
   def useOriginalUri: Unit =
-    request.uri = session.originalRequest.getUri
+    request.uri = session.request.getUri
 
   def useOriginalMethod: Unit =
-    request.method = Method(session.originalRequest.getMethod.getName)
+    request.method = Method(session.request.getMethod.getName)
 
   def borderCookie: Option[String] =
     request.cookies.getValue(Session.cookieName)

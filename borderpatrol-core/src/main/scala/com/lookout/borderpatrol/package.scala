@@ -3,6 +3,8 @@ package com.lookout
 import java.io.FileReader
 
 
+import argonaut.Json
+import com.twitter.bijection.{Bijection, Base64String, Injection}
 import com.twitter.finagle.Service
 import com.twitter.finagle.builder.ClientBuilder
 import com.twitter.finagle.httpx.{Response, Http, Request}
@@ -18,7 +20,13 @@ package object borderpatrol {
   implicit class AnyOps[A](val any: A) extends AnyVal {
     def toFuture: Future[A] =
       Future.value[A](any)
+    def toFailedFuture(e: Throwable): Future[A] =
+      Future.exception(e)
   }
+
+  lazy val bytes2b64str = Injection.connect[Array[Byte], Base64String, String]
+  lazy val json2bytes = Injection.connect[Json, String, Array[Byte]]
+  lazy val seq2IndexedSeq = Bijection.seq2IndexedSeq
 
   /**
    * Build upstream clients from borderpatrol.conf. A map of the clients (where service name is the key)
@@ -44,8 +52,7 @@ package object borderpatrol {
   }
 
   trait Serializable[A] {
-    def asJson(a: A): Option[String]
-    def asBytes(a: A): Option[Array[Byte]]
+    def as[B](a: A)(implicit f: A => Option[B]): Option[B]
 
     case class SerializedResult[Type](result: String \/ Type) {
       def isError: Boolean =
@@ -82,5 +89,19 @@ package object borderpatrol {
         Some(session.asBytes)
     }
   }
+
+  trait View[A,B] {
+    def apply(a: A): B
+  }
+
+  object View {
+    def apply[A,B](f: A => B): View[A,B] = new View[A,B] {
+      def apply(a: A): B =
+        f(a)
+      implicit def identity[A]: View[A,A] = View(a => a)
+    }
+  }
+
+  type %>[A, B] = View[A, B]
 
 }

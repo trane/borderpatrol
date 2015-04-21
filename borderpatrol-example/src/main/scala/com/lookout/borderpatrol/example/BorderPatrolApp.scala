@@ -20,6 +20,8 @@ object BorderPatrolApp extends TwitterServer {
 
     val service = new Service[BorderRequest[Basic], httpx.Response] {
       def apply(request: BorderRequest[Basic]) = {
+        val session = Session(request.request)
+
         val cred = request.authInfo.info.credential.get
         val body = s"You have authenticated with $cred"
         println(body)

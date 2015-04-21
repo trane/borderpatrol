@@ -64,7 +64,7 @@ class TokensSpec extends FlatSpec with Matchers {
     (t.service(serviceName) getOrElse EmptyToken) shouldBe st
   }
 
-  it should "converge service tokens" in {
+  it should "converge service data" in {
     val st1 = mockServiceToken("someservice")
     val st2 = mockServiceToken("otherservice")
     val tokens1 = mockEmptyTokens += st1
@@ -76,7 +76,7 @@ class TokensSpec extends FlatSpec with Matchers {
     mergedIdentity shouldBe merged
   }
 
-  it should "replace all tokens from left with right" in {
+  it should "replace all data from left with right" in {
     val st1 = mockServiceToken("someservice", "value")
     val st2 = mockServiceToken("someservice", "newvalue")
     val mt1 = MasterToken("value")
@@ -94,7 +94,7 @@ class TokensSpec extends FlatSpec with Matchers {
     ((EmptyServiceTokens + mockServiceToken()).get(serviceName) getOrElse EmptyToken) should not be EmptyToken
   }
 
-  it should "merge service tokens" in {
+  it should "merge service data" in {
     val t1 = EmptyServiceTokens + mockServiceToken("service0")
     val t2 = EmptyServiceTokens + mockServiceToken("service1")
     val merged = t1 ++ t2

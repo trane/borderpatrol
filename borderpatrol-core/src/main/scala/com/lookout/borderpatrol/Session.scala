@@ -5,32 +5,26 @@ import com.lookout.borderpatrol.session.secret._
 import com.lookout.borderpatrol.session.store.{InMemorySessionStore, SessionStoreComponent}
 import com.lookout.borderpatrol.session._
 import com.twitter.util.Time
-import org.jboss.netty.handler.codec.http.HttpRequest
-import com.twitter.finagle.httpx.Request
+import com.twitter.finagle.httpx
 import com.twitter.finagle.httpx.netty.Bijections
+import org.jboss.netty.handler.codec.http.{HttpRequest => NettyRequest}
 
-trait SecureSession {
+trait SecureSession[+R, +A] {
   val id: SessionId
-  val originalRequest: HttpRequest
-  val tokens: Tokens
-
+  val request: R
+  val data: A
 }
 
-case class Session(id: SessionId, originalRequest: HttpRequest, tokens: Tokens) extends SecureSession {
-  def equals(o: SecureSession): Boolean =
-    id == o.id && tokens == o.tokens && (originalRequest.getUri == o.originalRequest.getUri &&
-      originalRequest.getMethod == o.originalRequest.getMethod)
+case class Session(id: SessionId, request: httpx.Request, data: Tokens) extends SecureSession[httpx.Request, Tokens] {
+  def equals[R <: httpx.Request, A <: Tokens](o: SecureSession[R, A]): Boolean =
+    id == o.id && data == o.data && (request.uri == o.request.uri &&
+      request.method == o.request.method)
 }
 
-trait SessionFactory {
-  def apply(s: String, originalRequest: HttpRequest): Session
-  def apply(request: RoutedRequest): Session
-}
-
-object Session extends SessionFactory with SignerComponent
-                                      with ExpiryComponent
-                                      with SecretStoreComponent
-                                      with SessionStoreComponent {
+object Session extends SignerComponent
+    with ExpiryComponent
+    with SecretStoreComponent
+    with SessionStoreComponent {
 
   val cookieName = "border_session"
   val entropySize = Constants.SessionId.entropySize
@@ -39,20 +33,17 @@ object Session extends SessionFactory with SignerComponent
   implicit val generator: Generator = new Generator
   val sessionStore = new InMemorySessionStore
 
-  def apply(request: Request): Session =
+  def apply(request: httpx.Request): Session =
     request.cookies.getValue(cookieName).flatMap(id => sessionStore.get(id)) getOrElse newSession(request)
 
-  def apply(key: String, httpRequest: HttpRequest): Session =
+  def apply(key: String, httpRequest: NettyRequest): Session =
     Session(key, Bijections.requestFromNetty(httpRequest))
 
-  def apply(key: String, request: Request): Session =
+  def apply(key: String, request: httpx.Request): Session =
     sessionStore.get(key) getOrElse newSession(request)
 
-  def apply(rrequest: RoutedRequest): Session =
-    rrequest.borderCookie.flatMap(id => sessionStore.get(id)) getOrElse newSession(rrequest.request)
-
-  def newSession(request: Request): Session =
-    Session(generator.next, Bijections.requestToNetty(request), Tokens.empty)
+  def newSession(request: httpx.Request): Session =
+    Session(generator.next, request, Tokens.empty)
 
   def save(session: Session): Session =
     sessionStore.update(session)

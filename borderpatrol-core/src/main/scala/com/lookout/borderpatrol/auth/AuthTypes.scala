@@ -33,24 +33,21 @@ import scala.util.Try
 trait AuthTypes {
   type BasicAuthString = String
 
-  sealed trait Token
-  case object OAuth2 extends Token
+  sealed trait OAuth2
 
   case class Credential(username: String, password: String)
 
-  sealed trait BasicEncoded {
-    val auth: BasicAuthString
-  }
-  case class Basic(auth: BasicAuthString)(implicit conv: BasicAuthString => Try[Credential]) extends BasicEncoded {
+  case class Basic(auth: BasicAuthString)(implicit conv: BasicAuthString => Try[Credential]) {
     val credential: Try[Credential] = conv(auth)
   }
 
   abstract class BorderError(val status: httpx.Status, val description: String) extends Exception
   class InvalidRequest(description: String = "") extends BorderError(httpx.Status.BadRequest, description)
-  class UnauthorizedRequest(description: String = "") extends BorderError(httpx.Status.BadRequest, description)
+  class UnauthorizedRequest(description: String = "") extends BorderError(httpx.Status.Unauthorized, description)
+  class ForbiddenRequest(description: String = "") extends BorderError(httpx.Status.Forbidden, description)
 
-  case class AuthResult[+A](result: A)
-  case class AuthInfo[+A](info: A)
+  case class AuthResult[A](result: A)
+  case class AuthInfo[A](info: A)
 
   trait RequestBase {
     val request: httpx.Request
@@ -59,5 +56,5 @@ trait AuthTypes {
   case class AuthRequest[+A](request: httpx.Request) extends RequestBase
   case class AuthResourceRequest[+A](request: httpx.Request) extends RequestBase
 
-  case class BorderRequest[A](authInfo: AuthInfo[A], request: httpx.Request)
+  case class BorderRequest[+A](authInfo: AuthInfo[A], request: httpx.Request)
 }
