@@ -40,6 +40,7 @@ trait SessionTypeClasses extends SessionTypes {
   }
   type PSession = Session[_,_] // polymorphic session
   type HttpSession[+A] = Session[httpx.Request, A]
+  type HttpSessionJson = HttpSession[Json]
 
   object Session {
     import com.lookout.borderpatrol.auth._
@@ -69,20 +70,13 @@ trait SessionTypeClasses extends SessionTypes {
   }
 
   trait Crypto[A, E] {
-    def encrypt(a: A)(implicit enc: Encryptable[A]): E =
-      enc(a)
-    def decrypt(e: E)(implicit dec: Decryptable[E]): Option[A] =
-      dec(e)
-  }
-
-  object Crypto {
-    def encrypt[A : Encryptable,E](a: A): E =
+    def encrypt[A : Encryptable](a: A): E =
       implicitly[Encryptable[A]].apply(a)
-    def decrypt[A, E: Decryptable](e: E): Option[A] =
+    def decrypt[E : Decryptable](e: E): Option[A] =
       implicitly[Decryptable[E]].apply(e)
   }
 
-  type SessionCrypto[E] = Crypto[PSession, E]
+  type SessionCrypto[+E] = Crypto[PSession, E]
 
   trait EncryptedStore[K, V, MK, MV, M] extends Store[K, V, MK, MV, M] with Crypto[V, MV]
   trait EncryptedSessionStore[MK, MV, M] extends SessionStore[MK, MV, M] with SessionCrypto[MV]

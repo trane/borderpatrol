@@ -136,27 +136,32 @@ trait SessionImplicits extends SessionTypeClasses {
         c => for (r <- HttpRequestCodecJson.decode(c)) yield Bijections.requestFromNetty(r)
       )
 
-    implicit lazy val session2Json: Injection[Session[httpx.Request, String], Json] = new AbstractInjection[Session[httpx.Request, String], Json] {
-      def apply(session: Session[httpx.Request, String]): Json =
-        implicitly[EncodeJson[Session[httpx.Request, String]]].encode(session)
-      override def invert(json: Json): Try[Session[httpx.Request, String]] =
-        implicitly[DecodeJson[Session[httpx.Request, String]]].decodeJson(json).fold[Try[Session[httpx.Request, String]]](
+    implicit lazy val session2Json: Injection[HttpSessionJson, Json] = new AbstractInjection[HttpSessionJson, Json] {
+      def apply(session: HttpSessionJson): Json =
+        implicitly[EncodeJson[HttpSessionJson]].encode(session)
+      override def invert(json: Json): Try[HttpSessionJson] =
+        implicitly[DecodeJson[HttpSessionJson]].decodeJson(json).fold[Try[HttpSessionJson]](
           (str, _) => Failure(new DecodeSessionJsonException(str)),
           (session) => Success(session)
         )
     }
 
-    implicit lazy val arr2Buf: Bijection[Array[Byte], Buf] = new AbstractBijection[Array[Byte], Buf] {
-      def apply(bytes: Array[Byte]): Buf =
-        Buf.ByteArray.Owned(bytes)
-      def apply(buf: Buf): Array[Byte] =
-        Buf.ByteArray.Owned.extract(buf)
-    }
+    implicit lazy val arr2Buf: Bijection[Array[Byte], Buf] =
+      new Bijection[Array[Byte], Buf] {
+        def apply(bytes: Array[Byte]): Buf = Buf.ByteArray.Owned(bytes)
+        override def invert(buf: Buf): Array[Byte] = Buf.ByteArray.Owned.extract(buf)
+      }
 
-    implicit lazy val session2Buf = Injection.connect[Session[httpx.Request, String], Json, String, Array[Byte], Buf]
+    implicit lazy val str2Buf: Bijection[String, Buf] =
+      new Bijection[String, Buf] {
+        def apply(a: String): Buf = Buf.Utf8(a)
+        override def invert(b: Buf): String = b match { case Buf.Utf8(u) => u }
+      }
+
+    implicit lazy val session2Buf = Injection.connect[HttpSessionJson, Json, String, Array[Byte], Buf]
   }
 
   implicit val id2String: SessionId %> String = View(SessionIdInjections.id2String(_))
-  implicit val session2Buf: Session[httpx.Request, String] %> Buf = View(SessionInjections.session2Buf(_))
-  implicit val buf2Session: Buf %> Option[Session[httpx.Request, String]] = View(SessionInjections.session2Buf.invert(_).toOption)
+  implicit val session2Buf: HttpSessionJson %> Buf = View(SessionInjections.session2Buf(_))
+  implicit val buf2Session: Buf %> Option[HttpSessionJson] = View(SessionInjections.session2Buf.invert(_).toOption)
 }
