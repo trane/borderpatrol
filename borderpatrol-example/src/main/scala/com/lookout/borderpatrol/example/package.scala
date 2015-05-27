@@ -1,11 +1,15 @@
 package com.lookout.borderpatrol
-
-import com.twitter.finagle.httpx
+import com.lookout.borderpatrol.{AuthRequest => _}
+import io.finch.HttpRequest
 
 package object example {
-  import auth._
-  import session.SessionId
+  import sessionx._
+  import model._
 
-  case class Session(id: SessionId, request: httpx.Request, data: AuthInfo[Basic]) extends SecureSession[httpx.Request, AuthInfo[Basic]]
+  case class AuthRequest(key: ApiKey, http: HttpRequest)
 
+  implicit val loginReqEv = (req: LoginRequest) => req.request
+  implicit val authReqEv = (req: AuthRequest) => req.http
+  implicit val pSessionEv: PSession => ApiKeySession =
+    (ps: PSession) => ps.asInstanceOf[ApiKeySession]
 }

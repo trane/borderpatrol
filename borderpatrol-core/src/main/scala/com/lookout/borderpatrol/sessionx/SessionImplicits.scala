@@ -24,144 +24,241 @@
 
 package com.lookout.borderpatrol.sessionx
 
+import java.util.concurrent.TimeUnit
+
 import argonaut._
 import Argonaut._
-import com.lookout.borderpatrol.session.id.ExpiryComponent
 import com.lookout.borderpatrol.util.Combinators.tap
-import com.lookout.borderpatrol.{View, %>}
-import com.lookout.borderpatrol.session.SessionId
 import com.twitter.bijection._
 import com.twitter.finagle.httpx.netty.Bijections
 import com.twitter.finagle.httpx
 import com.twitter.io.Buf
-import com.twitter.util.Time
+import com.twitter.util.{Base64StringEncoder, Duration, Time}
 import org.jboss.netty.buffer.ChannelBuffers
-import org.jboss.netty.handler.codec.http.{HttpMethod, HttpVersion, DefaultHttpRequest, HttpRequest}
+import org.jboss.netty.handler.codec.http.{HttpVersion, DefaultHttpRequest, HttpMethod, HttpRequest}
 
 import scala.util.{Failure, Success, Try}
 
 trait SessionImplicits extends SessionTypeClasses {
 
+  implicit object TimeConversions extends Serializable[Time] {
+    implicit def asLong(t: Time): Long =
+      t.inMilliseconds
+    implicit def asBytes(t: Time): TimeBytes =
+      Injection.long2BigEndian(asLong(t))
+    implicit def fromLong(l: Long): Time =
+      Time.fromMilliseconds(l)
+    implicit def fromBytes(bytes: TimeBytes): Time =
+      fromLong(Injection.long2BigEndian.invert(bytes.toArray).get)
+  }
 
-  object SessionIdInjections extends ExpiryComponent {
-    import com.lookout.borderpatrol.session.id.Types._
-    import com.lookout.borderpatrol.session.Constants.SessionId.entropySize
+  implicit object SecretConversions extends Serializable[Secret] {
+    implicit def fromByte(byte: SecretId)(implicit store: SecretStoreApi): Secret =
+      store.find(_.id == byte).get
+    implicit def asByte(s: Secret): SecretId =
+      s.id
+    implicit def asJson[A <: Secret : EncodeJson](s: A): Json =
+      s.asJson
+    implicit def asString[A <: Secret : EncodeJson](s: A): String =
+      asJson(s).toString()
+  }
+
+  object SessionIdInjections {
 
     type BytesTuple = (Payload, TimeBytes, Entropy, SecretId, Signature)
 
     val timeBytesSize: Size = 8 // long -> bytes
     val signatureSize: Size = 32 // sha256 -> bytes
     val secretIdSize: Size = 1 // secret id byte
-    val payloadSize: Size = timeBytesSize + entropySize + secretIdSize
+    val payloadSize: Size = timeBytesSize + SessionId.entropySize + secretIdSize
     val expectedSize: Size = payloadSize + signatureSize
 
-    def long2Time(l: Long): Try[Time] = {
-      val t = Time.fromMilliseconds(l)
-      if (t > Time.now && t <= currentExpiry) Success(t)
-      else Failure(new SessionIdException("Time has expired"))
-    }
+    def invalid(sig1: Signature, sig2: Signature): Boolean =
+      sig1 != sig2
 
-    def parseBytes(bytes: Vector[Byte]): Try[BytesTuple] = bytes match {
+    def validate(t: Time, sig1: Signature, sig2: Signature): Try[Unit] =
+      if (SessionId.expired(t)) Failure(new SessionIdException(s"Expired $t"))
+      else if (invalid(sig1, sig2)) Failure(new SessionIdException("Signature is invalid"))
+      else Success(())
+
+    def long2Time(l: Long): Time =
+      Time.fromMilliseconds(l)
+
+    def bytes2Long(bytes: IndexedSeq[Byte]): Try[Long] =
+      Injection.long2BigEndian.invert(bytes.toArray)
+
+    implicit def bytes2Time(bytes: IndexedSeq[Byte]): Try[Time] = for {
+      l <- bytes2Long(bytes)
+    } yield long2Time(l)
+
+    implicit def byte2Secret(byte: Byte)(implicit store: SecretStoreApi): Try[Secret] =
+      store.find(_.id == byte) match {
+        case Some(s) => Success(s)
+        case None => Failure(new SessionIdException(s"No secret with id=$byte"))
+      }
+
+    implicit def bytes2Tuple(bytes: IndexedSeq[Byte]): Try[BytesTuple] = bytes match {
       case a if a.size == expectedSize => {
         val (pl, sig) = a.splitAt(payloadSize)
         val (tb, tail) = pl.splitAt(timeBytesSize)
-        val (ent, idList) = tail.splitAt(entropySize)
+        val (ent, idList) = tail.splitAt(SessionId.entropySize)
         Success(pl, tb, ent, idList.head, sig)
       }
       case _ => Failure(new SessionIdException("Not a session string"))
     }
 
-    def sessionId(tuple: BytesTuple): Try[SessionId] = {
-      val (pl, tb, ent, id, sig) = tuple
-      for {
-        tLong <- Injection.long2BigEndian.invert(tb.toArray)
-        time <- long2Time(tLong)
-      } yield SessionId(time, ent, id, sig)
-    }
+    implicit def seq2SessionId(bytes: IndexedSeq[Byte])(implicit store: SecretStoreApi): Try[SessionId] = for {
+      (pyld, tbs, ent, id, sig) <- bytes2Tuple(bytes)
+      time <- bytes2Time(tbs)
+      secret <- byte2Secret(id)
+      _ <- validate(time, sig, secret.sign(pyld))
+    } yield new SessionId(time, ent, secret, sig)
 
-    implicit lazy val sessionIdAndSecret2Bytes: Injection[SessionId, Array[Byte]] =
-      new AbstractInjection[SessionId, Array[Byte]] {
+    implicit def str2arr(s: String): Array[Byte] =
+      Base64StringEncoder.decode(s)
 
-        def apply(id: SessionId): Array[Byte] =
-          id.toBytes.toArray
+    def arr2seq(bytes: Array[Byte]): IndexedSeq[Byte] =
+      bytes.toIndexedSeq
 
-        override def invert(bytes: Array[Byte]): Try[SessionId] =
-          for (t <- parseBytes(bytes.toVector); s <- sessionId(t)) yield s
-      }
+    implicit def str2seq(s: String): IndexedSeq[Byte] =
+      arr2seq(str2arr(s))
 
-    implicit lazy val id2String = Injection.connect[SessionId, Array[Byte], Base64String, String]
+    implicit def str2SessionId(s: String)(implicit store: SecretStoreApi): Try[SessionId] =
+      seq2SessionId(str2seq(s))
+
   }
 
-  object SessionInjections {
-    import scala.collection.JavaConversions._
+  object CryptKey {
+    import Crypto.{CryptKey => CryptKeyy}
 
-    implicit def ByteCodecJson: CodecJson[Byte] =
-      CodecJson(
-        (b: Byte) => jNumberOrNull(b.toInt),
-        c => for (b <- c.as[Int]) yield b.toByte
-      )
+    implicit def id2Key(id: SessionId): Array[Byte] =
+      id.entropy.toArray
+    implicit def sec2Iv(secret: Secret): Array[Byte] =
+      secret.entropy.toArray
 
-    implicit def TimeCodecJson: CodecJson[Time] =
-      CodecJson(
-        (t: Time) =>
-          ("ms" := t.inMilliseconds) ->: jEmptyObject,
-        c => for {
-          s <- (c --\ "ms").as[Long]
-        } yield Time.fromMilliseconds(s))
+    def apply(id: SessionId, secret: Secret): CryptKeyy =
+      new CryptKeyy(id2Key(id), sec2Iv(secret))
 
-    implicit def HttpRequestCodecJson: CodecJson[HttpRequest] =
-      CodecJson(
-        (r: HttpRequest) =>
-          ("u" := r.getUri) ->:
-            ("m" := r.getMethod.getName) ->:
-            ("v" := r.getProtocolVersion.getText) ->:
-            ("c" := r.getContent.array.toList) ->:
-            ("h" := r.headers.names.toList.map(n => Map[String, String](n -> r.headers.get(n)))) ->:
-            jEmptyObject,
-        c => for {
-          uri <- (c --\ "u").as[String]
-          meth <- (c --\ "m").as[String]
-          ver <- (c --\ "v").as[String]
-          heads <- (c --\ "h").as[List[Map[String, String]]]
-          cont <- (c --\ "c").as[List[Byte]]
-        } yield tap(new DefaultHttpRequest(HttpVersion.valueOf(ver), HttpMethod.valueOf(meth), uri))(req => {
-            heads.foreach(head => head.foreach(kv => req.headers.add(kv._1, kv._2)))
-            req.setContent(ChannelBuffers.copiedBuffer(cont.toArray))
-          })
-      )
+    def apply(id: SessionId): CryptKeyy =
+      CryptKeyy(id2Key(id), sec2Iv(id.secret))
 
-    implicit def HttpxRequestCodecJson: CodecJson[httpx.Request] =
-      CodecJson(
-        (r: httpx.Request) => HttpRequestCodecJson.encode(Bijections.requestToNetty(r)),
-        c => for (r <- HttpRequestCodecJson.decode(c)) yield Bijections.requestFromNetty(r)
-      )
+    def apply(s: PSession): CryptKeyy =
+      CryptKey(s.id, s.id.secret)
+  }
 
-    implicit lazy val session2Json: Injection[HttpSessionJson, Json] = new AbstractInjection[HttpSessionJson, Json] {
-      def apply(session: HttpSessionJson): Json =
-        implicitly[EncodeJson[HttpSessionJson]].encode(session)
-      override def invert(json: Json): Try[HttpSessionJson] =
-        implicitly[DecodeJson[HttpSessionJson]].decodeJson(json).fold[Try[HttpSessionJson]](
-          (str, _) => Failure(new DecodeSessionJsonException(str)),
-          (session) => Success(session)
+  object Session {
+    import com.lookout.borderpatrol.auth._
+
+    case class HttpBasicSession(id: SessionId, request: httpx.Request, data: AuthInfo[Basic]) extends HttpSession[AuthInfo[Basic]]
+    case class HttpOAuth2Session(id: SessionId, request: httpx.Request, data: AuthInfo[OAuth2]) extends HttpSession[AuthInfo[OAuth2]]
+
+    def apply[R,A](i: SessionId, r: R, d: A): Session[R,A] =
+      new Session[R, A] {
+        override val id = i
+        override val request = r
+        override val data = d
+      }
+
+    def apply[R,A](r: R, d: A)(implicit store: SecretStoreApi): Session[R,A] =
+      Session.apply(SessionId.next, r, d)
+
+    def from[A](a: A)(implicit f: A => Try[PSession]): Try[PSession] =
+      f(a)
+
+    object Injections {
+      import scala.collection.JavaConversions._
+
+      implicit def ByteCodecJson: CodecJson[Byte] =
+        CodecJson(
+          (b: Byte) => jNumberOrNull(b.toInt),
+          c => for (b <- c.as[Int]) yield b.toByte
         )
+
+      implicit def TimeCodecJson: CodecJson[Time] =
+        CodecJson(
+          (t: Time) => ("ms" := t.inMilliseconds) ->: jEmptyObject,
+          c => for { s <- (c --\ "ms").as[Long] } yield Time.fromMilliseconds(s)
+        )
+
+      implicit def HttpRequestCodecJson: CodecJson[HttpRequest] =
+        CodecJson(
+          (r: HttpRequest) =>
+            ("u" := r.getUri) ->:
+              ("m" := r.getMethod.getName) ->:
+              ("v" := r.getProtocolVersion.getText) ->:
+              ("c" := r.getContent.array.toList) ->:
+              ("h" := r.headers.names.toList.map(n => Map[String, String](n -> r.headers.get(n)))) ->:
+              jEmptyObject,
+          c => for {
+            uri <- (c --\ "u").as[String]
+            meth <- (c --\ "m").as[String]
+            ver <- (c --\ "v").as[String]
+            heads <- (c --\ "h").as[List[Map[String, String]]]
+            cont <- (c --\ "c").as[List[Byte]]
+          } yield tap(new DefaultHttpRequest(HttpVersion.valueOf(ver), HttpMethod.valueOf(meth), uri))(req => {
+              heads.foreach(head => head.foreach(kv => req.headers.add(kv._1, kv._2)))
+              req.setContent(ChannelBuffers.copiedBuffer(cont.toArray))
+            })
+        )
+
+      implicit def HttpxRequestCodecJson: CodecJson[httpx.Request] =
+        CodecJson(
+          (r: httpx.Request) => HttpRequestCodecJson.encode(Bijections.requestToNetty(r)),
+          c => for (r <- HttpRequestCodecJson.decode(c)) yield Bijections.requestFromNetty(r)
+        )
+
+      implicit def str2SessionId(s: String)(implicit store: SecretStoreApi): Try[SessionId] =
+        SessionIdInjections.str2SessionId(s)
+
+      implicit def SessionIdCodecJson(implicit store: SecretStoreApi): CodecJson[SessionId] =
+        CodecJson(
+          (id: SessionId) => ("id" := SessionId.toBase64(id)) ->: jEmptyObject,
+          c => for ( id <- (c --\ "id").as[String] ) yield SessionId.from[String](id).toOption.get
+        )
+
+      implicit def HttpSessionJsonCodecJson(implicit store: SecretStoreApi): CodecJson[HttpSessionJson] =
+        CodecJson(
+          (s: HttpSessionJson) =>  ("id" := s.id) ->: ("request" := s.request) ->: ("data" := s.data) ->: jEmptyObject,
+          c => for {
+            id <- (c --\ "id").as[SessionId]
+            req <- (c --\ "request").as[httpx.Request]
+            data <- (c --\ "data").as[Json]
+          } yield Session(id, req, data)
+        )
+
+      implicit def session2Json(implicit store: SecretStoreApi): Injection[HttpSessionJson, Json] =
+        new AbstractInjection[HttpSessionJson, Json] {
+          def apply(session: HttpSessionJson): Json =
+            implicitly[CodecJson[HttpSessionJson]].encode(session)
+          override def invert(json: Json): Try[HttpSessionJson] =
+            implicitly[CodecJson[HttpSessionJson]].decodeJson(json).fold[Try[HttpSessionJson]](
+              (str, _) => Failure(new DecodeSessionJsonException(str)),
+              (session) => Success(session)
+            )
+        }
+
+      implicit def arr2Buf: Bijection[Array[Byte], Buf] =
+        new Bijection[Array[Byte], Buf] {
+          def apply(bytes: Array[Byte]): Buf = Buf.ByteArray.Owned(bytes)
+          override def invert(buf: Buf): Array[Byte] = Buf.ByteArray.Owned.extract(buf)
+        }
+
+      implicit def str2Buf: Bijection[String, Buf] =
+        new Bijection[String, Buf] {
+          def apply(a: String): Buf = Buf.Utf8(a)
+          override def invert(b: Buf): String = b match { case Buf.Utf8(u) => u }
+        }
+
+      implicit def json2Str: Injection[Json, String] =
+        new AbstractInjection[Json, String] {
+          def apply(json: Json): String = json.toString()
+          override def invert(s: String): Try[Json] = Parse.parseOption(s) match {
+            case None => Failure(new DecodeSessionJsonException("Unable to convert string to Json"))
+            case Some(v) => Success(v)
+          }
+        }
     }
 
-    implicit lazy val arr2Buf: Bijection[Array[Byte], Buf] =
-      new Bijection[Array[Byte], Buf] {
-        def apply(bytes: Array[Byte]): Buf = Buf.ByteArray.Owned(bytes)
-        override def invert(buf: Buf): Array[Byte] = Buf.ByteArray.Owned.extract(buf)
-      }
-
-    implicit lazy val str2Buf: Bijection[String, Buf] =
-      new Bijection[String, Buf] {
-        def apply(a: String): Buf = Buf.Utf8(a)
-        override def invert(b: Buf): String = b match { case Buf.Utf8(u) => u }
-      }
-
-    implicit lazy val session2Buf = Injection.connect[HttpSessionJson, Json, String, Array[Byte], Buf]
   }
 
-  implicit val id2String: SessionId %> String = View(SessionIdInjections.id2String(_))
-  implicit val session2Buf: HttpSessionJson %> Buf = View(SessionInjections.session2Buf(_))
-  implicit val buf2Session: Buf %> Option[HttpSessionJson] = View(SessionInjections.session2Buf.invert(_).toOption)
 }

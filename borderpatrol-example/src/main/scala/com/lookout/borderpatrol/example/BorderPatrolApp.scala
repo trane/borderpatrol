@@ -1,44 +1,80 @@
 package com.lookout.borderpatrol.example
 
+import _root_.argonaut._, _root_.argonaut.Argonaut._
+import com.lookout.borderpatrol.sessionx
 import com.lookout.borderpatrol.util.Combinators.tap
-import com.lookout.borderpatrol.auth._
-import com.lookout.borderpatrol._
-import com.twitter.finagle.httpx.path._
-import com.twitter.finagle.httpx.service.RoutingService
-
-import com.twitter.finagle.{Service, httpx}
+import com.twitter.finagle._
+import com.twitter.finagle.httpx.Cookie
 import com.twitter.io.Charsets
 import com.twitter.server.TwitterServer
-import com.twitter.util.Base64StringEncoder
+import com.twitter.util.{Future, Await, Base64StringEncoder}
+import io.finch.response.{TurnIntoHttp, Unauthorized}
+import io.finch.{Endpoint => _, _}
+import io.finch.{HttpRequest, HttpResponse}
+import io.finch.argonaut._
+import io.finch.request._
+import io.finch.request.items._
+import io.finch.response._
+import io.finch.route._
 
+object Main extends App {
+  val _ = Await.ready(Httpx.serve(":8080", BorderPatrolApp.backend))
+}
 object BorderPatrolApp extends TwitterServer {
+  import model._
+  import reader._
+  import endpoint._
+  import sessionx._
+  import io.finch.AnyOps
 
-  object Basic {
-    import BasicAuth._
+  def gimmeCookie(id: SessionId): httpx.Cookie =
+    tap(new Cookie("border_session", id.asBase64))(c => {
+      // c.isSecure = true
+    })
 
-    val auth = BasicAuthFilter
+  val createIdOnLoginFilter = new SimpleFilter[HttpRequest, HttpResponse] {
+    def apply(req: HttpRequest, service: Service[HttpRequest, HttpResponse]): Future[HttpResponse] =
+      service(req) flatMap (rep => {
+        rep.status match {
+          case Unauthorized => Ok(Json("login please"))
+          case _ => rep
+        }
+        val id = SessionId.next
+        tap(rep)(rep.addCookie())
+      })
+  }
+  val idFilter = new SimpleFilter[HttpRequest, HttpResponse] {
+    def apply(req: HttpRequest, service: Service[HttpRequest, HttpResponse]): Future[HttpResponse] =
+      for {
+        id <- sessionId(req)
+        rep <- service(req)
+        _ <- rep.addCookie(gimmeCookie(id))
+      } yield rep
+  }
 
-    val service = new Service[BorderRequest[Basic], httpx.Response] {
-      def apply(request: BorderRequest[Basic]) = {
-        val session = Session(request.request)
+  val authorize = new Filter[HttpRequest, HttpResponse, AuthRequest, HttpResponse] {
+    def apply(req: HttpRequest, service: Service[AuthRequest, HttpResponse]): Future[HttpResponse] =
+      (for {
+        sn <- session(req)
+        up <- upstream(req)
+        rep <- service(AuthRequest(sn.as[ApiKeySession].data(up), req))
+      } yield tap(rep)(r => r.addCookie(gimmeCookie(sn.id)))) or Unauthorized().toFuture
+  }
 
-        val cred = request.authInfo.info.credential.get
-        val body = s"You have authenticated with $cred"
-        println(body)
-        tap(httpx.Response(httpx.Status.Ok))(r => r.contentString = body).toFuture
+  val handleExceptions = new SimpleFilter[HttpRequest, HttpResponse] {
+    def apply(req: HttpRequest, service: Service[HttpRequest, HttpResponse]): Future[HttpResponse] =
+      service(req) handle {
+        case NotValid(ParamItem(p), rule) => BadRequest(Json("error" := "param_not_valid", "param" := p, "rule" := rule))
+        case RouteNotFound(r) => NotFound(Json("error" := "route_not_found", "route" := r))
+        case _ => InternalServerError()
       }
-    }
   }
 
-  object OAuth {
-    val auth: BorderFilter[OAuth2] = ???
-    val service: Service[BorderRequest[OAuth2], httpx.Response] = ???
-  }
+  val open: Service[HttpRequest, ToJson] = loginEP
+  val api: Service[AuthRequest, ToJson] = businessEP
 
-  val backend = RoutingService.byPathObject {
-    case Root / "basic" => Basic.auth andThen Basic.service
-    case Root / "oauth2" => OAuth.auth andThen OAuth.service
-  }
+  val backend: Service[HttpRequest, HttpResponse] =
+    (handleExceptions ! authorize ! (api ! TurnModelIntoJson ! TurnIntoHttp[Json]))
 
   def testExample(u: String, p: String) = {
     val req = httpx.Request(httpx.Method.Get, "/basic")

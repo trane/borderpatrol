@@ -24,7 +24,17 @@
 
 package com.lookout.borderpatrol.example
 
-sealed trait OAuth2
-object OAuth2 {
+import io.finch.HttpRequest
+import io.finch.route._
 
+object endpoint {
+  import model._
+  import service._
+
+  val loginEP: Endpoint[HttpRequest, ToJson] =
+    Post / "a" / "login" /> ApiKeyService
+
+  val businessEP: Endpoint[AuthRequest, ToJson] =
+    (* / "service1" /> Service1) |
+    (* / "service2" /> Service2 )
 }

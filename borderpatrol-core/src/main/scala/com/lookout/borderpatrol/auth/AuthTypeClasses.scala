@@ -24,6 +24,7 @@
 
 package com.lookout.borderpatrol.auth
 
+import com.lookout.borderpatrol.{BorderRequest, BorderError, AuthResourceRequest, AuthRequest}
 import com.twitter.util.Future
 import com.twitter.finagle.{Service, Filter, httpx}
 
@@ -40,13 +41,13 @@ trait AuthTypeClasses extends AuthTypes {
 
   trait BorderAuth[A] {
     def authenticate[A : Authable](request: httpx.Request): Future[AuthResult[A]] =
-      implicitly[Authable[A]].validate(AuthRequest(request))
+      implicitly[Authable[A]].validate(AuthRequest[A](request))
 
     def identify[A : Authable](request: httpx.Request): Future[AuthInfo[A]] =
-      implicitly[Authable[A]].identify(AuthResourceRequest(request))
+      implicitly[Authable[A]].identify(AuthResourceRequest[A](request))
   }
 
-  trait BorderFilter[+A]
+  trait BorderFilter[A]
       extends Filter[httpx.Request, httpx.Response, BorderRequest[A], httpx.Response]
       with BorderAuth[A] with AuthErrorHandler {
 

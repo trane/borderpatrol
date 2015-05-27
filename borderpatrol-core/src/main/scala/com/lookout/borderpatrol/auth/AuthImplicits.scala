@@ -24,6 +24,7 @@
 
 package com.lookout.borderpatrol.auth
 
+import com.lookout.borderpatrol._
 import com.twitter.finagle.Service
 import com.twitter.finagle.httpx.{Response, Request}
 import com.twitter.util.Future
@@ -94,14 +95,6 @@ trait AuthImplicits extends AuthTypeClasses {
       }
     }
 
-    implicit object BasicAuthFilter extends BorderFilter[Basic] {
-      def apply(request: Request, service: Service[BorderRequest[Basic], Response]): Future[Response] =
-        identify(request) flatMap { info =>
-          service(BorderRequest(info, request))
-        } handle {
-          case e: BorderError => handle(e)
-        }
-    }
 
   }
 

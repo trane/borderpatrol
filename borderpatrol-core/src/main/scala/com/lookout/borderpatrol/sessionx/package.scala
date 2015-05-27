@@ -24,56 +24,138 @@
 
 package com.lookout.borderpatrol
 
-import com.lookout.borderpatrol.session.SessionId
 import com.twitter.io.Buf
-import com.twitter.util.Future
+import com.twitter.util.{Base64StringEncoder, Time, Future}
 import com.twitter.finagle.memcachedx
 
 import scala.collection.mutable
 
 package object sessionx extends SessionFunctions {
 
-  object Stores {
+  implicit class SecretOps(val s: Secret) extends AnyVal {
+    def expired: Boolean =
+      s.expiry < Time.now || s.expiry > Secret.currentExpiry
+  }
 
-    case class MemcachedStore(store: memcachedx.BaseClient[Buf])
-        extends SessionStore[String, Buf, memcachedx.BaseClient[Buf]] {
+  implicit class SessionIdOps(val id: SessionId) extends AnyVal {
+    def payload: Payload =
+      SessionId.payload(id)
+
+    def signWith(s: Secret): Signature =
+      SessionId.signWith(id, s)
+
+    def expired: Boolean =
+      SessionId.expired(id)
+
+    def as[A](implicit f: SessionId => A): A =
+      SessionId.as[A](id)(f)
+
+    def asSeq: IndexedSeq[Byte] =
+      SessionId.toIndexedSeq(id)
+
+    def asArray: Array[Byte] =
+      SessionId.toArray(id)
+
+    def asBase64: String =
+      SessionId.toBase64(id)
+  }
+
+  implicit class SessionOps[R, A](val s: Session[R, A]) extends AnyVal {
+    def as[B](implicit f: Session[R, A] => B): B =
+      f(s)
+
+    def expired: Boolean =
+      s.id.expired
+
+    def encrypt(implicit f: Session[R, A] => Array[Byte]): Array[Byte] =
+      CryptKey(s).encrypt(f(s))
+  }
+
+
+
+  object SecretStores {
+
+    case class InMemorySecretStore(secrets: Secrets) extends SecretStoreApi {
+      private[this] var _secrets: Secrets = secrets
+
+      def current = {
+        val c = _secrets.current
+        if (c.expired) {
+          _secrets = _secrets.copy(Secret(), c)
+          _secrets.current
+        }
+        else c
+      }
+
+      def previous =
+        _secrets.previous
+
+      def find(f: (Secret) => Boolean) =
+        if (f(current)) Some(current)
+        else if (f(previous)) Some(previous)
+        else None
+    }
+
+  }
+
+
+  object SessionStores {
+
+    case class MemcachedStore(store: memcachedx.BaseClient[Buf])(
+        implicit i2s: SessionId %> String,
+                 s2b: PSession %> Buf,
+                 b2s: Buf %> Option[PSession])
+        extends SessionStore[memcachedx.BaseClient[Buf]] {
       val flag = 0 // ignored flag required by memcached api
 
-      def update(key: SessionId)(value: PSession)(implicit id2k: SessionId %> String, s2v: PSession %> Buf): Future[Unit] =
-        store.set(id2k(key), flag, key.expires, s2v(value))
+      def update(key: SessionId)(value: PSession): Future[Unit] =
+        store.set(i2s(key), flag, key.expires, s2b(value))
 
-      def get(key: SessionId)(implicit id2k: SessionId %> String, v2s: Buf %> Option[PSession]): Future[Option[PSession]] =
-        for {
-          maybeBuf <- store.get(id2k(key))
-          buf <- maybeBuf
-        } yield v2s(buf)
-
+      def get(key: SessionId): Future[Option[PSession]] =
+        store.get(i2s(key)) map (_ flatMap (b2s(_)))
     }
 
-    case class InMemoryStore(store: mutable.Map[SessionId, PSession] = mutable.Map[SessionId, PSession]())
-        extends SessionStore[SessionId, PSession, mutable.Map[SessionId, PSession]] {
+    case class InMemoryStore(store: mutable.Map[String, PSession] = mutable.Map[String, PSession]())(
+        implicit i2s: SessionId => String)
+        extends SessionStore[mutable.Map[String, PSession]] {
 
-      def update(key: SessionId)(value: PSession)(implicit id2k: SessionId %> SessionId, s2v: PSession %> PSession) =
-        store.put(key, value).
+      def update(key: SessionId)(value: PSession) =
+        store.put(i2s(key), value).
             fold(Future.exception[Unit](new
                 UpdateStoreException(s"Unable to update store with $value")))(_ => Future.value[Unit](()))
 
-      def get(key: SessionId)(implicit id2k: SessionId %> SessionId, v2s: PSession %> Option[PSession]) =
-        store.get(key).filterNot(session => session.id.expired).toFuture
+      def get(key: SessionId) =
+        store.get(i2s(key)).filterNot(session => session.id.expired).toFuture
 
     }
 
-    case class EncryptedInMemorySessionStore(store: mutable.Map[String, Array[Byte]] = mutable.Map[String, Array[Byte]]())
-        extends EncryptedSessionStore[String, Array[Byte], mutable.Map[String, Array[Byte]]] {
+    /*
+    implicit object SessionEncryptor extends Encryptable[PSession, SessionId, Array[Byte]] {
+      def apply(a: PSession)(key: SessionId): Array[Byte] =
+        CryptKey(key).encrypt[PSession](a)
+    }
 
-      def update(key: SessionId)(value: PSession)(implicit id2k: SessionId %> String, s2v: PSession %> Array[Byte]) =
-        store.put(id2k(key), encrypt(value)).
+    implicit object SessionDecryptor extends Decryptable[Array[Byte], SessionId, PSession] {
+      def apply(e: Array[Byte])(key: SessionId): PSession =
+        CryptKey(key).decryptAs[PSession](e)
+    }
+
+    implicit object SessionCryptographer extends SessionCrypto[Array[Byte]]
+
+    case class EncryptedInMemorySessionStore(
+          store: mutable.Map[String, Encrypted] = mutable.Map[String, Encrypted]())(
+        implicit i2s: SessionId %> String)
+        extends EncryptedSessionStore[Encrypted, mutable.Map[String, Encrypted]] {
+
+      def update(key: SessionId)(value: PSession) =
+        store.put(i2s(key), value.encrypt).
             fold(Future.exception[Unit](new
                 UpdateStoreException(s"Unable to update store with $value")))(_ => Future.value[Unit](()))
 
-      def get(key: SessionId)(implicit id2k: SessionId %> String, v2s: Array[Byte] %> Option[PSession]) =
-        store.get(id2k(key)).flatMap(decrypt(_)).filterNot(session => session.id.expired).toFuture
+      def get(key: SessionId) =
+        store.get(i2s(key)).flatMap(decrypt(_)).filterNot(session => session.id.expired).toFuture
     }
+    */
   }
 
 }

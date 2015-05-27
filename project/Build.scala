@@ -8,13 +8,12 @@ object BorderPatrol extends Build {
   val sharedSettings = Seq(
     version := libVersion,
     organization := "com.lookout",
-    scalaVersion := "2.11.5",
+    scalaVersion := "2.11.6",
     libraryDependencies ++= Seq(
-      "com.twitter" %% "twitter-server" % twitter_server,
       "com.twitter" %% "finagle-memcachedx" % "6.24.0",
       "com.twitter" %% "finagle-httpx" % "6.24.0",
       "com.twitter" %% "bijection-core" % "0.7.0",
-      "io.argonaut" %% "argonaut" % "6.1-M5",
+      "io.argonaut" %% "argonaut" % "6.0.4",
       "org.scalatest" %% "scalatest" % "2.2.2" % "test",
       "org.scalamock" %% "scalamock-scalatest-support" % "3.2.1" % "test",
       "org.skife.com.typesafe.config" % "typesafe-config" % "0.3.0",
@@ -46,7 +45,16 @@ object BorderPatrol extends Build {
     base = file("borderpatrol-example"),
     settings = Defaults.coreDefaultSettings ++ sharedSettings
   ).settings(
-      name := "borderpatrol-example"
+      name := "borderpatrol-example",
+      libraryDependencies ++= Seq(
+        "com.twitter" %% "twitter-server" % twitter_server,
+        "com.github.finagle" %% "finch-core" % "0.7.0-SNAPSHOT" changing(),
+        "com.github.finagle" %% "finch-json" % "0.7.0-SNAPSHOT" changing(),
+        "com.github.finagle" %% "finch-argonaut" % "0.7.0-SNAPSHOT" changing()
+      ),
+      resolvers ++= Seq(
+        Resolver.sonatypeRepo("snapshots")
+      )
   ).dependsOn(borderPatrolCore)
 
   lazy val borderPatrol = Project(

@@ -24,16 +24,15 @@
 
 package com.lookout.borderpatrol.sessionx
 
-import argonaut._
-import Argonaut._
-import com.lookout.borderpatrol.%>
-import com.lookout.borderpatrol.session.SessionId
+import argonaut.Json
 import com.twitter.util.Future
 import com.twitter.finagle.httpx
 
+import scalaz.{\/-, -\/, \/}
+
 trait SessionTypeClasses extends SessionTypes {
 
-  trait Session[+R, +A] {
+  trait Session[+R, +A] { self =>
     val id: SessionId
     val request: R
     val data: A
@@ -42,42 +41,72 @@ trait SessionTypeClasses extends SessionTypes {
   type HttpSession[+A] = Session[httpx.Request, A]
   type HttpSessionJson = HttpSession[Json]
 
-  object Session {
-    import com.lookout.borderpatrol.auth._
-
-    type HttpBasicSession = HttpSession[AuthInfo[Basic]]
-    type HttpOAuth2Session = HttpSession[AuthInfo[OAuth2]]
-  }
-
-  trait Store[K, V, MK, MV, M] {
+  trait Store[K, V, M] {
     val store: M
 
-    def update(key: K)(value: V)(implicit a2k: K %> MK, b2v: V %> MV): Future[Unit]
-    def get(key: K)(implicit a2k: K %> MK, v2b: MV %> Option[V]): Future[Option[V]]
+    def update(key: K)(value: V): Future[Unit]
+    def get(key: K): Future[Option[V]]
   }
 
-  trait SessionStore[K, V, M] extends Store[SessionId, PSession, K, V, M] {
-    def update(key: SessionId)(value: PSession)(implicit a2k: SessionId %> K, b2v: PSession %> V): Future[Unit]
-    def get(key: SessionId)(implicit a2k: SessionId %> K, v2b: V %> Option[PSession]): Future[Option[PSession]]
+  trait SessionStore[M] extends Store[SessionId, PSession, M] {
+    def update(key: SessionId)(value: PSession): Future[Unit]
+    def get(key: SessionId): Future[Option[PSession]]
   }
 
-  trait Encryptable[A] {
-    def apply[E](a: A): E
+  trait Encryptable[A, Key, E] {
+    def apply(a: A)(key: Key): E
   }
 
-  trait Decryptable[E] {
-    def apply[A](e: E): Option[A]
+  trait Decryptable[E, Key, A] {
+    def apply(e: E)(key: Key): Option[A]
   }
 
-  trait Crypto[A, E] {
-    def encrypt[A : Encryptable](a: A): E =
-      implicitly[Encryptable[A]].apply(a)
-    def decrypt[E : Decryptable](e: E): Option[A] =
-      implicitly[Decryptable[E]].apply(e)
+  trait Crypto[A, Key, E] {
+    def encrypt(a: A)(key: Key)(implicit enc: Encryptable[A, Key, E]): E =
+      enc(a)(key)
+    def decrypt(e: E)(key: Key)(implicit dec: Decryptable[E, Key, A]): Option[A] =
+      dec(e)(key)
   }
 
-  type SessionCrypto[+E] = Crypto[PSession, E]
+  type SessionCrypto[E] = Crypto[PSession, SessionId, E]
 
-  trait EncryptedStore[K, V, MK, MV, M] extends Store[K, V, MK, MV, M] with Crypto[V, MV]
-  trait EncryptedSessionStore[MK, MV, M] extends SessionStore[MK, MV, M] with SessionCrypto[MV]
+  trait EncryptedStore[K, V, Key, EV, M] extends Store[K, V, M] with Crypto[V, Key, EV]
+  trait EncryptedSessionStore[EV, M] extends SessionStore[M] with SessionCrypto[EV]
+
+  trait Serializable[A] {
+    def as[B](a: A)(implicit f: A => B): SerializedResult[B] =
+      try { SerializedResult.ok(f(a)) }
+      catch { case e: Throwable => SerializedResult.fail(e.getMessage) }
+
+    def from[B](b: B)(implicit f: B => A): SerializedResult[A] =
+      try { SerializedResult.ok(f(b)) }
+      catch { case e: Throwable => SerializedResult.fail(e.getMessage) }
+
+    case class SerializedResult[R](result: String \/ R) {
+      def isError: Boolean =
+        result.isLeft
+      def isSuccess: Boolean =
+        result.isRight
+      def toOption: Option[R] =
+        result.toOption
+      def value: Option[R] =
+        result.toOption
+      def failure: Option[String] =
+        result.swap.toOption
+      def map[B](f: R => B): SerializedResult[B] =
+        SerializedResult(result map f)
+      def flatMap[B](f: R => SerializedResult[B]): SerializedResult[B] =
+        SerializedResult(result flatMap(f(_).result))
+      override def toString(): String =
+        s"SerializedResult($result)"
+    }
+
+    object SerializedResult {
+      def ok[B](value: B): SerializedResult[B] =
+        SerializedResult(\/-(value))
+      def fail[B](e: String): SerializedResult[B] =
+        SerializedResult(-\/(e))
+    }
+  }
+
 }

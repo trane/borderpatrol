@@ -41,20 +41,7 @@ trait AuthTypes {
     val credential: Try[Credential] = conv(auth)
   }
 
-  abstract class BorderError(val status: httpx.Status, val description: String) extends Exception
-  class InvalidRequest(description: String = "") extends BorderError(httpx.Status.BadRequest, description)
-  class UnauthorizedRequest(description: String = "") extends BorderError(httpx.Status.Unauthorized, description)
-  class ForbiddenRequest(description: String = "") extends BorderError(httpx.Status.Forbidden, description)
-
   case class AuthResult[A](result: A)
   case class AuthInfo[A](info: A)
 
-  trait RequestBase {
-    val request: httpx.Request
-    val auth: Option[String] = request.headerMap.get(HttpHeaders.Names.AUTHORIZATION)
-  }
-  case class AuthRequest[+A](request: httpx.Request) extends RequestBase
-  case class AuthResourceRequest[+A](request: httpx.Request) extends RequestBase
-
-  case class BorderRequest[+A](authInfo: AuthInfo[A], request: httpx.Request)
 }
