@@ -4,6 +4,7 @@ import sbt._
 object BorderPatrol extends Build {
   val libVersion = "0.1.0"
   val twitter_server = "1.9.0"
+  import bintray.BintrayKeys._
 
   val sharedSettings = Seq(
     version := libVersion,
@@ -29,7 +30,6 @@ object BorderPatrol extends Build {
     // This is bad news for things like com.twitter.util.Time
     parallelExecution in Test := false,
     fork := false
-
   )
 
   lazy val borderPatrolCore = Project(
@@ -37,6 +37,8 @@ object BorderPatrol extends Build {
     base = file("borderpatrol-core"),
     settings = Defaults.coreDefaultSettings ++ sharedSettings
   ).settings(
-    name := "borderpatrol-core"
+    name := "borderpatrol-core",
+    licenses += ("MIT", url("http://opensource.org/licenses/MIT")),
+    bintrayRepository := "borderpatrol"
   )
 }
