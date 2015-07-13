@@ -50,7 +50,7 @@ object service {
       u <- user(req)
       if UserDB.exists(u)
       us <- upstream(req)
-      k <- (services find (_ == us)) getOrElse "defaultservice"
+      k = (services find (_ == us)) getOrElse "defaultservice"
     } yield ApiKey(us, s"$us:$u:$k:supersecretencoded")
   }
 

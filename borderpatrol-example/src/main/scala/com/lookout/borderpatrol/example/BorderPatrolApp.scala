@@ -5,6 +5,8 @@ import com.lookout.borderpatrol.sessionx
 import com.lookout.borderpatrol.util.Combinators.tap
 import com.twitter.finagle._
 import com.twitter.finagle.httpx.Cookie
+import com.twitter.finagle.httpx.path.Root
+import com.twitter.finagle.httpx.service.RoutingService
 import com.twitter.io.Charsets
 import com.twitter.server.TwitterServer
 import com.twitter.util.{Future, Await, Base64StringEncoder}
@@ -17,8 +19,10 @@ import io.finch.request.items._
 import io.finch.response._
 import io.finch.route._
 
+import scala.util.Success
+
 object Main extends App {
-  val _ = Await.ready(Httpx.serve(":8080", BorderPatrolApp.backend))
+  val _ = Await.ready(Httpx.serve(":8080", BorderPatrolApp.authBackend))
 }
 object BorderPatrolApp extends TwitterServer {
   import model._
@@ -27,60 +31,60 @@ object BorderPatrolApp extends TwitterServer {
   import sessionx._
   import io.finch.AnyOps
 
-  def gimmeCookie(id: SessionId): httpx.Cookie =
-    tap(new Cookie("border_session", id.asBase64))(c => {
-      // c.isSecure = true
-    })
+  def addCookie(response: HttpResponse): HttpResponse =
+    tap(response) { rep =>
+      rep.addCookie(new Cookie("border_session", SessionId.next))
+    }
 
   val createIdOnLoginFilter = new SimpleFilter[HttpRequest, HttpResponse] {
     def apply(req: HttpRequest, service: Service[HttpRequest, HttpResponse]): Future[HttpResponse] =
-      service(req) flatMap (rep => {
+      service(req) map (rep => (
         rep.status match {
-          case Unauthorized => Ok(Json("login please"))
+          case httpx.Status.Unauthorized => Ok(Json("error" := "login please"))
+          case httpx.Status.Ok => addCookie(rep)
           case _ => rep
         }
-        val id = SessionId.next
-        tap(rep)(rep.addCookie())
-      })
-  }
-  val idFilter = new SimpleFilter[HttpRequest, HttpResponse] {
-    def apply(req: HttpRequest, service: Service[HttpRequest, HttpResponse]): Future[HttpResponse] =
-      for {
-        id <- sessionId(req)
-        rep <- service(req)
-        _ <- rep.addCookie(gimmeCookie(id))
-      } yield rep
+      ))
   }
 
   val authorize = new Filter[HttpRequest, HttpResponse, AuthRequest, HttpResponse] {
     def apply(req: HttpRequest, service: Service[AuthRequest, HttpResponse]): Future[HttpResponse] =
-      (for {
-        sn <- session(req)
+      for {
+        id <- requireSessionId(req)
+        sn <- session(id)(req)
         up <- upstream(req)
         rep <- service(AuthRequest(sn.as[ApiKeySession].data(up), req))
-      } yield tap(rep)(r => r.addCookie(gimmeCookie(sn.id)))) or Unauthorized().toFuture
+      } yield rep
   }
 
+  val loginPath = "/login"
   val handleExceptions = new SimpleFilter[HttpRequest, HttpResponse] {
     def apply(req: HttpRequest, service: Service[HttpRequest, HttpResponse]): Future[HttpResponse] =
       service(req) handle {
+        case NotPresent(e) | InvalidSessionId(ee) => SeeOther.withHeaders(("Location", loginPath))()
         case NotValid(ParamItem(p), rule) => BadRequest(Json("error" := "param_not_valid", "param" := p, "rule" := rule))
         case RouteNotFound(r) => NotFound(Json("error" := "route_not_found", "route" := r))
-        case _ => InternalServerError()
+        case e => InternalServerError(Json("error" := s"$e"))
       }
   }
 
-  val open: Service[HttpRequest, ToJson] = loginEP
-  val api: Service[AuthRequest, ToJson] = businessEP
+  val printer = new SimpleFilter[HttpRequest, HttpResponse] {
+    def apply(req: HttpRequest, service: Service[HttpRequest, HttpResponse]): Future[HttpResponse] =
+      service(req) map (rep => {println(s"$rep"); rep;})
+  }
 
-  val backend: Service[HttpRequest, HttpResponse] =
-    (handleExceptions ! authorize ! (api ! TurnModelIntoJson ! TurnIntoHttp[Json]))
+  /**
+  val authBackend: Service[HttpRequest, HttpResponse] =
+    handleExceptions ! (authorize ! (api ! TurnModelIntoJson ! TurnIntoHttp[Json]))
+  val loginBackend: Service[HttpRequest, HttpResponse] =
+    handleExceptions ! (open ! TurnModelIntoJson ! TurnIntoHttp[Json])
+  */
 
-  def testExample(u: String, p: String) = {
-    val req = httpx.Request(httpx.Method.Get, "/basic")
-    val auth = Base64StringEncoder.encode(s"$u:$p".getBytes(Charsets.Utf8))
-    req.authorization = s"Basic $auth"
-    backend(req)
+  val server = Httpx.serve(":8080", routes.toService)
+
+  def testAuth(req: HttpRequest = httpx.Request(httpx.Method.Get, "/service1/blah")) = {
+    //req.addCookie(new Cookie("border_session", SessionId.next))
+    //authBackend(req)
   }
 
 }

@@ -24,31 +24,36 @@
 
 package com.lookout.borderpatrol.example
 
-import com.lookout.borderpatrol.example.service.{ApiKeyStore, UserDB}
 import com.lookout.borderpatrol.sessionx._
 import com.twitter.util.Future
 import io.finch.HttpRequest
 import io.finch.request._
-import io.finch.request.items.{MultipleItems, RequestItem}
-import org.jboss.netty.handler.codec.http.HttpHeaders
+
+import scala.util.{Failure, Success, Try}
 
 object reader {
+
+  import com.lookout.borderpatrol.sessionx.SessionIdInjections._
   import model._
+  import io.finch.AnyOps
 
   implicit val secretStore = SecretStores.InMemorySecretStore(Secrets(Secret(), Secret()))
   implicit val sessionStore = SessionStores.InMemoryStore()
 
-  val sessionId: RequestReader[SessionId] =
-    cookieOption("border_session") map {
-      case Some(c) => SessionId.from[String](c.value) getOrElse (SessionId.next)
-      case None => SessionId.next
+  case class InvalidSessionId(msg: String) extends Exception(s"Invalid SessionID: $msg")
+  val requireSessionId: RequestReader[SessionId] =
+    cookie("border_session").embedFlatMap {c =>
+      SessionId.from[String](c.value) match {
+        case Success(id) => id.toFuture
+        case Failure(e) => Future.exception(InvalidSessionId(e.getMessage))
+      }
     }
 
   val sessionIdOption: RequestReader[Option[SessionId]] =
     cookieOption("border_session") ~> (_.flatMap(c => SessionId.from[String](c.value).toOption))
 
   val user: RequestReader[User] =
-    param("username") ~
+    param("username") ::
     param("password").shouldNot(beShorterThan(6)) ~> User
 
   val upstream: RequestReader[Upstream] =
@@ -57,15 +62,13 @@ object reader {
       case h :: t => t.head
     })
 
-  val session: RequestReader[PSession] =
-    sessionIdOption flatMap (idMaybe =>
-      flattenFuture[HttpRequest, PSession](req =>
-        idMaybe match {
-          case Some(id) => sessionStore.get(id) map {
-            case Some(s) => s
-            case None => ApiKeySession(SessionId.next, req, Map())
-          }
-          case None => ApiKeySession(SessionId.next, req, Map()).toFuture
-        }))
+  def session(id: SessionId): RequestReader[PSession] =
+    flattenFuture[HttpRequest, PSession](req =>
+      sessionStore.get(id) map {
+        case Some(s) => s
+        case None => ApiKeySession(id, req, Map())
+      })
 
+  val validSession: RequestReader[SessionId] =
+    header("border_session").as[SessionId]
 }

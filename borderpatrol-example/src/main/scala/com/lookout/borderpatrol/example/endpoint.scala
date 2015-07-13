@@ -24,17 +24,18 @@
 
 package com.lookout.borderpatrol.example
 
+import argonaut._, Argonaut._
 import io.finch.HttpRequest
+import io.finch.response.Ok
 import io.finch.route._
 
 object endpoint {
   import model._
   import service._
 
-  val loginEP: Endpoint[HttpRequest, ToJson] =
-    Post / "a" / "login" /> ApiKeyService
+  val routes =
+    (* / "service1" /> Service1) :+:
+    (* / "service2" /> Service2) :+:
+    (Post / string / "login" /> ApiKeyService)
 
-  val businessEP: Endpoint[AuthRequest, ToJson] =
-    (* / "service1" /> Service1) |
-    (* / "service2" /> Service2 )
 }

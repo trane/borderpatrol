@@ -170,7 +170,7 @@ trait SessionImplicits extends SessionTypeClasses {
 
       implicit def ByteCodecJson: CodecJson[Byte] =
         CodecJson(
-          (b: Byte) => jNumberOrNull(b.toInt),
+          (b: Byte) => jNumber(b.toInt),
           c => for (b <- c.as[Int]) yield b.toByte
         )
 
