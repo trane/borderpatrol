@@ -29,9 +29,7 @@ import javax.crypto.spec.SecretKeySpec
 
 import com.lookout.borderpatrol.sessionx.Crypto.{Generator, Signer}
 import com.twitter.bijection.Injection
-import com.twitter.util.{Base64StringEncoder, Duration, Time}
-
-import scala.util.Try
+import com.twitter.util._
 
 trait SessionTypes {
   type Encrypted = Array[Byte]
@@ -103,8 +101,8 @@ trait SessionTypes {
     def signWith(id: SessionId, s: Secret): Signature =
       s.sign(payload(id))
 
-    def next(implicit store: SecretStoreApi): SessionId =
-      SessionId(currentExpiry, genEntropy, store.current)
+    def next(implicit store: SecretStoreApi): Future[SessionId] =
+      Future.value[SessionId](SessionId(currentExpiry, genEntropy, store.current))
 
     def apply(expires: Time, entropy: Entropy, secret: Secret): SessionId =
       new SessionId(expires, entropy, secret, secret.sign(payload(expires, entropy, secret.id)))

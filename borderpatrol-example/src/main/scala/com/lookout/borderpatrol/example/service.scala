@@ -24,55 +24,63 @@
 
 package com.lookout.borderpatrol.example
 import argonaut._, Argonaut._
-import com.lookout.borderpatrol.BorderError
+import com.twitter.finagle.httpx.{Response, Request}
 import com.twitter.finagle.{Service, Filter}
+import com.twitter.io.Buf.Utf8
 import com.twitter.util.Future
-import io.finch.{HttpResponse, HttpRequest}
-import io.finch._
-
-import scala.collection.mutable
+import io.finch.response.Ok
 
 object service {
   import model._
   import reader._
+  import com.lookout.borderpatrol.sessionx.Session
+  import io.finch.request._
 
-  object ApiKeyService extends Service[HttpRequest, ApiKey] {
-    val services = Set[String]("service1", "service2", "service3")
+  object LoginService extends Service[Request, Response] {
+    import io.finch.response._
 
-    object UserDB {
-      val userDB = Set[User](User("user1", "pass1"), User("user2", "pass2"))
+    val loginForm =
+      """<html><body>
+        |<h1>Account Service Login</h1>
+        |<form action="/login" method="post">
+        |<label>username</label><input type="text" name="username" />
+        |<label>password</label><input type="password" name="password" />
+        |<input type="submit" name="login" value="login" />
+        |</form>
+        |</body></html>
+      """.stripMargin
 
-      def exists(u: User): Boolean =
-        userDB.contains(u)
-    }
+    val ok: Response = Ok(Utf8(loginForm)).addCookie(new)
 
-    def apply(req: HttpRequest): Future[ApiKey] = for {
-      u <- user(req)
-      if UserDB.exists(u)
-      us <- upstream(req)
-      k = (services find (_ == us)) getOrElse "defaultservice"
-    } yield ApiKey(us, s"$us:$u:$k:supersecretencoded")
+    def apply(req: Request): Future[Response] =
+      for {
+        u <- param("username")(req)
+        p <- param("password")(req)
+        tr <- TokenService(Request("e" -> u, "p" -> p, "s" -> "login"))
+        id <- Session
+      } yield tr
   }
 
-  object Service1 extends Service[AuthRequest, Foo] {
-    val name = "service1"
-    val validKey = "supersecretencoded"
-    def apply(req: AuthRequest): Future[Foo] = {
-      req.key.base64.split(":").toList match {
-        case _ :: u :: n :: k if n == name && k == validKey => Foo(s"hello $u success!42").toFuture
-        case  _ =>  Foo("").toFuture
-      }
-    }
+  object TokenService extends Service[Request, Response] {
+    val authMap: Map[String, User] = Map(("login" -> User("test@example.com", "test")))
+
+    def apply(req: Request): Future[Response] =
+      for {
+        u <- userReader(req)
+        s <- param("s")(req)
+        if authMap(s) == u
+      } yield Ok(Token.generate(u).asJson)
   }
 
-  object Service2 extends Service[AuthRequest, Bar] {
-    val name = "service2"
-    val validKey = "supersecretencoded"
-    def apply(req: AuthRequest): Future[Bar] = {
-      req.key.base64.split(":").toList match {
-        case _ :: _ :: n :: k if n == name && k == validKey => Bar(42).toFuture
-        case  _ =>  Bar(1).toFuture
-      }
-    }
+  case class ExternalService(name: String, allowed: Set[User]) extends Service[Request, Response] {
+    def apply(req: Request): Future[Response] =
+      for {
+        t <- authHeaderReader(req)
+        if allowed(t.u)
+      } yield Ok(s"Hello ${t.u}! Welcome to $name")
   }
+
+  val service1 = ExternalService("service1", Set(User("test@example.com", "test"), User("tester@examp.ly", "password")))
+  val service2 = ExternalService("service1", Set(User("test@example.com", "test")))
+
 }

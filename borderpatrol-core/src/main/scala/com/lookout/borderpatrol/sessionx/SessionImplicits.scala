@@ -33,7 +33,7 @@ import com.twitter.bijection._
 import com.twitter.finagle.httpx.netty.Bijections
 import com.twitter.finagle.httpx
 import com.twitter.io.Buf
-import com.twitter.util.{Base64StringEncoder, Duration, Time}
+import com.twitter.util.{Future, Base64StringEncoder, Duration, Time}
 import org.jboss.netty.buffer.ChannelBuffers
 import org.jboss.netty.handler.codec.http.{HttpVersion, DefaultHttpRequest, HttpMethod, HttpRequest}
 
@@ -159,8 +159,8 @@ trait SessionImplicits extends SessionTypeClasses {
         override val data = d
       }
 
-    def apply[R,A](r: R, d: A)(implicit store: SecretStoreApi): Session[R,A] =
-      Session.apply(SessionId.next, r, d)
+    def apply[R,A](r: R, d: A)(implicit store: SecretStoreApi): Future[Session[R,A]] =
+      SessionId.next map (Session.apply(_, r, d))
 
     def from[A](a: A)(implicit f: A => Try[PSession]): Try[PSession] =
       f(a)

@@ -34,8 +34,9 @@ object endpoint {
   import service._
 
   val routes =
+    (Get / "login" /> LoginService.ok) :+:
+    (Post / "login" /> LoginService) :+:
     (* / "service1" /> Service1) :+:
-    (* / "service2" /> Service2) :+:
-    (Post / string / "login" /> ApiKeyService)
+    (* / "service2" /> Service2)
 
 }

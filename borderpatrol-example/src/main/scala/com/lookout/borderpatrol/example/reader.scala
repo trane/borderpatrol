@@ -24,6 +24,7 @@
 
 package com.lookout.borderpatrol.example
 
+import argonaut._, Argonaut._
 import com.lookout.borderpatrol.sessionx._
 import com.twitter.util.Future
 import io.finch.HttpRequest
@@ -40,35 +41,19 @@ object reader {
   implicit val secretStore = SecretStores.InMemorySecretStore(Secrets(Secret(), Secret()))
   implicit val sessionStore = SessionStores.InMemoryStore()
 
-  case class InvalidSessionId(msg: String) extends Exception(s"Invalid SessionID: $msg")
-  val requireSessionId: RequestReader[SessionId] =
-    cookie("border_session").embedFlatMap {c =>
-      SessionId.from[String](c.value) match {
-        case Success(id) => id.toFuture
-        case Failure(e) => Future.exception(InvalidSessionId(e.getMessage))
-      }
-    }
+  implicit val sessionIdDecoder: DecodeRequest[SessionId] =
+    DecodeRequest[SessionId](s => SessionId.from[String](s))
 
-  val sessionIdOption: RequestReader[Option[SessionId]] =
-    cookieOption("border_session") ~> (_.flatMap(c => SessionId.from[String](c.value).toOption))
+  implicit val tokenCodec: CodecJson[Token] =
+    casecodec2(Token.apply, Token.unapply)("s", "u")
 
-  val user: RequestReader[User] =
-    param("username") ::
-    param("password").shouldNot(beShorterThan(6)) ~> User
+  val userReader: RequestReader[User] = (
+      param("e") :: param("p")
+      ).as[User]
 
-  val upstream: RequestReader[Upstream] =
-    RequestReader(r => r.path.split("/").toList match {
-      case Nil => "service1"
-      case h :: t => t.head
-    })
+  val sessionId: RequestReader[SessionId] =
+    cookie("border_session").map(_.value).as[SessionId]
 
-  def session(id: SessionId): RequestReader[PSession] =
-    flattenFuture[HttpRequest, PSession](req =>
-      sessionStore.get(id) map {
-        case Some(s) => s
-        case None => ApiKeySession(id, req, Map())
-      })
-
-  val validSession: RequestReader[SessionId] =
-    header("border_session").as[SessionId]
+  val authHeaderReader: RequestReader[Token] =
+    header("X-AUTH-TOKEN").should("start with secret")(_.startsWith("supersecret")).as[Token]
 }
