@@ -26,9 +26,9 @@ package com.lookout.borderpatrol.sessionx
 
 import java.util.concurrent.TimeUnit
 
-
 import com.twitter.io.Buf
 import com.twitter.util.{Await, Duration, Time}
+import com.twitter.finagle.httpx
 import org.scalatest.{Matchers, FlatSpec}
 
 import scala.util.{Try, Failure, Success}
@@ -96,7 +96,7 @@ class SessionSpec extends FlatSpec with Matchers {
 
   behavior of "SessionId"
   implicit val secretStore = SecretStores.InMemorySecretStore(mockSecrets)
-  val id = SessionId.next
+  val id = Await.result(SessionId.next)
   val ent = Crypto.Generator.EntropyGenerator(16)
   val sig = current.sign(ent)
   val expiredId = SessionId(Time.fromMilliseconds(0), ent, current, sig)
@@ -115,29 +115,29 @@ class SessionSpec extends FlatSpec with Matchers {
 
   behavior of "Session"
 
-  case class StringSession(id: SessionId, request: String, data: String) extends Session[String, String]
-  case class IntSession(id: SessionId, request: Int, data: Int) extends Session[Int, Int]
-  case class IntStringSession(id: SessionId, request: Int, data: String) extends Session[Int, String]
+  case class StringSession(id: SessionId, data: String) extends Session[String]
+  case class IntSession(id: SessionId, data: Int) extends Session[Int]
+  case class HttpRequestSession(id: SessionId, data: httpx.Request) extends Session[httpx.Request]
 
-  implicit def s2str(s: Session[String, String]): String =
-    s"${s.data}:${s.request}:${s.id.asBase64}}"
-  implicit def s2arr(s: Session[String, String]): Seq[Byte] =
+  implicit def s2str(s: Session[String]): String =
+    s"${s.data}:${s.id.asBase64}}"
+  implicit def s2arr(s: Session[String]): Seq[Byte] =
     s2str(s).getBytes()
   implicit def str2Id(s: String): Try[SessionId] =
     SessionIdInjections.str2SessionId(s)
-  implicit def str2s(s: String): Try[Session[String, String]] =
+  implicit def str2s(s: String): Try[Session[String]] =
     s.split(":").toList match {
-      case List(data: String, req: String, id: String) => SessionId.from[String](id) map (Session(_, req, data))
+      case List(data: String, id: String) => SessionId.from[String](id) map (Session(_, data))
       case _ => Failure(new Exception("failed"))
     }
 
   it should "expire" in {
-    IntSession(id, 1, 1).expired shouldBe false
-    IntSession(expiredId, 1, 1).expired shouldBe true
+    IntSession(id, 1).expired shouldBe false
+    IntSession(expiredId, 1).expired shouldBe true
   }
 
   it should "be convertable" in {
-    val session = StringSession(SessionId.next, "hello", "world")
+    val session = Await.result(Session[String]("hello world"))
     val str = session.as[String]
     val arr = session.as[Seq[Byte]]
     val session2 = Session.from[String](str).get
@@ -150,23 +150,23 @@ class SessionSpec extends FlatSpec with Matchers {
 
   behavior of "SessionStore"
 
-  implicit def sint2str(s: Session[Int, String]): Buf =
-    Buf.Utf8(s"${s.data}:${s.request}:${s.id.asBase64}}")
+  implicit def sint2str(s: Session[String]): Buf =
+    Buf.Utf8(s"${s.data}::${s.id.asBase64}}")
   implicit def id2str(id: SessionId): String =
     id.asBase64
-  implicit def buf2Session(b: Buf): Option[Session[String, String]] = for {
+  implicit def buf2Session(b: Buf): Option[Session[String]] = for {
     str <- Buf.Utf8.unapply(b)
     ses <- str2s(str).toOption
   } yield ses
   implicit val sessionStore = SessionStores.InMemoryStore()
 
   it should "store any type of session" in {
-    val intSession = IntSession(SessionId.next, 1, 1)
-    val strSession = IntStringSession(SessionId.next, 1, "Hi")
+    val intSession = IntSession(Await.result(SessionId.next), 1)
+    val strSession = StringSession(Await.result(SessionId.next), "string")
     sessionStore.update(intSession.id)(intSession)
     sessionStore.update(strSession.id)(strSession)
     Await.result(sessionStore get strSession.id) shouldBe Some(strSession)
     Await.result(sessionStore get intSession.id) shouldBe Some(intSession)
-    Await.result(sessionStore get SessionId.next) shouldBe None
+    Await.result(sessionStore get Await.result(SessionId.next)) shouldBe None
   }
 }

@@ -32,14 +32,12 @@ import scalaz.{\/-, -\/, \/}
 
 trait SessionTypeClasses extends SessionTypes {
 
-  trait Session[+R, +A] { self =>
+  trait Session[+A] {
     val id: SessionId
-    val request: R
     val data: A
   }
-  type PSession = Session[_,_] // polymorphic session
-  type HttpSession[+A] = Session[httpx.Request, A]
-  type HttpSessionJson = HttpSession[Json]
+  type PSession = Session[_]
+  type HttpSession = Session[httpx.Request]
 
   trait Store[K, V, M] {
     val store: M

@@ -27,7 +27,7 @@ package com.lookout.borderpatrol.example
 import argonaut._
 import Argonaut._
 import com.twitter.finagle.Service
-import com.twitter.finagle.httpx.Response
+import com.twitter.finagle.httpx.{Request, Response}
 import com.twitter.io.Charsets
 import com.twitter.util.{Future, Base64StringEncoder}
 import io.finch.request.PRequestReader
@@ -43,5 +43,4 @@ object model {
       Token(s"supersecret${user.e}", user)
   }
 
-  case class SessionResponse(rep: Response, id: SessionId)
 }

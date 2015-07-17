@@ -60,14 +60,14 @@ package object sessionx extends SessionFunctions {
       SessionId.toBase64(id)
   }
 
-  implicit class SessionOps[R, A](val s: Session[R, A]) extends AnyVal {
-    def as[B](implicit f: Session[R, A] => B): B =
+  implicit class SessionOps[A](val s: Session[A]) extends AnyVal {
+    def as[B](implicit f: Session[A] => B): B =
       f(s)
 
     def expired: Boolean =
       s.id.expired
 
-    def encrypt(implicit f: Session[R, A] => Array[Byte]): Array[Byte] =
+    def encrypt(implicit f: Session[A] => Array[Byte]): Array[Byte] =
       CryptKey(s).encrypt(f(s))
   }
 

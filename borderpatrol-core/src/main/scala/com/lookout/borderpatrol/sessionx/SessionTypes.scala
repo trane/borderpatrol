@@ -29,7 +29,9 @@ import javax.crypto.spec.SecretKeySpec
 
 import com.lookout.borderpatrol.sessionx.Crypto.{Generator, Signer}
 import com.twitter.bijection.Injection
-import com.twitter.util._
+import com.twitter.util.{Base64StringEncoder, Future, Time, Duration}
+
+import scala.util.Try
 
 trait SessionTypes {
   type Encrypted = Array[Byte]
@@ -110,7 +112,7 @@ trait SessionTypes {
     def as[A](id: SessionId)(implicit f: SessionId => A): A =
       f(id)
 
-    def from[A](a: A)(implicit store: SecretStoreApi, f: A => Try[SessionId]): Try[SessionId] =
+    def from[A](a: A)(implicit f: A => Try[SessionId]): Try[SessionId] =
       f(a)
 
     implicit def toIndexedSeq(id: SessionId): IndexedSeq[Byte] =

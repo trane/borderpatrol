@@ -24,8 +24,6 @@
 
 package com.lookout.borderpatrol.sessionx
 
-import java.util.concurrent.TimeUnit
-
 import argonaut._
 import Argonaut._
 import com.lookout.borderpatrol.util.Combinators.tap
@@ -33,7 +31,7 @@ import com.twitter.bijection._
 import com.twitter.finagle.httpx.netty.Bijections
 import com.twitter.finagle.httpx
 import com.twitter.io.Buf
-import com.twitter.util.{Future, Base64StringEncoder, Duration, Time}
+import com.twitter.util.{Future, Base64StringEncoder, Time}
 import org.jboss.netty.buffer.ChannelBuffers
 import org.jboss.netty.handler.codec.http.{HttpVersion, DefaultHttpRequest, HttpMethod, HttpRequest}
 
@@ -147,20 +145,14 @@ trait SessionImplicits extends SessionTypeClasses {
   }
 
   object Session {
-    import com.lookout.borderpatrol.auth._
-
-    case class HttpBasicSession(id: SessionId, request: httpx.Request, data: AuthInfo[Basic]) extends HttpSession[AuthInfo[Basic]]
-    case class HttpOAuth2Session(id: SessionId, request: httpx.Request, data: AuthInfo[OAuth2]) extends HttpSession[AuthInfo[OAuth2]]
-
-    def apply[R,A](i: SessionId, r: R, d: A): Session[R,A] =
-      new Session[R, A] {
+    def apply[A](i: SessionId, d: A): Session[A] =
+      new Session[A] {
         override val id = i
-        override val request = r
         override val data = d
       }
 
-    def apply[R,A](r: R, d: A)(implicit store: SecretStoreApi): Future[Session[R,A]] =
-      SessionId.next map (Session.apply(_, r, d))
+    def apply[A](data: A)(implicit store: SecretStoreApi): Future[Session[A]] =
+      SessionId.next map (Session(_, data))
 
     def from[A](a: A)(implicit f: A => Try[PSession]): Try[PSession] =
       f(a)
@@ -216,26 +208,14 @@ trait SessionImplicits extends SessionTypeClasses {
           c => for ( id <- (c --\ "id").as[String] ) yield SessionId.from[String](id).toOption.get
         )
 
-      implicit def HttpSessionJsonCodecJson(implicit store: SecretStoreApi): CodecJson[HttpSessionJson] =
+      implicit def HttpSessionCodecJson(implicit store: SecretStoreApi): CodecJson[HttpSession] =
         CodecJson(
-          (s: HttpSessionJson) =>  ("id" := s.id) ->: ("request" := s.request) ->: ("data" := s.data) ->: jEmptyObject,
+          (s: HttpSession) => ("id" := s.id) ->: ("data" := s.data) ->: jEmptyObject,
           c => for {
             id <- (c --\ "id").as[SessionId]
-            req <- (c --\ "request").as[httpx.Request]
-            data <- (c --\ "data").as[Json]
-          } yield Session(id, req, data)
+            data <- (c --\ "data").as[httpx.Request]
+          } yield Session(id, data)
         )
-
-      implicit def session2Json(implicit store: SecretStoreApi): Injection[HttpSessionJson, Json] =
-        new AbstractInjection[HttpSessionJson, Json] {
-          def apply(session: HttpSessionJson): Json =
-            implicitly[CodecJson[HttpSessionJson]].encode(session)
-          override def invert(json: Json): Try[HttpSessionJson] =
-            implicitly[CodecJson[HttpSessionJson]].decodeJson(json).fold[Try[HttpSessionJson]](
-              (str, _) => Failure(new DecodeSessionJsonException(str)),
-              (session) => Success(session)
-            )
-        }
 
       implicit def arr2Buf: Bijection[Array[Byte], Buf] =
         new Bijection[Array[Byte], Buf] {
