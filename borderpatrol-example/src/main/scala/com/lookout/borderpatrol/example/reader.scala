@@ -26,6 +26,7 @@ package com.lookout.borderpatrol.example
 
 import argonaut._, Argonaut._
 import com.lookout.borderpatrol.sessionx._
+import com.twitter.finagle.httpx.Request
 import com.twitter.util.Future
 import io.finch.HttpRequest
 import io.finch.request._
@@ -51,8 +52,14 @@ object reader {
       param("e") :: param("p")
       ).as[User]
 
-  val sessionId: RequestReader[SessionId] =
+  val sessionIdReader: RequestReader[SessionId] =
     cookie("border_session").map(_.value).as[SessionId]
+
+  val sessionReader: RequestReader[Session[Request]] =
+    sessionIdReader.embedFlatMap(sessionStore.apply[Request]).embedFlatMap {
+      case Some(s) => Future.value(s)
+      case None => Future.exception(new RequestError("invalid session"))
+    }
 
   val authHeaderReader: RequestReader[Token] =
     header("X-AUTH-TOKEN").should("start with secret")(_.startsWith("supersecret")).as[Token]

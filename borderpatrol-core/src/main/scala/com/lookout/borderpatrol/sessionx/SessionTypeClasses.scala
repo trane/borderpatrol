@@ -39,16 +39,18 @@ trait SessionTypeClasses extends SessionTypes {
   type PSession = Session[_]
   type HttpSession = Session[httpx.Request]
 
-  trait Store[K, V, M] {
-    val store: M
+  trait Store[K, V, S] {
+    val store: S
 
-    def update(key: K)(value: V): Future[Unit]
-    def get(key: K): Future[Option[V]]
+    def update[A](key: K, value: A): Future[Unit]
+    def get[A](key: K): Future[Option[A]]
   }
 
-  trait SessionStore[M] extends Store[SessionId, PSession, M] {
-    def update(key: SessionId)(value: PSession): Future[Unit]
-    def get(key: SessionId): Future[Option[PSession]]
+  trait SessionStore[S] extends Store[SessionId, PSession, S] {
+    def update[A](key: SessionId, value: A): Future[Unit]
+    def get[A](key: SessionId): Future[Option[Session[A]]]
+    def update[A](session: Session[A]): Future[Unit] =
+      update[A](session.id, session.data)
   }
 
   trait Encryptable[A, Key, E] {

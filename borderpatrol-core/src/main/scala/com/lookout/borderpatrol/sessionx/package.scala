@@ -29,6 +29,7 @@ import com.twitter.util.{Base64StringEncoder, Time, Future}
 import com.twitter.finagle.memcachedx
 
 import scala.collection.mutable
+import scalaz.{\/-, -\/}
 
 package object sessionx extends SessionFunctions {
 
@@ -100,33 +101,49 @@ package object sessionx extends SessionFunctions {
 
 
   object SessionStores {
+    implicit def buf2Buf(buf: Buf): Buf =
+      buf
 
     case class MemcachedStore(store: memcachedx.BaseClient[Buf])(
-        implicit i2s: SessionId %> String,
-                 s2b: PSession %> Buf,
-                 b2s: Buf %> Option[PSession])
+        implicit eva: SessionId => String,
+                 evb: Serializable[Buf])
         extends SessionStore[memcachedx.BaseClient[Buf]] {
       val flag = 0 // ignored flag required by memcached api
 
-      def update(key: SessionId)(value: PSession): Future[Unit] =
-        store.set(i2s(key), flag, key.expires, s2b(value))
+      def get[A](key: SessionId): Future[Option[Session[A]]] =
+        store.get(eva(key)).map(_.flatMap(b => evb.as[A](b).toOption.map(a => Session(key, a))))
 
-      def get(key: SessionId): Future[Option[PSession]] =
-        store.get(i2s(key)) map (_ flatMap (b2s(_)))
+      def update[A](key: SessionId, value: A): Future[Unit] =
+        evb.from[A](value).result match {
+          case -\/(e) => Future.exception(new UpdateStoreException(e))
+          case \/-(buf) => store.set(eva(key), flag, key.expires, buf)
+        }
     }
 
-    case class InMemoryStore(store: mutable.Map[String, PSession] = mutable.Map[String, PSession]())(
-        implicit i2s: SessionId => String)
-        extends SessionStore[mutable.Map[String, PSession]] {
+    case class InMemoryStore(store: mutable.Map[String, Session[_]] = mutable.Map[String, Session[_]]())(
+        implicit ev: SessionId => String)
+        extends SessionStore[mutable.Map[String, Session[_]]] {
 
       def update(key: SessionId)(value: PSession) =
-        store.put(i2s(key), value).
+        store.put(ev(key), value).
             fold(Future.exception[Unit](new
                 UpdateStoreException(s"Unable to update store with $value")))(_ => Future.value[Unit](()))
 
       def get(key: SessionId) =
         store.get(i2s(key)).filterNot(session => session.id.expired).toFuture
 
+      def apply[A](key: SessionId)(implicit e: PSession %> Session[A]): Future[Option[Session[A]]] =
+        store.get(i2s(key)).map(e(_)).toFuture
+
+      def get[A](key: SessionId): Future[Option[Session[A]]] =
+        impli
+        store.get(ev(key)).filterNot(session => session.id.expired).toFuture
+
+      def update[A](key: SessionId, value: A): Future[Unit] =
+        evb.from[A](value).result match {
+          case -\/(e) => Future.exception(new Exception(e))
+          case \/-(buf) => store.set(eva(key), flag, key.expires, buf)
+        }
     }
 
     /*

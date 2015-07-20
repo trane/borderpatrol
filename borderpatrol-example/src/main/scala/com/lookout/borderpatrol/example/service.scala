@@ -24,18 +24,24 @@
 
 package com.lookout.borderpatrol.example
 import argonaut._, Argonaut._
+
 import com.twitter.finagle.httpx.{Response, Request}
-import com.twitter.finagle.{Service, Filter}
-import com.twitter.io.Buf.Utf8
+import com.twitter.finagle.{SimpleFilter, Service}
+import com.twitter.io.Buf
 import com.twitter.util.Future
-import io.finch.response.Ok
+import io.finch.response.{ResponseBuilder, Ok}
 
 object service {
   import model._
   import reader._
-  import com.lookout.borderpatrol.sessionx.Session
+  import com.lookout.borderpatrol.sessionx._
   import io.finch.request._
+  import com.twitter.finagle.httpx.Status
 
+  /**
+   * Handles login requests, routing them to the Token Service
+   * It then will send the user to the location they were trying to access before they were prompted to login
+   */
   object LoginService extends Service[Request, Response] {
     import io.finch.response._
 
@@ -50,17 +56,51 @@ object service {
         |</body></html>
       """.stripMargin
 
-    val ok: Response = Ok(Utf8(loginForm)).addCookie(new)
+    val ok: Response = Ok(Buf.Utf8(loginForm))
 
     def apply(req: Request): Future[Response] =
-      for {
+      (for {
         u <- param("username")(req)
         p <- param("password")(req)
+        s <- sessionReader(req)
         tr <- TokenService(Request("e" -> u, "p" -> p, "s" -> "login"))
-        id <- Session
-      } yield tr
+        if tr.status == Status.Ok
+        s2 <- Session(tr.content)
+      } yield buildAuthResponse(s, s2)) or Future.value(Unauthorized("invalid login"))
+
+    def buildAuthResponse(prev: Session[Request], next: Session[Buf]): Response =
+      ResponseBuilder(Status.TemporaryRedirect)
+        .withHeaders("Location" -> prev.data.uri)
+        .withCookies(generateCookie(next.id))()
+
   }
 
+  /**
+   * If the request results in an Unauthorized status, then it will create a redirect and attach a cookie/session
+   * sending you to the login page
+   */
+  val sessionRequestFilter: SimpleFilter[Request, Response] = new SimpleFilter[Request, Response] {
+
+    def apply(request: Request, service: Service[Request, Response]): Future[Response] =
+      service(request) flatMap {rep => rep.status match {
+        case Status.Unauthorized => buildLoginResponse(request)
+        case _ => Future.value(rep)
+      }}
+
+    def buildLoginResponse(request: Request): Future[Response] =
+      Session(request) map { session =>
+        ResponseBuilder(Status.TemporaryRedirect)
+            .withHeaders("Location" -> "/login")
+            .withCookies(generateCookie(session.id))()
+      }
+  }
+
+  /**
+   * Basic ACL service
+   *
+   * Generates service tokens for users who have access to that service
+   * based on a mapping between services and users
+   */
   object TokenService extends Service[Request, Response] {
     val authMap: Map[String, User] = Map(("login" -> User("test@example.com", "test")))
 

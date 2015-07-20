@@ -25,11 +25,8 @@
 package com.lookout.borderpatrol.sessionx
 
 import com.twitter.finagle.httpx.Cookie
-import com.twitter.util.Future
 
 trait SessionFunctions extends SessionImplicits {
-  def generateCookie: Future[Cookie] =
-    SessionId.next map (new Cookie("border_session", _))
   def generateCookie(id: SessionId): Cookie =
     new Cookie("border_session", id)
 }
