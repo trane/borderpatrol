@@ -26,6 +26,7 @@ package com.lookout.borderpatrol.sessionx
 
 import java.util.concurrent.TimeUnit
 
+import com.lookout.borderpatrol.{View, %>}
 import com.twitter.io.Buf
 import com.twitter.util.{Await, Duration, Time}
 import com.twitter.finagle.httpx
@@ -149,11 +150,12 @@ class SessionSpec extends FlatSpec with Matchers {
   }
 
   behavior of "SessionStore"
-
+  implicit val int2Buf: Int %> Buf = View((i: Int) => Buf.U32BE(i))
+  implicit val buf2Int: Buf %> Option[Int] = View((b: Buf) => Buf.U32BE.unapply(b).map(t => t._1))
+  implicit val str2Buf: String %> Buf = View((s: String) => Buf.Utf8(s))
+  implicit val buf2str: Buf %> Option[String] = View((b: Buf) => Buf.Utf8.unapply(b))
   implicit def sint2str(s: Session[String]): Buf =
     Buf.Utf8(s"${s.data}::${s.id.asBase64}}")
-  implicit def id2str(id: SessionId): String =
-    id.asBase64
   implicit def buf2Session(b: Buf): Option[Session[String]] = for {
     str <- Buf.Utf8.unapply(b)
     ses <- str2s(str).toOption
@@ -161,12 +163,13 @@ class SessionSpec extends FlatSpec with Matchers {
   implicit val sessionStore = SessionStores.InMemoryStore()
 
   it should "store any type of session" in {
-    val intSession = IntSession(Await.result(SessionId.next), 1)
-    val strSession = StringSession(Await.result(SessionId.next), "string")
-    sessionStore.update(intSession.id)(intSession)
-    sessionStore.update(strSession.id)(strSession)
-    Await.result(sessionStore get strSession.id) shouldBe Some(strSession)
-    Await.result(sessionStore get intSession.id) shouldBe Some(intSession)
-    Await.result(sessionStore get Await.result(SessionId.next)) shouldBe None
+    val intSession = Session(Await.result(SessionId.next), 1)
+    val strSession = Session(Await.result(SessionId.next), "string")
+    sessionStore.update[Int](intSession)
+    sessionStore.update[String](strSession)
+    Await.result(sessionStore.get[String](strSession.id)) shouldEqual Some(strSession)
+    Await.result(sessionStore.get[Int](strSession.id)) shouldBe None
+    Await.result(sessionStore.get[Int](intSession.id)) shouldBe Some(intSession)
+    Await.result(sessionStore.get[Int](Await.result(SessionId.next))) shouldBe None
   }
 }

@@ -21,8 +21,7 @@ object Main extends TwitterServer {
         sesReq <- Session(req)
         res <- service(req)
         if res.status == httpx.Status.Unauthorized
-        cookie <- generateCookie(sesReq.id)
-      } yield tap(res)(_.addCookie(cookie))
+      } yield tap(res)(_.addCookie(generateCookie(sesReq.id)))
   }
 
   val server = Httpx.serve(":8080", routes.toService)

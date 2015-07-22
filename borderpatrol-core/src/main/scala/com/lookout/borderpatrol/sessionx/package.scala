@@ -101,9 +101,37 @@ package object sessionx extends SessionFunctions {
 
 
   object SessionStores {
-    implicit def buf2Buf(buf: Buf): Buf =
-      buf
 
+    case class MemcachedStore(store: memcachedx.BaseClient[Buf])
+        extends SessionStore[Buf, memcachedx.BaseClient[Buf]] {
+      val flag = 0 // ignored flag required by memcached api
+
+      def get[A](key: SessionId)(implicit ev: Buf %> Option[A]): Future[Option[Session[A]]] =
+        store.get(key.asBase64).map { obuf =>
+          obuf.flatMap { buf =>
+            ev(buf).map { a =>
+              Session(key, a)
+            }
+          }
+        }
+
+      def update[A](session: Session[A])(implicit ev: A %> Buf): Future[Unit] =
+        store.set(session.id.asBase64, flag, session.id.expires, ev(session.data))
+    }
+
+    case class InMemoryStore(store: mutable.Set[Session[Buf]] = mutable.Set[Session[Buf]]())
+        extends SessionStore[Buf, mutable.Set[Session[Buf]]] {
+
+      def get[A](key: SessionId)(implicit ev: Buf %> Option[A]): Future[Option[Session[A]]] =
+        store.find(_.id == key).flatMap(s => ev(s.data)).map(Session(key, _)).toFuture
+
+      def update[A](session: Session[A])(implicit ev: A %> Buf): Future[Unit] =
+        if (store.add(Session(session.id, ev(session.data))))
+          Future.Unit
+        else
+          Future.exception[Unit](new UpdateStoreException(s"Unable to update store with $session"))
+    }
+    /*
     case class MemcachedStore(store: memcachedx.BaseClient[Buf])(
         implicit eva: SessionId => String,
                  evb: Serializable[Buf])
@@ -145,6 +173,7 @@ package object sessionx extends SessionFunctions {
           case \/-(buf) => store.set(eva(key), flag, key.expires, buf)
         }
     }
+    */
 
     /*
     implicit object SessionEncryptor extends Encryptable[PSession, SessionId, Array[Byte]] {

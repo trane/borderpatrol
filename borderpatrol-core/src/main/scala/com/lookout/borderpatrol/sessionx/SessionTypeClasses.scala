@@ -25,6 +25,7 @@
 package com.lookout.borderpatrol.sessionx
 
 import argonaut.Json
+import com.lookout.borderpatrol.%>
 import com.twitter.util.Future
 import com.twitter.finagle.httpx
 
@@ -39,18 +40,16 @@ trait SessionTypeClasses extends SessionTypes {
   type PSession = Session[_]
   type HttpSession = Session[httpx.Request]
 
-  trait Store[K, V, S] {
-    val store: S
+  trait Store[K, F[_], B, M] {
+    val store: M
 
-    def update[A](key: K, value: A): Future[Unit]
-    def get[A](key: K): Future[Option[A]]
+    def update[A](value: F[A])(implicit ev: A %> B): Future[Unit]
+    def get[A](key: K)(implicit ev: B %> Option[A]): Future[Option[F[A]]]
   }
 
-  trait SessionStore[S] extends Store[SessionId, PSession, S] {
-    def update[A](key: SessionId, value: A): Future[Unit]
-    def get[A](key: SessionId): Future[Option[Session[A]]]
-    def update[A](session: Session[A]): Future[Unit] =
-      update[A](session.id, session.data)
+  trait SessionStore[B, M] extends Store[SessionId, Session, B, M] {
+    def update[A](session: Session[A])(implicit ev: A %> B): Future[Unit]
+    def get[A](key: SessionId)(implicit ev: B %> Option[A]): Future[Option[Session[A]]]
   }
 
   trait Encryptable[A, Key, E] {
@@ -70,8 +69,10 @@ trait SessionTypeClasses extends SessionTypes {
 
   type SessionCrypto[E] = Crypto[PSession, SessionId, E]
 
+  /*
   trait EncryptedStore[K, V, Key, EV, M] extends Store[K, V, M] with Crypto[V, Key, EV]
   trait EncryptedSessionStore[EV, M] extends SessionStore[M] with SessionCrypto[EV]
+  */
 
   trait Serializable[A] {
     def as[B](a: A)(implicit f: A => B): SerializedResult[B] =
