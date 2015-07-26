@@ -3,20 +3,19 @@ package com.lookout.borderpatrol.example
 import com.lookout.borderpatrol.sessionx
 import com.lookout.borderpatrol.util.Combinators.tap
 import com.twitter.finagle._
+import com.twitter.finagle.httpx.{Response, Request}
 import com.twitter.server.TwitterServer
-import com.twitter.util.{Future}
+import com.twitter.util.{Await, Future}
 import io.finch.{Endpoint => _, _}
-import io.finch.{HttpRequest, HttpResponse}
 
 object Main extends TwitterServer {
-  import model._
   import reader._
-  import endpoint._
   import sessionx._
-  import io.finch.AnyOps
+  import io.finch.request._
+  import io.finch.route._
 
-  val printer = new SimpleFilter[HttpRequest, HttpResponse] {
-    def apply(req: HttpRequest, service: Service[HttpRequest, HttpResponse]): Future[HttpResponse] =
+  val printer = new Filter[Request, Response, Request, Response] {
+    def apply(req: Request, service: Service[Request, Response]): Future[Response] =
       for {
         sesReq <- Session(req)
         res <- service(req)
@@ -24,6 +23,6 @@ object Main extends TwitterServer {
       } yield tap(res)(_.addCookie(generateCookie(sesReq.id)))
   }
 
-  val server = Httpx.serve(":8080", routes.toService)
-
+  val server = Httpx.serve("localhost:8080", (Get / "service" /> printer).toService)
+  Await.ready(server)
 }

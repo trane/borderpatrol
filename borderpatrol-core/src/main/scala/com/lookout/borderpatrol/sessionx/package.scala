@@ -102,31 +102,35 @@ package object sessionx extends SessionFunctions {
 
   object SessionStores {
 
+
+    trait RemoteSessionStore[M] extends Store[SessionId, Session, Buf, M] {
+      def update[A](session: Session[A])(implicit ev: Session[A] %> Buf): Future[Unit]
+      def get[A](key: SessionId)(implicit ev: Buf %> Option[Session[A]]): Future[Option[Session[A]]]
+    }
+
     case class MemcachedStore(store: memcachedx.BaseClient[Buf])
         extends SessionStore[Buf, memcachedx.BaseClient[Buf]] {
       val flag = 0 // ignored flag required by memcached api
 
-      def get[A](key: SessionId)(implicit ev: Buf %> Option[A]): Future[Option[Session[A]]] =
+      def get[A](key: SessionId)(implicit ev: Session[Buf] %> Option[Session[A]]): Future[Option[Session[A]]] =
         store.get(key.asBase64).map { obuf =>
           obuf.flatMap { buf =>
-            ev(buf).map { a =>
-              Session(key, a)
-            }
+            ev(Session(key, buf))
           }
         }
 
-      def update[A](session: Session[A])(implicit ev: A %> Buf): Future[Unit] =
-        store.set(session.id.asBase64, flag, session.id.expires, ev(session.data))
+      def update[A](session: Session[A])(implicit ev: Session[A] %> Session[Buf]): Future[Unit] =
+        store.set(session.id.asBase64, flag, session.id.expires, ev(session).data)
     }
 
     case class InMemoryStore(store: mutable.Set[Session[Buf]] = mutable.Set[Session[Buf]]())
         extends SessionStore[Buf, mutable.Set[Session[Buf]]] {
 
-      def get[A](key: SessionId)(implicit ev: Buf %> Option[A]): Future[Option[Session[A]]] =
-        store.find(_.id == key).flatMap(s => ev(s.data)).map(Session(key, _)).toFuture
+      def get[A](key: SessionId)(implicit ev: Session[Buf] %> Option[Session[A]]): Future[Option[Session[A]]] =
+        store.find(_.id == key).flatMap(s => ev(s)).toFuture
 
-      def update[A](session: Session[A])(implicit ev: A %> Buf): Future[Unit] =
-        if (store.add(Session(session.id, ev(session.data))))
+      def update[A](session: Session[A])(implicit ev: Session[A] %> Session[Buf]): Future[Unit] =
+        if (store.add(ev(session)))
           Future.Unit
         else
           Future.exception[Unit](new UpdateStoreException(s"Unable to update store with $session"))

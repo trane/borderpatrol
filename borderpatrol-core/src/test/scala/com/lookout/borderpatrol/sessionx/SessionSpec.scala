@@ -119,6 +119,7 @@ class SessionSpec extends FlatSpec with Matchers {
   case class StringSession(id: SessionId, data: String) extends Session[String]
   case class IntSession(id: SessionId, data: Int) extends Session[Int]
   case class HttpRequestSession(id: SessionId, data: httpx.Request) extends Session[httpx.Request]
+  case class BufSession(id: SessionId, data: Buf) extends Session[Buf]
 
   implicit def s2str(s: Session[String]): String =
     s"${s.data}:${s.id.asBase64}}"
@@ -152,8 +153,7 @@ class SessionSpec extends FlatSpec with Matchers {
   behavior of "SessionStore"
   implicit val int2Buf: Int %> Buf = View((i: Int) => Buf.U32BE(i))
   implicit val buf2Int: Buf %> Option[Int] = View((b: Buf) => Buf.U32BE.unapply(b).map(t => t._1))
-  implicit val str2Buf: String %> Buf = View((s: String) => Buf.Utf8(s))
-  implicit val buf2str: Buf %> Option[String] = View((b: Buf) => Buf.Utf8.unapply(b))
+
   implicit def sint2str(s: Session[String]): Buf =
     Buf.Utf8(s"${s.data}::${s.id.asBase64}}")
   implicit def buf2Session(b: Buf): Option[Session[String]] = for {
@@ -163,13 +163,23 @@ class SessionSpec extends FlatSpec with Matchers {
   implicit val sessionStore = SessionStores.InMemoryStore()
 
   it should "store any type of session" in {
+    import Session._
     val intSession = Session(Await.result(SessionId.next), 1)
     val strSession = Session(Await.result(SessionId.next), "string")
     sessionStore.update[Int](intSession)
     sessionStore.update[String](strSession)
-    Await.result(sessionStore.get[String](strSession.id)) shouldEqual Some(strSession)
-    Await.result(sessionStore.get[Int](strSession.id)) shouldBe None
-    Await.result(sessionStore.get[Int](intSession.id)) shouldBe Some(intSession)
+    Await.result(sessionStore.get[String](strSession.id)).get.data shouldEqual strSession.data
+    val a = Await.result(sessionStore.get[Int](strSession.id)).get // test string -> buf -> int
+    a.data shouldBe buf2Int(implicitly[String %> Buf].apply(strSession.data)).get
+    Await.result(sessionStore.get[Int](intSession.id)).get.data shouldBe intSession.data
     Await.result(sessionStore.get[Int](Await.result(SessionId.next))) shouldBe None
+  }
+
+  it should "store request sessions" in {
+    import Session._
+    val reqSession = Session(Await.result(SessionId.next), httpx.Request("localhost:8080"))
+    sessionStore.update(reqSession)
+    val a = Await.result(sessionStore.get[httpx.Request](reqSession.id)).get
+    a.data.uri shouldEqual reqSession.data.uri
   }
 }
