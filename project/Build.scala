@@ -15,6 +15,7 @@ object BorderPatrol extends Build {
       "com.twitter" %% "finagle-memcachedx" % finagle_version,
       "com.twitter" %% "finagle-httpx" % finagle_version,
       "com.twitter" %% "bijection-core" % "0.8.1",
+      "com.twitter" %% "bijection-util" % "0.8.1",
       "io.argonaut" %% "argonaut" % "6.1",
       "org.scalatest" %% "scalatest" % "2.2.2" % "test",
       "org.scalamock" %% "scalamock-scalatest-support" % "3.2.1" % "test",

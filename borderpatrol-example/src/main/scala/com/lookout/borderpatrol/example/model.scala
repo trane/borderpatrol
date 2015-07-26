@@ -41,6 +41,7 @@ object model {
   object Token {
     def generate(user: User): Token =
       Token(s"supersecret${user.e}", user)
+
   }
 
 }

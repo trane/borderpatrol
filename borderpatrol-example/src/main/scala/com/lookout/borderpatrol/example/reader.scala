@@ -26,8 +26,9 @@ package com.lookout.borderpatrol.example
 
 import argonaut._, Argonaut._
 import com.lookout.borderpatrol.sessionx._
+import com.twitter.bijection.twitter_util.UtilBijections
 import com.twitter.finagle.httpx.Request
-import com.twitter.util.Future
+import com.twitter.util.{Throw, Return, Future}
 import io.finch.HttpRequest
 import io.finch.request._
 
@@ -37,16 +38,26 @@ object reader {
 
   import com.lookout.borderpatrol.sessionx.SessionIdInjections._
   import model._
+  import com.lookout.borderpatrol.sessionx.Session._
   import io.finch.AnyOps
 
   implicit val secretStore = SecretStores.InMemorySecretStore(Secrets(Secret(), Secret()))
   implicit val sessionStore = SessionStores.InMemoryStore()
 
   implicit val sessionIdDecoder: DecodeRequest[SessionId] =
-    DecodeRequest[SessionId](s => SessionId.from[String](s))
+    DecodeRequest[SessionId](s => UtilBijections.twitter2ScalaTry.inverse(SessionId.from[String](s)))
+
+  implicit val userCodec: CodecJson[User] =
+    casecodec2(User.apply, User.unapply)("e", "p")
 
   implicit val tokenCodec: CodecJson[Token] =
     casecodec2(Token.apply, Token.unapply)("s", "u")
+
+  implicit val tokenDecoder: DecodeRequest[Token] =
+    DecodeRequest[Token](s => Parse.decodeOption[Token](s) match {
+        case Some(v) => Return(v)
+        case None => Throw(new Exception("unparsable"))
+      })
 
   val userReader: RequestReader[User] = (
       param("e") :: param("p")
@@ -56,7 +67,7 @@ object reader {
     cookie("border_session").map(_.value).as[SessionId]
 
   val sessionReader: RequestReader[Session[Request]] =
-    sessionIdReader.embedFlatMap(sessionStore.apply[Request]).embedFlatMap {
+    sessionIdReader.embedFlatMap(sessionStore.get[Request]).embedFlatMap {
       case Some(s) => Future.value(s)
       case None => Future.exception(new RequestError("invalid session"))
     }

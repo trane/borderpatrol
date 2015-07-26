@@ -30,13 +30,12 @@ import io.finch.response.Ok
 import io.finch.route._
 
 object endpoint {
-  import model._
   import service._
 
   val routes =
-    (Get / "login" /> LoginService.ok) :+:
-    (Post / "login" /> LoginService) :+:
-    (* / "service1" /> service1) :+:
+    (Get / "login" /> loginService) :+:
+    (Post / "login" /> loginService) :+:
+    (Get / "service1" /> service1) :+:
     (* / "service2" /> service2)
 
 }

@@ -26,6 +26,7 @@ package com.lookout.borderpatrol.sessionx
 
 import argonaut._
 import Argonaut._
+import com.lookout.borderpatrol.{View, %>}
 import com.lookout.borderpatrol.util.Combinators.tap
 import com.twitter.bijection._
 import com.twitter.finagle.httpx.netty.Bijections
@@ -34,7 +35,6 @@ import com.twitter.io.Buf
 import com.twitter.util.{Future, Base64StringEncoder, Time}
 import org.jboss.netty.buffer.ChannelBuffers
 import org.jboss.netty.handler.codec.http.{HttpVersion, DefaultHttpRequest, HttpMethod, HttpRequest}
-
 import scala.util.{Failure, Success, Try}
 
 trait SessionImplicits extends SessionTypeClasses {
@@ -145,10 +145,31 @@ trait SessionImplicits extends SessionTypeClasses {
   }
 
   object Session {
+    import Injections.HttpxRequestCodecJson
+    implicit val str2Buf: String %> Buf = View(s => Buf.Utf8(s))
+    implicit val buf2OStr: Buf %> Option[String] = View(b => Buf.Utf8.unapply(b))
+    implicit val req2Json: httpx.Request %> Json = View(r => Injections.HttpxRequestCodecJson.encode(r))
+    implicit val json2OReq: Json %> Option[httpx.Request] = View(j => HttpxRequestCodecJson.Decoder.decodeJson(j).toOption)
+    implicit val json2String: Json %> String = View(j => j.toString())
+    implicit val json2Buf: Json %> Buf = View(j => str2Buf(json2String(j)))
+    implicit val req2Buf: httpx.Request %> Buf = View(r => json2Buf(req2Json(r)))
+    implicit val buf2OReq: Buf %> Option[httpx.Request] = View(b => buf2OStr(b).flatMap(s => Parse.decodeOption[httpx.Request](s)))
+
+    implicit def s2s[A,B](implicit f: A %> B): Session[A] %> Session[B] = View(sa =>
+      Session(sa.id, f(sa.data))
+    )
+    implicit def s2os[A,B](implicit f: B %> Option[A]): Session[B] %> Option[Session[A]] = View(sb =>
+      f(sb.data).map(a => Session(sb.id, a))
+    )
+
     def apply[A](i: SessionId, d: A): Session[A] =
       new Session[A] {
         override val id = i
         override val data = d
+        override def equals(o: Any): Boolean = o match {
+          case s: Session[_] => s.id == id && s.data == data
+          case _ => false
+        }
       }
 
     def apply[A](data: A)(implicit store: SecretStoreApi): Future[Session[A]] =
@@ -208,13 +229,13 @@ trait SessionImplicits extends SessionTypeClasses {
           c => for ( id <- (c --\ "id").as[String] ) yield SessionId.from[String](id).toOption.get
         )
 
-      implicit def HttpSessionCodecJson(implicit store: SecretStoreApi): CodecJson[HttpSession] =
+      implicit def HttpSessionCodecJson(implicit store: SecretStoreApi): CodecJson[RequestSession] =
         CodecJson(
-          (s: HttpSession) => ("id" := s.id) ->: ("data" := s.data) ->: jEmptyObject,
+          (s: RequestSession) => ("id" := s.id) ->: ("data" := s.data) ->: jEmptyObject,
           c => for {
             id <- (c --\ "id").as[SessionId]
             data <- (c --\ "data").as[httpx.Request]
-          } yield Session(id, data)
+          } yield RequestSession(id, data)
         )
 
       implicit def arr2Buf: Bijection[Array[Byte], Buf] =
