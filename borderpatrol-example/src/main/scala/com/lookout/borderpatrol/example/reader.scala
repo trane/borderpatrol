@@ -28,7 +28,7 @@ import argonaut._, Argonaut._
 import com.lookout.borderpatrol.sessionx._
 import com.twitter.bijection.twitter_util.UtilBijections
 import com.twitter.finagle.httpx.Request
-import com.twitter.util.Future
+import com.twitter.util.{Throw, Return, Future}
 import io.finch.HttpRequest
 import io.finch.request._
 
@@ -52,6 +52,12 @@ object reader {
 
   implicit val tokenCodec: CodecJson[Token] =
     casecodec2(Token.apply, Token.unapply)("s", "u")
+
+  implicit val tokenDecoder: DecodeRequest[Token] =
+    DecodeRequest[Token](s => Parse.decodeOption[Token](s) match {
+        case Some(v) => Return(v)
+        case None => Throw(new Exception("unparsable"))
+      })
 
   val userReader: RequestReader[User] = (
       param("e") :: param("p")

@@ -36,6 +36,7 @@ object service {
   import reader._
   import com.lookout.borderpatrol.sessionx._
   import io.finch.request._
+  import io.finch.argonaut._
   import com.twitter.finagle.httpx.Status
 
   /**
@@ -56,7 +57,7 @@ object service {
         |</body></html>
       """.stripMargin
 
-    val ok: Response = Ok(Buf.Utf8(loginForm))
+    val ok: Future[Response] = Future.value(Ok(Buf.Utf8(loginForm)))
 
     def apply(req: Request): Future[Response] =
       (for {
@@ -109,7 +110,7 @@ object service {
         u <- userReader(req)
         s <- param("s")(req)
         if authMap(s) == u
-      } yield Ok(Token.generate(u).asJson)
+      } yield Ok(Token.generate(u))
   }
 
   case class ExternalService(name: String, allowed: Set[User]) extends Service[Request, Response] {
