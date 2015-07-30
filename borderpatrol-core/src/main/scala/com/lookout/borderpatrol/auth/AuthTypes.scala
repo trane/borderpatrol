@@ -24,10 +24,6 @@
 
 package com.lookout.borderpatrol.auth
 
-import com.twitter.finagle.httpx
-
-import org.jboss.netty.handler.codec.http.HttpHeaders
-
 import scala.util.Try
 
 trait AuthTypes {

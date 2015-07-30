@@ -77,7 +77,6 @@ trait SessionTypeClasses extends SessionTypes {
   trait EncryptedStore[K, V, Key, EV, M] extends Store[K, V, M] with Crypto[V, Key, EV]
   trait EncryptedSessionStore[EV, M] extends SessionStore[M] with SessionCrypto[EV]
   */
-
   trait Serializable[A] {
     def as[B](a: A)(implicit f: A => B): SerializedResult[B] =
       try { SerializedResult.ok(f(a)) }
@@ -113,5 +112,4 @@ trait SessionTypeClasses extends SessionTypes {
         SerializedResult(-\/(e))
     }
   }
-
 }

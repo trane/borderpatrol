@@ -4,16 +4,13 @@ resolvers ++= Seq(
   "sonatype-releases" at "https://oss.sonatype.org/content/repositories/releases/"
 )
 
-addSbtPlugin("com.github.mpeltonen" % "sbt-idea" % "1.5.2")
-
-addSbtPlugin("org.scoverage" % "sbt-scoverage" % "1.0.1")
-
-addSbtPlugin("org.scoverage" % "sbt-coveralls" % "1.0.0.BETA1")
-
-addSbtPlugin("com.jsuereth" % "sbt-pgp" % "1.0.0")
-
+addSbtPlugin("com.github.mpeltonen" % "sbt-idea" % "1.6.0")
+addSbtPlugin("org.scoverage" % "sbt-scoverage" % "1.1.0")
+addSbtPlugin("com.typesafe.sbt" % "sbt-pgp" % "0.8.3")
+addSbtPlugin("com.typesafe.sbt" % "sbt-ghpages" % "0.5.3")
+addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.13.0")
+addSbtPlugin("com.eed3si9n" % "sbt-unidoc" % "0.3.1")
 addSbtPlugin("org.scalastyle" %% "scalastyle-sbt-plugin" % "0.6.0")
-
-addSbtPlugin("com.typesafe.sbt" % "sbt-site" % "0.8.1")
-
+addSbtPlugin("org.brianmckenna" % "sbt-wartremover" % "0.11")
+addSbtPlugin("pl.project13.scala" % "sbt-jmh" % "0.1.15")
 addSbtPlugin("me.lessis" % "bintray-sbt" % "0.3.0")

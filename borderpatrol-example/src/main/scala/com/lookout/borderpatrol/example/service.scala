@@ -33,6 +33,7 @@ import io.finch.response.{Forbidden, ResponseBuilder, Ok}
 
 object service {
   import model._
+
   import reader._
   import com.lookout.borderpatrol.sessionx._
   import io.finch.request._

@@ -24,9 +24,5 @@
 
 package com.lookout.borderpatrol
 
-import com.twitter.finagle.Service
-import com.twitter.finagle.httpx.{Response, Request}
-import com.twitter.util.Future
-
 package object auth extends AuthFunctions {
 }

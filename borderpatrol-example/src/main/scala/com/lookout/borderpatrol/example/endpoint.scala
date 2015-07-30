@@ -24,9 +24,6 @@
 
 package com.lookout.borderpatrol.example
 
-import argonaut._, Argonaut._
-import io.finch.HttpRequest
-import io.finch.response.Ok
 import io.finch.route._
 
 object endpoint {
@@ -35,7 +32,6 @@ object endpoint {
   val routes =
     (Get / "login" /> loginService) :+:
     (Post / "login" /> loginService) :+:
-    (Get / "service1" /> service1) :+:
+    (* / "service1" /> service1) :+:
     (* / "service2" /> service2)
-
 }

@@ -31,7 +31,81 @@ import com.twitter.finagle.memcachedx
 import scala.collection.mutable
 import scalaz.{\/-, -\/}
 
+/**
+ * This package introduces types and functions that enable identifying, fetching, and storing web session data. This
+ * is accomplished by a set of types that will be used by consumers of this library: `Session`, `Store`, and `Secret`.
+ *
+ * A [[Secret]] is a cryptographically verifiable signing key used to sign a [[SessionId]]. Creating a `Secret` is
+ * simple. It defaults to expire at [[Secret.lifetime]]
+ *
+ * {{{
+ *   val secret = Secret() // default secret expiry
+ *   val expiringSecret = Secret(Time.now)
+ *
+ *   val randomBytes = EntropyGenerator(16) // 16 bytes of randomness
+ *   val randomId = EntropyGenerator(1).head // 1 byte of randomness for an id
+ *   val expiry = Time.from(0) // very expired
+ *   val constructedSecret = Secret(randomId, randomBytes, expiry)
+ *   println(s"secret has expired: ${constructedSecret.expired == true}")
+ *
+ *   val signedMsg = secret.sign("message to by signed".getBytes)
+ * }}}
+ *
+ * A [[SessionId]] is a cryptographically signed identifier for a [[Session]], it consists of entropy, expiry, secret,
+ * and signature of those items. This is meant to be used as the [[com.twitter.finagle.httpx.Cookie]] value, so we
+ * provide serializing to [[String]].
+ *
+ * {{{
+ *   val id: SessionId = Await.result(SessionId.next)
+ *   val cookieValue: String = id.asBase64
+ *   SessionId.from[String](cookieValue) == id
+ * }}}
+ *
+ * A [[Session]] is product type of a cryptographically verifiable identifier [[SessionId]] and an arbitrary data type
+ * A`. The only requirement for a [[SessionStore]][B,M] to store/fetch a `Session[A]` is that there be some implicit
+ * injective views from `A %> B` and `B %> Option[A]`.
+ *
+ * We have provided default views for: `httpx.Request %> Buf`, `Json %> Buf` and their injective views.
+ *
+ * {{{
+ *  // set up secret/session stores
+ *  implicit val secretStore = SecretStores.InMemorySecretStore(Secrets(Secret(), Secret()))
+ *  val sessionStore = SessionStores.InMemoryStore()
+ *
+ *  // create a Session[httpx.Request]
+ *  val newSessionFuture = Session(Request("http://localhost/api/stuff")) // entropy is blocking on the JVM
+ *  val newSession = Await.result(newSessionFuture)
+ *
+ *  // see if the session expired (checks the [[SessionId.expires]])
+ *  println(s"Session has expired? ${newSession.expired}"
+ *
+ *  // store the session and then fetch it
+ *  sessionStore.update(newSession).onFailure(println)
+ *  sessionStore.get(newSession.id).onSuccess(s => s match {
+ *    case Some(s) => println(s"Same session?: ${newSession == s}")
+ *    case None => println("hrm, where did the session go?")
+ *  })
+ * }}}
+ *
+ * Let's say you have a [[Session.data]] type that doesn't have the injective [[View]] that you need, that's OK!
+ * Assuming you are storing it in memcached, which requires a type of [[Buf]] for the value:
+ *
+ * {{{
+ *   trait Foo {
+ *     val value: Int
+ *   }
+ *
+ *   implicit val foo2Int: Foo %> Buf = View(f => Buf.U32BE(f.value))
+ *   implicit val int2OptFoo: Buf %> Option[Foo] = View(b => new Foo { override val value = Buf.U32BE.unapply(b) })
+ *
+ *   val foo1 = new Foo { override val value = 1 }
+ *   val fooSession = Session(foo1)
+ *   sessionStore.update(fooSession)
+ * }}}
+ *
+ */
 package object sessionx extends SessionFunctions {
+
 
   implicit class SecretOps(val s: Secret) extends AnyVal {
     def expired: Boolean =
@@ -76,6 +150,11 @@ package object sessionx extends SessionFunctions {
 
   object SecretStores {
 
+    /**
+     * A useful [[Secrets]] mock store for quickly testing and prototyping
+     *
+     * @param secrets the current secret and previous secret
+     */
     case class InMemorySecretStore(secrets: Secrets) extends SecretStoreApi {
       private[this] var _secrets: Secrets = secrets
 
@@ -102,16 +181,30 @@ package object sessionx extends SessionFunctions {
 
   object SessionStores {
 
-
-    trait RemoteSessionStore[M] extends Store[SessionId, Session, Buf, M] {
-      def update[A](session: Session[A])(implicit ev: Session[A] %> Buf): Future[Unit]
-      def get[A](key: SessionId)(implicit ev: Buf %> Option[Session[A]]): Future[Option[Session[A]]]
-    }
-
+    /**
+     * Memcached backend to [[SessionStore]]
+     *
+     * {{{
+     *   val store = MemcachedStore(Memcachedx.newKetamaClient("localhost:11211"))
+     *   val requestSession = store.get[httpx.Request](id) // default views from `Buf` %> `Request` are included
+     *   requestSession.onSuccess(s => println(s"Success! you were going to ${s.data.uri}"))
+     *                 .onFailure(println)
+     * }}}
+     * @param store finagle [[memcachedx.BaseClient]] memcached backend
+     */
     case class MemcachedStore(store: memcachedx.BaseClient[Buf])
         extends SessionStore[Buf, memcachedx.BaseClient[Buf]] {
       val flag = 0 // ignored flag required by memcached api
 
+      /**
+       * Fetches a [[Session]] if one exists otherwise `None`. On failure will make a [[Future.exception]].
+       *
+       * @param key lookup key
+       * @param ev evidence for converting the Buf to the type of A
+       * @tparam A [[Session.data]] type that must have a view from `Buf %> Option[A]`
+       *
+       * @return
+       */
       def get[A](key: SessionId)(implicit ev: Session[Buf] %> Option[Session[A]]): Future[Option[Session[A]]] =
         store.get(key.asBase64).map { obuf =>
           obuf.flatMap { buf =>
@@ -119,6 +212,15 @@ package object sessionx extends SessionFunctions {
           }
         }
 
+      /**
+       * Stores a [[Session]]. On failure returns a [[Future.exception]]
+       *
+       * @param session
+       * @param ev evidence for the conversion to `Buf`
+       * @tparam A [[Session.data]] type that must have a view from `A %> Buf`
+       *
+       * @return a [[Future]]
+       */
       def update[A](session: Session[A])(implicit ev: Session[A] %> Session[Buf]): Future[Unit] =
         store.set(session.id.asBase64, flag, session.id.expires, ev(session).data)
     }
@@ -135,49 +237,6 @@ package object sessionx extends SessionFunctions {
         else
           Future.exception[Unit](new UpdateStoreException(s"Unable to update store with $session"))
     }
-    /*
-    case class MemcachedStore(store: memcachedx.BaseClient[Buf])(
-        implicit eva: SessionId => String,
-                 evb: Serializable[Buf])
-        extends SessionStore[memcachedx.BaseClient[Buf]] {
-      val flag = 0 // ignored flag required by memcached api
-
-      def get[A](key: SessionId): Future[Option[Session[A]]] =
-        store.get(eva(key)).map(_.flatMap(b => evb.as[A](b).toOption.map(a => Session(key, a))))
-
-      def update[A](key: SessionId, value: A): Future[Unit] =
-        evb.from[A](value).result match {
-          case -\/(e) => Future.exception(new UpdateStoreException(e))
-          case \/-(buf) => store.set(eva(key), flag, key.expires, buf)
-        }
-    }
-
-    case class InMemoryStore(store: mutable.Map[String, Session[_]] = mutable.Map[String, Session[_]]())(
-        implicit ev: SessionId => String)
-        extends SessionStore[mutable.Map[String, Session[_]]] {
-
-      def update(key: SessionId)(value: PSession) =
-        store.put(ev(key), value).
-            fold(Future.exception[Unit](new
-                UpdateStoreException(s"Unable to update store with $value")))(_ => Future.value[Unit](()))
-
-      def get(key: SessionId) =
-        store.get(i2s(key)).filterNot(session => session.id.expired).toFuture
-
-      def apply[A](key: SessionId)(implicit e: PSession %> Session[A]): Future[Option[Session[A]]] =
-        store.get(i2s(key)).map(e(_)).toFuture
-
-      def get[A](key: SessionId): Future[Option[Session[A]]] =
-        impli
-        store.get(ev(key)).filterNot(session => session.id.expired).toFuture
-
-      def update[A](key: SessionId, value: A): Future[Unit] =
-        evb.from[A](value).result match {
-          case -\/(e) => Future.exception(new Exception(e))
-          case \/-(buf) => store.set(eva(key), flag, key.expires, buf)
-        }
-    }
-    */
 
     /*
     implicit object SessionEncryptor extends Encryptable[PSession, SessionId, Array[Byte]] {

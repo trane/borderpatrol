@@ -24,22 +24,19 @@
 
 package com.lookout.borderpatrol.example
 
-import argonaut._, Argonaut._
+import argonaut.Argonaut._
+import argonaut._
 import com.lookout.borderpatrol.sessionx._
 import com.twitter.bijection.twitter_util.UtilBijections
 import com.twitter.finagle.httpx.Request
-import com.twitter.util.{Throw, Return, Future}
-import io.finch.HttpRequest
+import com.twitter.util.{Future, Return, Throw}
 import io.finch.request._
-
-import scala.util.{Failure, Success, Try}
 
 object reader {
 
+  import com.lookout.borderpatrol.sessionx.Session._
   import com.lookout.borderpatrol.sessionx.SessionIdInjections._
   import model._
-  import com.lookout.borderpatrol.sessionx.Session._
-  import io.finch.AnyOps
 
   implicit val secretStore = SecretStores.InMemorySecretStore(Secrets(Secret(), Secret()))
   implicit val sessionStore = SessionStores.InMemoryStore()
@@ -55,9 +52,9 @@ object reader {
 
   implicit val tokenDecoder: DecodeRequest[Token] =
     DecodeRequest[Token](s => Parse.decodeOption[Token](s) match {
-        case Some(v) => Return(v)
-        case None => Throw(new Exception("unparsable"))
-      })
+      case Some(v) => Return(v)
+      case None => Throw(new Exception("unparsable"))
+    })
 
   val userReader: RequestReader[User] = (
       param("e") :: param("p")

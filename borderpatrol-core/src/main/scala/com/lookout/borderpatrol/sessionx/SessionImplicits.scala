@@ -100,7 +100,7 @@ trait SessionImplicits extends SessionTypeClasses {
         val (pl, sig) = a.splitAt(payloadSize)
         val (tb, tail) = pl.splitAt(timeBytesSize)
         val (ent, idList) = tail.splitAt(SessionId.entropySize)
-        Success(pl, tb, ent, idList.head, sig)
+        Success((pl, tb, ent, idList.head, sig))
       }
       case _ => Failure(new SessionIdException("Not a session string"))
     }

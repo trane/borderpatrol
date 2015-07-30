@@ -25,8 +25,7 @@
 package com.lookout.borderpatrol.auth
 
 import com.lookout.borderpatrol._
-import com.twitter.finagle.Service
-import com.twitter.finagle.httpx.{Response, Request}
+
 import com.twitter.util.Future
 
 import scala.util.{Failure, Try, Success}

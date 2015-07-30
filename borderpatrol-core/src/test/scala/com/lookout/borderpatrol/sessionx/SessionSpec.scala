@@ -28,8 +28,8 @@ import java.util.concurrent.TimeUnit
 
 import com.lookout.borderpatrol.{View, %>}
 import com.twitter.io.Buf
-import com.twitter.util.{Await, Duration, Time}
-import com.twitter.finagle.httpx
+import com.twitter.util.{Future, Await, Duration, Time}
+import com.twitter.finagle.{httpx,memcachedx}
 import org.scalatest.{Matchers, FlatSpec}
 
 import scala.util.{Try, Failure, Success}
@@ -151,6 +151,7 @@ class SessionSpec extends FlatSpec with Matchers {
   }
 
   behavior of "SessionStore"
+  import Session._
   implicit val int2Buf: Int %> Buf = View((i: Int) => Buf.U32BE(i))
   implicit val buf2Int: Buf %> Option[Int] = View((b: Buf) => Buf.U32BE.unapply(b).map(t => t._1))
 
@@ -160,26 +161,31 @@ class SessionSpec extends FlatSpec with Matchers {
     str <- Buf.Utf8.unapply(b)
     ses <- str2s(str).toOption
   } yield ses
-  implicit val sessionStore = SessionStores.InMemoryStore()
+  val sessionStore = SessionStores.InMemoryStore()
+  val memcachedSessionStore = SessionStores.MemcachedStore(new memcachedx.MockClient())
 
   it should "store any type of session" in {
-    import Session._
     val intSession = Session(Await.result(SessionId.next), 1)
     val strSession = Session(Await.result(SessionId.next), "string")
-    sessionStore.update[Int](intSession)
-    sessionStore.update[String](strSession)
-    Await.result(sessionStore.get[String](strSession.id)).get.data shouldEqual strSession.data
-    val a = Await.result(sessionStore.get[Int](strSession.id)).get // test string -> buf -> int
-    a.data shouldBe buf2Int(implicitly[String %> Buf].apply(strSession.data)).get
-    Await.result(sessionStore.get[Int](intSession.id)).get.data shouldBe intSession.data
-    Await.result(sessionStore.get[Int](Await.result(SessionId.next))) shouldBe None
+
+    List(sessionStore, memcachedSessionStore).map { store =>
+      store.update[Int](intSession)
+      store.update[String](strSession)
+      Await.result(store.get[String](strSession.id)).get.data shouldEqual strSession.data
+      val a = Await.result(store.get[Int](strSession.id)).get // test string -> buf -> int
+      a.data shouldBe buf2Int(implicitly[String %> Buf].apply(strSession.data)).get
+      Await.result(store.get[Int](intSession.id)).get.data shouldBe intSession.data
+      Await.result(store.get[Int](Await.result(SessionId.next))) shouldBe None
+    }
   }
 
   it should "store request sessions" in {
-    import Session._
-    val reqSession = Session(Await.result(SessionId.next), httpx.Request("localhost:8080"))
-    sessionStore.update(reqSession)
-    val a = Await.result(sessionStore.get[httpx.Request](reqSession.id)).get
-    a.data.uri shouldEqual reqSession.data.uri
+    List(sessionStore, memcachedSessionStore).map { store =>
+      val reqSession = Session(Await.result(SessionId.next), httpx.Request("localhost:8080"))
+      sessionStore.update(reqSession)
+      val a = Await.result(sessionStore.get[httpx.Request](reqSession.id)).get
+      a.data.uri shouldEqual reqSession.data.uri
+    }
   }
+
 }
