@@ -1,122 +1,62 @@
 package com.lookout
 
-import java.io.FileReader
-import java.net.{InetAddress, InetSocketAddress}
-
-import com.lookout.borderpatrol.session._
-import com.twitter.finagle.Service
-import com.twitter.finagle.builder.ClientBuilder
-import com.twitter.finagle.http.{Request => FinagleRequest, Response => FinagleResponse, Http}
-import com.twitter.finagle.loadbalancer.HeapBalancerFactory
-import com.typesafe.config.ConfigFactory
-import org.jboss.netty.handler.codec.http._
-
-import scala.collection.JavaConversions._
+import com.twitter.util.Future
+import org.jboss.netty.handler.codec.http.HttpHeaders
+import com.twitter.finagle.httpx
 
 package object borderpatrol {
+  import auth._
+  import sessionx._
 
-  case class RoutedRequest(httpRequest: HttpRequest, service: String, session: Session) extends FinagleRequest {
-    override val remoteSocketAddress: InetSocketAddress = new InetSocketAddress(InetAddress.getLoopbackAddress, 0) //TODO: This is wrong
-
-    def +=(otherSession: Session): RoutedRequest =
-      copy(session = otherSession)
-
-    def +(token: Token): RoutedRequest =
-      this += session.copy(tokens = session.tokens += token)
-
-    def ++(tokens: ServiceTokens): RoutedRequest =
-      this += session.copy(tokens = session.tokens ++= tokens)
-
-    def ++(tokens: Tokens): RoutedRequest =
-      this += session.copy(tokens = session.tokens ++= tokens)
-
-    def clearTokens: RoutedRequest =
-      this += session.copy(tokens = Tokens.empty)
-
-    def serviceToken: Option[ServiceToken] =
-      session.tokens.service(service)
-
-    def toHttpRequest: HttpRequest = {
-      addAuthHeaders
-      addBorderHeaders
-      httpRequest
-    }
-
-    /* TODO: make this more functional */
-    def addAuthHeaders: Unit =
-      serviceToken.foreach(t => httpRequest.headers.add("Auth-Token", t.value))
-
-    /* TODO: make this more functional */
-    def addBorderHeaders: Unit =
-      httpRequest.headers.add("Via", "Border Patrol")
-
-    def useOriginalUri: Unit =
-      httpRequest.setUri(session.originalRequest.getUri)
-
-    def useOriginalMethod: Unit =
-      httpRequest.setMethod(session.originalRequest.getMethod)
-
-    def borderCookie: Option[String] =
-      cookies.getValue(Session.cookieName)
+  implicit class AnyOps[A](val any: A) extends AnyVal {
+    def toFuture: Future[A] =
+      Future.value[A](any)
+    def toFailedFuture(e: Throwable): Future[A] =
+      Future.exception(e)
   }
 
-  object RoutedRequest {
-    val decoder = new CookieDecoder()
-
-    def apply(request: HttpRequest, name: String): RoutedRequest = {
-      val session = borderCookieValue(request).fold(Session.newSession(request))(Session(_, request))
-      RoutedRequest(request, name, session)
-    }
-
-    def borderCookieValue(request: HttpRequest): Option[String] = {
-      val cookie: Option[Cookie] = (for {
-        header <- request.headers.getAll(HttpHeaders.Names.COOKIE).toList
-        cookie <- decoder.decode(header).toSet
-        if cookie.getName == Session.cookieName
-      } yield cookie).headOption
-      cookie map (_.getValue)
-    }
+  implicit class IdxByteSeqOps(val bytes: IndexedSeq[Byte]) extends AnyVal {
+    def as[A](implicit f: IndexedSeq[Byte] => A): A =
+      f(bytes)
   }
 
-  object Responses {
-
-    object NotFound {
-      def apply(httpVersion: HttpVersion = HttpVersion.HTTP_1_1): HttpResponse =
-        new DefaultHttpResponse(httpVersion, HttpResponseStatus.NOT_FOUND)
-    }
-
-    object OK {
-      def apply(httpVersion: HttpVersion = HttpVersion.HTTP_1_1): HttpResponse =
-        new DefaultHttpResponse(httpVersion, HttpResponseStatus.OK)
-    }
-
+  implicit class StringOps(val s: String) extends AnyVal {
+    def as[A](implicit f: String => A): A =
+      f(s)
   }
 
-  /**
-   * Build upstream clients from borderpatrol.conf. A map of the clients (where service name is the key)
-   * gets passed to the UpstreamService, which dispatches requests based on the service name
-   * @return
-   */
-  def getUpstreamClients: Map[String, Service[HttpRequest, HttpResponse]] = {
-
-    val conf = ConfigFactory.parseReader(new FileReader("borderpatrol.conf"))
-    val services = conf.getConfigList("services").toList
-    case class ServiceConfiguration(name: String, friendlyName: String, hosts: String, rewriteRule: String) {}
-
-    val clients = services map (s =>
-      (s.getString("name"),
-        ClientBuilder()
-          .codec(Http())
-          .hosts(s.getString("hosts"))
-          .hostConnectionLimit(10)
-          .loadBalancer(HeapBalancerFactory.toWeighted)
-          .retries(2)
-          .build()))
-    clients.toMap
+  trait View[A, B] {
+    def apply(a: A): B
   }
 
-  case class NeedsAuthResponse(httpResponse: HttpResponse) extends FinagleResponse
-  case class Response(httpResponse: HttpResponse) extends FinagleResponse
+  object View {
+    def apply[A, B](f: A => B): View[A, B] =
+      new View[A,B] {
+        def apply(a: A): B =
+          f(a)
+        implicit def identity[A]: View[A,A] =
+          View(a => a)
+      }
+  }
 
-  implicit val upstreams = getUpstreamClients
+  type %>[A, B] = View[A, B]
+
+  abstract class BorderError(val status: httpx.Status, val description: String) extends Exception
+  class InvalidRequest(description: String = "") extends BorderError(httpx.Status.BadRequest, description)
+  class UnauthorizedRequest(description: String = "") extends BorderError(httpx.Status.Unauthorized, description)
+  class ForbiddenRequest(description: String = "") extends BorderError(httpx.Status.Forbidden, description)
+
+  trait RequestBase {
+    val request: httpx.Request
+    val auth: Option[String] = request.headerMap.get(HttpHeaders.Names.AUTHORIZATION)
+  }
+  case class AuthRequest[A](request: httpx.Request) extends RequestBase
+  case class AuthResourceRequest[A](request: httpx.Request) extends RequestBase
+
+  trait BorderRequest[A] {
+    val authInfo: AuthInfo[A]
+    val request: httpx.Request
+    val sessionId: SessionId
+  }
+
 }
