@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-package com.lookout.borderpatrol.sessionx.Crypto
+package com.lookout.borderpatrol.sessionx.crypto
 
 import java.security.Key
 import javax.crypto.spec.SecretKeySpec

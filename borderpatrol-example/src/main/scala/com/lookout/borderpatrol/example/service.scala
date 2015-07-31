@@ -142,7 +142,9 @@ object service {
   )
   val tokenService = TokenService(authMap)
   val loginService = LoginService(tokenService)
-  val service1 = sessionRequestFilter andThen ExternalService("service1", authMap.keySet.filter(u => authMap(u)("service1")))
-  val service2 = sessionRequestFilter andThen ExternalService("service2", authMap.keySet.filter(u => authMap(u)("service2")))
+  val service1 = sessionRequestFilter andThen ExternalService("service1",
+    authMap.keySet.filter(u => authMap(u)("service1")))
+  val service2 = sessionRequestFilter andThen ExternalService("service2",
+    authMap.keySet.filter(u => authMap(u)("service2")))
 
 }

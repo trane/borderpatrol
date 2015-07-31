@@ -32,7 +32,7 @@ import scala.collection.mutable
 import scalaz.{\/-, -\/}
 
 /**
- * This package introduces types and functions that enable identifying, fetching, and storing web session data. This
+ * This crypto introduces types and functions that enable identifying, fetching, and storing web session data. This
  * is accomplished by a set of types that will be used by consumers of this library: `Session`, `Store`, and `Secret`.
  *
  * A [[Secret]] is a cryptographically verifiable signing key used to sign a [[SessionId]]. Creating a `Secret` is
@@ -46,7 +46,7 @@ import scalaz.{\/-, -\/}
  *   val randomId = EntropyGenerator(1).head // 1 byte of randomness for an id
  *   val expiry = Time.from(0) // very expired
  *   val constructedSecret = Secret(randomId, randomBytes, expiry)
- *   println(s"secret has expired: ${constructedSecret.expired == true}")
+ *   log(s"secret has expired: ${constructedSecret.expired == true}")
  *
  *   val signedMsg = secret.sign("message to by signed".getBytes)
  * }}}
@@ -77,13 +77,13 @@ import scalaz.{\/-, -\/}
  *  val newSession = Await.result(newSessionFuture)
  *
  *  // see if the session expired (checks the [[SessionId.expires]])
- *  println(s"Session has expired? ${newSession.expired}"
+ *  log(s"Session has expired? ${newSession.expired}")
  *
  *  // store the session and then fetch it
- *  sessionStore.update(newSession).onFailure(println)
+ *  sessionStore.update(newSession).onFailure(log)
  *  sessionStore.get(newSession.id).onSuccess(s => s match {
- *    case Some(s) => println(s"Same session?: ${newSession == s}")
- *    case None => println("hrm, where did the session go?")
+ *    case Some(s) => log(s"Same session?: ${newSession == s}")
+ *    case None => log("hrm, where did the session go?")
  *  })
  * }}}
  *
@@ -158,7 +158,7 @@ package object sessionx extends SessionFunctions {
     case class InMemorySecretStore(secrets: Secrets) extends SecretStoreApi {
       private[this] var _secrets: Secrets = secrets
 
-      def current = {
+      def current: Secret = {
         val c = _secrets.current
         if (c.expired) {
           _secrets = _secrets.copy(Secret(), c)
@@ -167,10 +167,10 @@ package object sessionx extends SessionFunctions {
         else c
       }
 
-      def previous =
+      def previous: Secret =
         _secrets.previous
 
-      def find(f: (Secret) => Boolean) =
+      def find(f: (Secret) => Boolean): Option[Secret] =
         if (f(current)) Some(current)
         else if (f(previous)) Some(previous)
         else None
@@ -187,8 +187,8 @@ package object sessionx extends SessionFunctions {
      * {{{
      *   val store = MemcachedStore(Memcachedx.newKetamaClient("localhost:11211"))
      *   val requestSession = store.get[httpx.Request](id) // default views from `Buf` %> `Request` are included
-     *   requestSession.onSuccess(s => println(s"Success! you were going to ${s.data.uri}"))
-     *                 .onFailure(println)
+     *   requestSession.onSuccess(s => log(s"Success! you were going to ${s.data.uri}"))
+     *                 .onFailure(log)
      * }}}
      * @param store finagle [[memcachedx.BaseClient]] memcached backend
      */

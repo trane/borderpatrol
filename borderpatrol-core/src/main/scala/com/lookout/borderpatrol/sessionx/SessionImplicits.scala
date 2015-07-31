@@ -127,7 +127,7 @@ trait SessionImplicits extends SessionTypeClasses {
   }
 
   object CryptKey {
-    import Crypto.{CryptKey => CryptKeyy}
+    import crypto.{CryptKey => CryptKeyy}
 
     implicit def id2Key(id: SessionId): Array[Byte] =
       id.entropy.toArray
@@ -149,11 +149,13 @@ trait SessionImplicits extends SessionTypeClasses {
     implicit val str2Buf: String %> Buf = View(s => Buf.Utf8(s))
     implicit val buf2OStr: Buf %> Option[String] = View(b => Buf.Utf8.unapply(b))
     implicit val req2Json: httpx.Request %> Json = View(r => Injections.HttpxRequestCodecJson.encode(r))
-    implicit val json2OReq: Json %> Option[httpx.Request] = View(j => HttpxRequestCodecJson.Decoder.decodeJson(j).toOption)
+    implicit val json2OReq: Json %> Option[httpx.Request] = View(j =>
+      HttpxRequestCodecJson.Decoder.decodeJson(j).toOption)
     implicit val json2String: Json %> String = View(j => j.toString())
     implicit val json2Buf: Json %> Buf = View(j => str2Buf(json2String(j)))
     implicit val req2Buf: httpx.Request %> Buf = View(r => json2Buf(req2Json(r)))
-    implicit val buf2OReq: Buf %> Option[httpx.Request] = View(b => buf2OStr(b).flatMap(s => Parse.decodeOption[httpx.Request](s)))
+    implicit val buf2OReq: Buf %> Option[httpx.Request] = View(b =>
+      buf2OStr(b).flatMap(s => Parse.decodeOption[httpx.Request](s)))
 
     implicit def s2s[A,B](implicit f: A %> B): Session[A] %> Session[B] = View(sa =>
       Session(sa.id, f(sa.data))

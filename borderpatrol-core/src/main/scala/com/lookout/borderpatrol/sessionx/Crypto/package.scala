@@ -24,7 +24,7 @@
 
 package com.lookout.borderpatrol.sessionx
 
-package object Crypto {
+package object crypto {
   import java.security.{Key, Provider, SecureRandom, Security}
   import javax.crypto.spec.{IvParameterSpec, SecretKeySpec}
   import javax.crypto.{Cipher, Mac, SecretKey}
@@ -87,7 +87,10 @@ package object Crypto {
     def decrypt(bytes: Array[Byte]): Array[Byte]
   }
 
-  case class CryptKey(keyBytes: Array[Byte], ivBytes: Array[Byte], provider: Provider = new BouncyCastleProvider) extends SymmetricKey {
+  case class CryptKey(keyBytes: Array[Byte],
+                      ivBytes: Array[Byte],
+                      provider: Provider = new BouncyCastleProvider)
+      extends SymmetricKey {
     Security.addProvider(provider)
 
     val keyAlgo: String = "PBKDF2WithHmacSHA1"

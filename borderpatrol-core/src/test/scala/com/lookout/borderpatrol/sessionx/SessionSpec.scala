@@ -98,7 +98,7 @@ class SessionSpec extends FlatSpec with Matchers {
   behavior of "SessionId"
   implicit val secretStore = SecretStores.InMemorySecretStore(mockSecrets)
   val id = Await.result(SessionId.next)
-  val ent = Crypto.Generator.EntropyGenerator(16)
+  val ent = crypto.Generator.EntropyGenerator(16)
   val sig = current.sign(ent)
   val expiredId = SessionId(Time.fromMilliseconds(0), ent, current, sig)
 

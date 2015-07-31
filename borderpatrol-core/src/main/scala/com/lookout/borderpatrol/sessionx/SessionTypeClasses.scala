@@ -74,7 +74,7 @@ trait SessionTypeClasses extends SessionTypes {
   type SessionCrypto[E] = Crypto[PSession, SessionId, E]
 
   /*
-  trait EncryptedStore[K, V, Key, EV, M] extends Store[K, V, M] with Crypto[V, Key, EV]
+  trait EncryptedStore[K, V, Key, EV, M] extends Store[K, V, M] with crypto[V, Key, EV]
   trait EncryptedSessionStore[EV, M] extends SessionStore[M] with SessionCrypto[EV]
   */
   trait Serializable[A] {
