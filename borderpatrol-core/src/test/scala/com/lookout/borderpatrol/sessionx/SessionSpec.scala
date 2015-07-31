@@ -26,7 +26,8 @@ package com.lookout.borderpatrol.sessionx
 
 import java.util.concurrent.TimeUnit
 
-import com.lookout.borderpatrol.{View, %>}
+import com.lookout.borderpatrol.%>
+import com.lookout.borderpatrol.view.View
 import com.twitter.io.Buf
 import com.twitter.util.{Future, Await, Duration, Time}
 import com.twitter.finagle.{httpx,memcachedx}

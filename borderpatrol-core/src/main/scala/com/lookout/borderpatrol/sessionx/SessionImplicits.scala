@@ -26,8 +26,9 @@ package com.lookout.borderpatrol.sessionx
 
 import argonaut._
 import Argonaut._
-import com.lookout.borderpatrol.{View, %>}
+import com.lookout.borderpatrol.%>
 import com.lookout.borderpatrol.util.Combinators.tap
+import com.lookout.borderpatrol.view.View
 import com.twitter.bijection._
 import com.twitter.finagle.httpx.netty.Bijections
 import com.twitter.finagle.httpx
@@ -46,13 +47,13 @@ trait SessionImplicits extends SessionTypeClasses {
       Injection.long2BigEndian(asLong(t))
     implicit def fromLong(l: Long): Time =
       Time.fromMilliseconds(l)
-    implicit def fromBytes(bytes: TimeBytes): Time =
-      fromLong(Injection.long2BigEndian.invert(bytes.toArray).get)
+    implicit def fromBytes(bytes: TimeBytes): Try[Time] =
+      Injection.long2BigEndian.invert(bytes.toArray).map(fromLong)
   }
 
   implicit object SecretConversions extends Serializable[Secret] {
-    implicit def fromByte(byte: SecretId)(implicit store: SecretStoreApi): Secret =
-      store.find(_.id == byte).get
+    implicit def fromByte(byte: SecretId)(implicit store: SecretStoreApi): Option[Secret] =
+      store.find(_.id == byte)
     implicit def asByte(s: Secret): SecretId =
       s.id
     implicit def asJson[A <: Secret : EncodeJson](s: A): Json =
@@ -163,15 +164,31 @@ trait SessionImplicits extends SessionTypeClasses {
     implicit def s2os[A,B](implicit f: B %> Option[A]): Session[B] %> Option[Session[A]] = View(sb =>
       f(sb.data).map(a => Session(sb.id, a))
     )
-
+    @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.Any"))
     def apply[A](i: SessionId, d: A): Session[A] =
       new Session[A] {
-        override val id = i
-        override val data = d
-        override def equals(o: Any): Boolean = o match {
-          case s: Session[_] => s.id == id && s.data == data
-          case _ => false
+        override val id: SessionId = i
+        override val data: A = d
+
+        @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.AsInstanceOf"))
+        def membersCanEqual(o: Any): Boolean = {
+          val s: Session[_] = o.asInstanceOf[Session[_]]
+          s.id == id && s.data == data
         }
+
+        @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.IsInstanceOf"))
+        // scalastyle:off null
+        def canEqual(o: Any): Boolean =
+          o != null && o.isInstanceOf[Session[_]]
+
+        override def equals(o: Any): Boolean =
+          canEqual(o) && membersCanEqual(o)
+
+        override def toString: String =
+          s"Session($id, $data)"
+
+        override def hashCode: Int =
+          41 * (id.hashCode() + 41) + data.hashCode()
       }
 
     def apply[A](data: A)(implicit store: SecretStoreApi): Future[Session[A]] =
@@ -181,7 +198,7 @@ trait SessionImplicits extends SessionTypeClasses {
       f(a)
 
     object Injections {
-      import scala.collection.JavaConversions._
+      import scala.collection.JavaConverters._
 
       implicit def ByteCodecJson: CodecJson[Byte] =
         CodecJson(
@@ -202,7 +219,7 @@ trait SessionImplicits extends SessionTypeClasses {
               ("m" := r.getMethod.getName) ->:
               ("v" := r.getProtocolVersion.getText) ->:
               ("c" := r.getContent.array.toList) ->:
-              ("h" := r.headers.names.toList.map(n => Map[String, String](n -> r.headers.get(n)))) ->:
+              ("h" := r.headers.names.asScala.map(n => Map[String, String](n -> r.headers.get(n)))) ->:
               jEmptyObject,
           c => for {
             uri <- (c --\ "u").as[String]
@@ -228,7 +245,12 @@ trait SessionImplicits extends SessionTypeClasses {
       implicit def SessionIdCodecJson(implicit store: SecretStoreApi): CodecJson[SessionId] =
         CodecJson(
           (id: SessionId) => ("id" := SessionId.toBase64(id)) ->: jEmptyObject,
-          c => for ( id <- (c --\ "id").as[String] ) yield SessionId.from[String](id).toOption.get
+          c => (for {
+            id <- (c --\ "id").as[String]
+          } yield SessionId.from[String](id)).flatMap[SessionId] {
+            case Success(id) => DecodeResult.ok(id)
+            case Failure(e) => DecodeResult.fail(e.getMessage, c.history)
+          }
         )
 
       implicit def HttpSessionCodecJson(implicit store: SecretStoreApi): CodecJson[RequestSession] =

@@ -25,38 +25,51 @@ package object borderpatrol {
       f(s)
   }
 
-  trait View[A, B] {
-    def apply(a: A): B
-  }
+  object view {
 
-  object View {
-    def apply[A, B](f: A => B): View[A, B] =
-      new View[A,B] {
+    trait View[A, B] {
+      def apply(a: A): B
+    }
+
+    object View {
+      def apply[A, B](f: A => B): View[A, B] = new View[A, B] {
         def apply(a: A): B =
           f(a)
-        implicit def identity[A]: View[A,A] =
-          View(a => a)
       }
+      implicit def identity[A]: View[A, A] =
+        View(a => a)
+    }
+
   }
 
+  import view._
   type %>[A, B] = View[A, B]
 
-  abstract class BorderError(val status: httpx.Status, val description: String) extends Exception
-  class InvalidRequest(description: String = "") extends BorderError(httpx.Status.BadRequest, description)
-  class UnauthorizedRequest(description: String = "") extends BorderError(httpx.Status.Unauthorized, description)
-  class ForbiddenRequest(description: String = "") extends BorderError(httpx.Status.Forbidden, description)
 
-  trait RequestBase {
-    val request: httpx.Request
-    val auth: Option[String] = request.headerMap.get(HttpHeaders.Names.AUTHORIZATION)
+  object errors {
+    abstract class BorderError(val status: httpx.Status, val description: String) extends Exception
+    class InvalidRequest(description: String = "") extends BorderError(httpx.Status.BadRequest, description)
+    class UnauthorizedRequest(description: String = "") extends BorderError(httpx.Status.Unauthorized, description)
+    class ForbiddenRequest(description: String = "") extends BorderError(httpx.Status.Forbidden, description)
   }
-  case class AuthRequest[A](request: httpx.Request) extends RequestBase
-  case class AuthResourceRequest[A](request: httpx.Request) extends RequestBase
 
-  trait BorderRequest[A] {
-    val authInfo: AuthInfo[A]
-    val request: httpx.Request
-    val sessionId: SessionId
+  object request {
+
+    trait RequestBase {
+      val request: httpx.Request
+      val auth: Option[String] = request.headerMap.get(HttpHeaders.Names.AUTHORIZATION)
+    }
+
+    case class AuthRequest[A](request: httpx.Request) extends RequestBase
+
+    case class AuthResourceRequest[A](request: httpx.Request) extends RequestBase
+
+    trait BorderRequest[A] {
+      val authInfo: AuthInfo[A]
+      val request: httpx.Request
+      val sessionId: SessionId
+    }
+
   }
 
 }

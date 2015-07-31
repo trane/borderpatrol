@@ -25,6 +25,8 @@
 package com.lookout.borderpatrol.auth
 
 import com.lookout.borderpatrol._
+import com.lookout.borderpatrol.errors.UnauthorizedRequest
+import com.lookout.borderpatrol.request.{AuthResourceRequest, AuthRequest}
 
 import com.twitter.util.Future
 

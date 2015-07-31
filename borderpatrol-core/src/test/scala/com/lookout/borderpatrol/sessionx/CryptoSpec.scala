@@ -22,14 +22,16 @@
  * THE SOFTWARE.
  */
 
-package com.lookout.borderpatrol.sessionx.crypto
+package com.lookout.borderpatrol.sessionx
 
 import java.security.Key
+
 import javax.crypto.spec.SecretKeySpec
+import crypto._
 
-import org.scalatest.{Matchers, FlatSpec}
+import org.scalatest.{FlatSpec, Matchers}
 
-class CryptoSpec extends FlatSpec with Matchers {
+class cryptoSpec extends FlatSpec with Matchers {
   val entropy = Array[Byte](1, 2, 3)
 
   behavior of "Signer"
@@ -62,7 +64,7 @@ class CryptoSpec extends FlatSpec with Matchers {
 
   val ckey = Generator.BytesGenerator(16).toArray
   val iv = Generator.BytesGenerator(16).toArray
-  val cryptKey = CryptKey(ckey, iv)
+  val cryptKey = crypto.CryptKey(ckey, iv)
 
   it should "encrypt and decrypt" in {
     val enc = cryptKey.encrypt(entropy)

@@ -24,7 +24,8 @@
 
 package com.lookout.borderpatrol.auth
 
-import com.lookout.borderpatrol.{BorderRequest, BorderError, AuthResourceRequest, AuthRequest}
+import com.lookout.borderpatrol.errors.BorderError
+import com.lookout.borderpatrol.request.{BorderRequest, AuthResourceRequest, AuthRequest}
 
 import com.twitter.util.Future
 import com.twitter.finagle.{Service, Filter, httpx}

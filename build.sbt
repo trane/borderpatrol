@@ -47,7 +47,7 @@ val baseSettings = Seq(
       }
       ),
   scalacOptions in (Compile, console) := compilerOptions :+ "-Yrepl-class-based",
-  wartremoverWarnings in (Compile, compile) ++= Warts.allBut(Wart.NoNeedForMonad, Wart.Null, Wart.Nothing, Wart.DefaultArguments)
+  wartremoverWarnings in (Compile, compile) ++= Warts.allBut(Wart.FinalCaseClass, Wart.NoNeedForMonad, Wart.Throw, Wart.Null, Wart.Nothing, Wart.DefaultArguments)
 )
 
 lazy val publishSettings = Seq(

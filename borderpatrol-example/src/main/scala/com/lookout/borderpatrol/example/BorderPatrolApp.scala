@@ -7,5 +7,5 @@ object Main extends App {
   import endpoint._
 
   val server = Httpx.serve(":8080", routes.toService)
-  Await.ready(server)
+  Await.all(server)
 }

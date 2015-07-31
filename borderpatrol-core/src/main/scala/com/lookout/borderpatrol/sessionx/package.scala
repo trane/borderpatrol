@@ -156,6 +156,7 @@ package object sessionx extends SessionFunctions {
      * @param secrets the current secret and previous secret
      */
     case class InMemorySecretStore(secrets: Secrets) extends SecretStoreApi {
+      @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.Var")) // this is for mocking
       private[this] var _secrets: Secrets = secrets
 
       def current: Secret = {
@@ -225,6 +226,7 @@ package object sessionx extends SessionFunctions {
         store.set(session.id.asBase64, flag, session.id.expires, ev(session).data)
     }
 
+    @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.MutableDataStructures"))
     case class InMemoryStore(store: mutable.Set[Session[Buf]] = mutable.Set[Session[Buf]]())
         extends SessionStore[Buf, mutable.Set[Session[Buf]]] {
 
