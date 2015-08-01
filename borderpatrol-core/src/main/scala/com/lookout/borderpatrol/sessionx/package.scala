@@ -24,6 +24,7 @@
 
 package com.lookout.borderpatrol
 
+import com.twitter.finagle.httpx.Cookie
 import com.twitter.io.Buf
 import com.twitter.util.{Base64StringEncoder, Time, Future}
 import com.twitter.finagle.memcachedx
@@ -136,6 +137,7 @@ package object sessionx extends SessionFunctions {
   }
 
   implicit class SessionOps[A](val s: Session[A]) extends AnyVal {
+
     def as[B](implicit f: Session[A] => B): B =
       f(s)
 
@@ -143,11 +145,13 @@ package object sessionx extends SessionFunctions {
       s.id.expired
 
     def encrypt(implicit f: Session[A] => Array[Byte]): Array[Byte] =
-      CryptKey(s).encrypt(f(s))
+      crypto.CryptKey(s).encrypt(f(s))
   }
 
 
-
+  /**
+   * Default implementations of [[SecretStoreApi]]
+   */
   object SecretStores {
 
     /**
@@ -180,6 +184,9 @@ package object sessionx extends SessionFunctions {
   }
 
 
+  /**
+   * Default implementations of [[SessionStore]] with [[memcachedx]] and an in-memory store for mocking
+   */
   object SessionStores {
 
     /**
@@ -226,9 +233,14 @@ package object sessionx extends SessionFunctions {
         store.set(session.id.asBase64, flag, session.id.expires, ev(session).data)
     }
 
+    /**
+     * An in-memory store for prototyping and testing remote stores
+     */
     @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.MutableDataStructures"))
-    case class InMemoryStore(store: mutable.Set[Session[Buf]] = mutable.Set[Session[Buf]]())
+    case object InMemoryStore
         extends SessionStore[Buf, mutable.Set[Session[Buf]]] {
+
+      val store: mutable.Set[Session[Buf]] = mutable.Set[Session[Buf]]()
 
       def get[A](key: SessionId)(implicit ev: Session[Buf] %> Option[Session[A]]): Future[Option[Session[A]]] =
         store.find(_.id == key).flatMap(s => ev(s)).toFuture

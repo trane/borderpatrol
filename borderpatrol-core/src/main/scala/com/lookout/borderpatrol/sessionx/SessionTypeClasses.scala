@@ -24,37 +24,10 @@
 
 package com.lookout.borderpatrol.sessionx
 
-import argonaut.Json
-import com.lookout.borderpatrol.%>
-import com.twitter.io.Buf
-import com.twitter.util.Future
-import com.twitter.finagle.httpx
-
 import scalaz.{\/-, -\/, \/}
 
 trait SessionTypeClasses extends SessionTypes {
 
-  trait Session[+A] {
-    val id: SessionId
-    val data: A
-  }
-
-  type PSession = Session[_]
-  case class RequestSession(id: SessionId, data: httpx.Request) extends Session[httpx.Request]
-  case class JsonSession(id: SessionId, data: Json) extends Session[Json]
-  case class BufSession(id: SessionId, data: Buf) extends Session[Buf]
-
-  trait Store[K, F[_], B, M] {
-    val store: M
-
-    def update[A](value: F[A])(implicit ev: F[A] %> F[B]): Future[Unit]
-    def get[A](key: K)(implicit ev: F[B] %> Option[F[A]]): Future[Option[F[A]]]
-  }
-
-  trait SessionStore[B, M] extends Store[SessionId, Session, B, M] {
-    def update[A](session: Session[A])(implicit ev: Session[A] %> Session[B]): Future[Unit]
-    def get[A](key: SessionId)(implicit ev: Session[B] %> Option[Session[A]]): Future[Option[Session[A]]]
-  }
 
   trait Encryptable[A, Key, E] {
     def apply(a: A)(key: Key): E

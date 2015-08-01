@@ -89,4 +89,21 @@ object crypto {
       cipher(Cipher.DECRYPT_MODE).doFinal(bytes)
   }
 
+  object CryptKey {
+
+    implicit def id2Key(id: SessionId): Array[Byte] =
+      id.entropy.toArray
+    implicit def sec2Iv(secret: Secret): Array[Byte] =
+      secret.entropy.toArray
+
+    def apply(id: SessionId, secret: Secret): CryptKey =
+      new CryptKey(id2Key(id), sec2Iv(secret))
+
+    def apply(id: SessionId): CryptKey =
+      apply(id, id.secret)
+
+    def apply(s: PSession): CryptKey =
+      apply(s.id)
+  }
+
 }

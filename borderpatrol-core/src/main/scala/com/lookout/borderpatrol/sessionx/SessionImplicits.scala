@@ -127,43 +127,71 @@ trait SessionImplicits extends SessionTypeClasses {
 
   }
 
-  object CryptKey {
-    import crypto.{CryptKey => CryptKeyy}
+  /**
+   * A container for some type `A` with a unique identifier of `SessionId`
+   */
+  trait Session[+A] {
+    val id: SessionId
+    val data: A
 
-    implicit def id2Key(id: SessionId): Array[Byte] =
-      id.entropy.toArray
-    implicit def sec2Iv(secret: Secret): Array[Byte] =
-      secret.entropy.toArray
-
-    def apply(id: SessionId, secret: Secret): CryptKeyy =
-      new CryptKeyy(id2Key(id), sec2Iv(secret))
-
-    def apply(id: SessionId): CryptKeyy =
-      CryptKeyy(id2Key(id), sec2Iv(id.secret))
-
-    def apply(s: PSession): CryptKeyy =
-      CryptKey(s.id, s.id.secret)
+    /**
+     * Transform a `Session[A]` to a `Session[B]` given a function from `A => B`, keeping the same id
+     *
+     * @param f
+     * @return
+     */
+    def map[B](f: A => B): Session[B] =
+      Session(id, f(data))
   }
+
+  type PSession = Session[_]
 
   object Session {
     import Injections.HttpxRequestCodecJson
-    implicit val str2Buf: String %> Buf = View(s => Buf.Utf8(s))
-    implicit val buf2OStr: Buf %> Option[String] = View(b => Buf.Utf8.unapply(b))
-    implicit val req2Json: httpx.Request %> Json = View(r => Injections.HttpxRequestCodecJson.encode(r))
-    implicit val json2OReq: Json %> Option[httpx.Request] = View(j =>
-      HttpxRequestCodecJson.Decoder.decodeJson(j).toOption)
-    implicit val json2String: Json %> String = View(j => j.toString())
-    implicit val json2Buf: Json %> Buf = View(j => str2Buf(json2String(j)))
-    implicit val req2Buf: httpx.Request %> Buf = View(r => json2Buf(req2Json(r)))
-    implicit val buf2OReq: Buf %> Option[httpx.Request] = View(b =>
-      buf2OStr(b).flatMap(s => Parse.decodeOption[httpx.Request](s)))
+    implicit val str2Buf: String => Buf = Buf.Utf8(_)
+    implicit val buf2OStr: Buf => Option[String] = Buf.Utf8.unapply(_)
+    implicit val req2Json: httpx.Request => Json = Injections.HttpxRequestCodecJson.encode(_)
+    implicit val json2OReq: Json => Option[httpx.Request] = HttpxRequestCodecJson.Decoder.decodeJson(_).toOption
+    implicit val json2String: Json => String = _.toString()
+    implicit val json2Buf: Json => Buf = j => str2Buf(json2String(j))
+    implicit val req2Buf: httpx.Request => Buf = j => json2Buf(req2Json(j))
+    implicit val buf2OReq: Buf => Option[httpx.Request] = b =>
+      buf2OStr(b).flatMap(s => Parse.decodeOption[httpx.Request](s))
 
-    implicit def s2s[A,B](implicit f: A %> B): Session[A] %> Session[B] = View(sa =>
-      Session(sa.id, f(sa.data))
-    )
-    implicit def s2os[A,B](implicit f: B %> Option[A]): Session[B] %> Option[Session[A]] = View(sb =>
-      f(sb.data).map(a => Session(sb.id, a))
-    )
+    /**
+     * helper view for SessionStore to lift `A => B` into `View[Session[A], Session[B]]`
+     * useful for [[SessionStore.update]]
+     */
+    implicit def liftAtoB[A,B](implicit f: A => B): Session[A] %> Session[B] =
+      View(_.map(f))
+
+    /**
+     * helper view to lift `B => Option[A]` into `View[Session[B], Option[Session[A]]]`
+     * useful for [[SessionStore.get]]
+     */
+    implicit def liftBtoOptA[A,B](implicit f: B => Option[A]): Session[B] %> Option[Session[A]] =
+      View(sb => sb.map(f).data.map(Session(sb.id, _)))
+
+
+    /**
+     * Primary method of recreating `Session[A]` from a given `SessionId` and data type `A`
+     *
+     * {{{
+     *   case class Foo(i: Int)
+     *
+     *   val id = Await.result(SessionId.next)
+     *   val data = Foo(42)
+     *   val s = Session(id, data)
+     *   val s2 = Session(id, data)
+     *   s == s2 // true
+     *   s === s2
+     * }}}
+     *
+     * @param i the SessionId
+     * @param d an arbitrary data value
+     * @tparam A
+     * @return a Session
+     */
     @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.Any"))
     def apply[A](i: SessionId, d: A): Session[A] =
       new Session[A] {
@@ -191,28 +219,45 @@ trait SessionImplicits extends SessionTypeClasses {
           41 * (id.hashCode() + 41) + data.hashCode()
       }
 
+    /**
+     * Primary mechanism for generating new [[Session]], returning a `Future` of the `Session[A]`
+     *
+     * {{{
+     *   val data = 1
+     *   val sessionFuture = for {
+     *    s <- Session(data)
+     *    _ <- SessionStores.InMemoryStore.update(s)
+     *   } yield s
+     * }}}
+     *
+     * @param data value you want to store
+     * @param store the secret store to fetch current secret
+     * @tparam A
+     * @return
+     */
     def apply[A](data: A)(implicit store: SecretStoreApi): Future[Session[A]] =
       SessionId.next map (Session(_, data))
 
-    def from[A](a: A)(implicit f: A => Try[PSession]): Try[PSession] =
-      f(a)
 
+    /**
+     * Set of implicit injections for `Session[A]` where `A => B` and `B => Option[A]`
+     */
     object Injections {
       import scala.collection.JavaConverters._
 
-      implicit def ByteCodecJson: CodecJson[Byte] =
+      implicit val ByteCodecJson: CodecJson[Byte] =
         CodecJson(
           (b: Byte) => jNumber(b.toInt),
           c => for (b <- c.as[Int]) yield b.toByte
         )
 
-      implicit def TimeCodecJson: CodecJson[Time] =
+      implicit val TimeCodecJson: CodecJson[Time] =
         CodecJson(
           (t: Time) => ("ms" := t.inMilliseconds) ->: jEmptyObject,
           c => for { s <- (c --\ "ms").as[Long] } yield Time.fromMilliseconds(s)
         )
 
-      implicit def HttpRequestCodecJson: CodecJson[HttpRequest] =
+      implicit val HttpRequestCodecJson: CodecJson[HttpRequest] =
         CodecJson(
           (r: HttpRequest) =>
             ("u" := r.getUri) ->:
@@ -233,7 +278,7 @@ trait SessionImplicits extends SessionTypeClasses {
             })
         )
 
-      implicit def HttpxRequestCodecJson: CodecJson[httpx.Request] =
+      implicit val HttpxRequestCodecJson: CodecJson[httpx.Request] =
         CodecJson(
           (r: httpx.Request) => HttpRequestCodecJson.encode(Bijections.requestToNetty(r)),
           c => for (r <- HttpRequestCodecJson.decode(c)) yield Bijections.requestFromNetty(r)
@@ -253,13 +298,13 @@ trait SessionImplicits extends SessionTypeClasses {
           }
         )
 
-      implicit def HttpSessionCodecJson(implicit store: SecretStoreApi): CodecJson[RequestSession] =
+      implicit def HttpSessionCodecJson(implicit store: SecretStoreApi): CodecJson[Session[httpx.Request]] =
         CodecJson(
-          (s: RequestSession) => ("id" := s.id) ->: ("data" := s.data) ->: jEmptyObject,
+          (s: Session[httpx.Request]) => ("id" := s.id) ->: ("data" := s.data) ->: jEmptyObject,
           c => for {
             id <- (c --\ "id").as[SessionId]
             data <- (c --\ "data").as[httpx.Request]
-          } yield RequestSession(id, data)
+          } yield Session(id, data)
         )
 
       implicit def arr2Buf: Bijection[Array[Byte], Buf] =

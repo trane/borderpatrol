@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit
 import com.lookout.borderpatrol.%>
 import com.lookout.borderpatrol.view.View
 import com.twitter.io.Buf
-import com.twitter.util.{Future, Await, Duration, Time}
+import com.twitter.util.{Await, Duration, Time}
 import com.twitter.finagle.{httpx,memcachedx}
 import org.scalatest.{Matchers, FlatSpec}
 
@@ -143,18 +143,23 @@ class SessionSpec extends FlatSpec with Matchers {
     val session = Await.result(Session[String]("hello world"))
     val str = session.as[String]
     val arr = session.as[Seq[Byte]]
-    val session2 = Session.from[String](str).get
 
     str shouldBe a [String]
     arr shouldBe an [Seq[_]]
+  }
 
-    session.id shouldEqual session2.id
+  it should "be the same object in memory when equal" in {
+    val id = Await.result(SessionId.next)
+    Session(id, "session") shouldBe Session(id, "session")
+    Session(id, "session1") should not be Session(id, "session2")
+
+    Await.result(Session(1)) should not be Await.result(Session(1))
   }
 
   behavior of "SessionStore"
   import Session._
-  implicit val int2Buf: Int %> Buf = View((i: Int) => Buf.U32BE(i))
-  implicit val buf2Int: Buf %> Option[Int] = View((b: Buf) => Buf.U32BE.unapply(b).map(t => t._1))
+  implicit val int2Buf: Int => Buf = (i: Int) => Buf.U32BE(i)
+  implicit val buf2Int: Buf => Option[Int] = (b: Buf) => Buf.U32BE.unapply(b).map(t => t._1)
 
   implicit def sint2str(s: Session[String]): Buf =
     Buf.Utf8(s"${s.data}::${s.id.asBase64}}")
@@ -162,7 +167,7 @@ class SessionSpec extends FlatSpec with Matchers {
     str <- Buf.Utf8.unapply(b)
     ses <- str2s(str).toOption
   } yield ses
-  val sessionStore = SessionStores.InMemoryStore()
+  val sessionStore = SessionStores.InMemoryStore
   val memcachedSessionStore = SessionStores.MemcachedStore(new memcachedx.MockClient())
 
   it should "store any type of session" in {
@@ -174,7 +179,7 @@ class SessionSpec extends FlatSpec with Matchers {
       store.update[String](strSession)
       Await.result(store.get[String](strSession.id)).get.data shouldEqual strSession.data
       val a = Await.result(store.get[Int](strSession.id)).get // test string -> buf -> int
-      a.data shouldBe buf2Int(implicitly[String %> Buf].apply(strSession.data)).get
+      a.data shouldBe buf2Int(implicitly[String => Buf].apply(strSession.data)).get
       Await.result(store.get[Int](intSession.id)).get.data shouldBe intSession.data
       Await.result(store.get[Int](Await.result(SessionId.next))) shouldBe None
     }

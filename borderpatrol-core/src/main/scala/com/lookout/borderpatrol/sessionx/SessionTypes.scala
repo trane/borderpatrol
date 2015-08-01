@@ -27,6 +27,7 @@ package com.lookout.borderpatrol.sessionx
 import java.util.concurrent.TimeUnit
 import javax.crypto.spec.SecretKeySpec
 
+import com.lookout.borderpatrol.%>
 import com.lookout.borderpatrol.sessionx.crypto.{Generator, Signer}
 import com.twitter.bijection.Injection
 import com.twitter.util.{Base64StringEncoder, Future, Time, Duration}
@@ -34,6 +35,7 @@ import com.twitter.util.{Base64StringEncoder, Future, Time, Duration}
 import scala.util.Try
 
 trait SessionTypes {
+
   type Encrypted = Array[Byte]
   type Seconds = Long
   type Size = Int
@@ -192,6 +194,33 @@ trait SessionTypes {
     def current: Secret
     def previous: Secret
     def find(f: Secret => Boolean): Option[Secret]
+  }
+
+  /**
+   * A generic interface to a store `M` (finagle client or `Map[K,B]`) that for functor `F[_]` (like `Session[A]`) and
+   * a view from `F[A] => F[B]` will store `B` with lookup key `K`
+   *
+   * @tparam K type of lookup key
+   * @tparam F some Functor
+   * @tparam B type of stored value
+   * @tparam M store
+   */
+  trait Store[K, F[_], B, M] {
+    val store: M
+
+    def update[A](value: F[A])(implicit f: F[A] %> F[B]): Future[Unit]
+    def get[A](key: K)(implicit f: F[B] %> Option[F[A]]): Future[Option[F[A]]]
+  }
+
+  /**
+   * Session store that will store a `Session[_]` data into `M`
+   *
+   * @tparam B type of stored value
+   * @tparam M store
+   */
+  trait SessionStore[B, M] extends Store[SessionId, Session, B, M] {
+    def update[A](session: Session[A])(implicit f: Session[A] %> Session[B]): Future[Unit]
+    def get[A](key: SessionId)(implicit f: Session[B] %> Option[Session[A]]): Future[Option[Session[A]]]
   }
 
   abstract class BorderSessionError(val description: String) extends Exception
