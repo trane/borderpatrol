@@ -26,8 +26,6 @@ package com.lookout.borderpatrol.sessionx
 
 import java.util.concurrent.TimeUnit
 
-import com.lookout.borderpatrol.%>
-import com.lookout.borderpatrol.view.View
 import com.twitter.io.Buf
 import com.twitter.util.{Await, Duration, Time}
 import com.twitter.finagle.{httpx,memcachedx}
@@ -109,8 +107,6 @@ class SessionSpec extends FlatSpec with Matchers {
   }
 
   it should "be convertable to a string" in {
-    implicit def str2Id(s: String) =
-      SessionIdInjections.str2SessionId(s)
     val str = id.asBase64
     SessionId.from[String](str) shouldBe Success(id)
   }
@@ -161,12 +157,6 @@ class SessionSpec extends FlatSpec with Matchers {
   implicit val int2Buf: Int => Buf = (i: Int) => Buf.U32BE(i)
   implicit val buf2Int: Buf => Option[Int] = (b: Buf) => Buf.U32BE.unapply(b).map(t => t._1)
 
-  implicit def sint2str(s: Session[String]): Buf =
-    Buf.Utf8(s"${s.data}::${s.id.asBase64}}")
-  implicit def buf2Session(b: Buf): Option[Session[String]] = for {
-    str <- Buf.Utf8.unapply(b)
-    ses <- str2s(str).toOption
-  } yield ses
   val sessionStore = SessionStores.InMemoryStore
   val memcachedSessionStore = SessionStores.MemcachedStore(new memcachedx.MockClient())
 

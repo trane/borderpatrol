@@ -119,6 +119,7 @@ trait SessionTypes {
   object SessionId {
 
     import Generator.EntropyGenerator
+    import SessionIdInjections.str2SessionId
 
     val entropySize: Size = 16
     val lifetime = Duration(1, TimeUnit.DAYS)
