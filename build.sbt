@@ -60,6 +60,7 @@ lazy val publishSettings = Seq(
     )
   ),
   bintrayRepository := "borderpatrol",
+  publishMavenStyle := true,
   bintrayOrganization := Some("lookout")
 )
 

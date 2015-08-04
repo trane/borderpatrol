@@ -1,7 +1,8 @@
 resolvers ++= Seq(
   Classpaths.typesafeReleases,
   Classpaths.sbtPluginReleases,
-  "sonatype-releases" at "https://oss.sonatype.org/content/repositories/releases/"
+  "sonatype-releases" at "https://oss.sonatype.org/content/repositories/releases/",
+  Resolver.jcenterRepo
 )
 
 addSbtPlugin("com.github.mpeltonen" % "sbt-idea" % "1.6.0")
