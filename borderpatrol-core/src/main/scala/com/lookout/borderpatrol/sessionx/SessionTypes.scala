@@ -149,7 +149,7 @@ trait SessionTypes {
       s.sign(payload(id))
 
     /**
-     * Generate a new id wrapped in a [[Future]] since entropy is blocking on the JVM
+     * Generate a new id wrapped in a [[com.twitter.util.Future Future]] since entropy is blocking on the JVM
      *
      * @param store where to fetch the current [[Secret]] to sign this id
      * @return

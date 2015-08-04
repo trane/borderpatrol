@@ -24,20 +24,19 @@
 
 package com.lookout.borderpatrol
 
-import com.twitter.finagle.httpx.Cookie
 import com.twitter.io.Buf
-import com.twitter.util.{Base64StringEncoder, Time, Future}
+import com.twitter.util.{Time, Future}
 import com.twitter.finagle.memcachedx
 
 import scala.collection.mutable
-import scalaz.{\/-, -\/}
 
 /**
  * This crypto introduces types and functions that enable identifying, fetching, and storing web session data. This
  * is accomplished by a set of types that will be used by consumers of this library: `Session`, `Store`, and `Secret`.
  *
- * A [[Secret]] is a cryptographically verifiable signing key used to sign a [[SessionId]]. Creating a `Secret` is
- * simple. It defaults to expire at [[Secret.lifetime]]
+ * A [[com.lookout.borderpatrol.sessionx.Secret Secret]] is a cryptographically verifiable signing key used to sign a
+ * [[com.lookout.borderpatrol.sessionx.SessionId SessionId]]. Creating a `Secret` is * simple. It defaults to expire at
+ * [[com.lookout.borderpatrol.sessionx.Secret.lifetime Secret.lifetime]]
  *
  * {{{
  *   val secret = Secret() // default secret expiry
@@ -52,9 +51,10 @@ import scalaz.{\/-, -\/}
  *   val signedMsg = secret.sign("message to by signed".getBytes)
  * }}}
  *
- * A [[SessionId]] is a cryptographically signed identifier for a [[Session]], it consists of entropy, expiry, secret,
- * and signature of those items. This is meant to be used as the [[com.twitter.finagle.httpx.Cookie]] value, so we
- * provide serializing to [[String]].
+ * A [[com.lookout.borderpatrol.sessionx.SessionId SessionId]] is a cryptographically signed identifier for a
+ * [[com.lookout.borderpatrol.sessionx.Session Session]], it consists of entropy, expiry, secret,and signature of those
+ * items. This is meant to be used as the [[com.twitter.finagle.httpx.Cookie]] value, so we provide serializing to
+ * [[String]].
  *
  * {{{
  *   val id: SessionId = Await.result(SessionId.next)
@@ -62,9 +62,10 @@ import scalaz.{\/-, -\/}
  *   SessionId.from[String](cookieValue) == id
  * }}}
  *
- * A [[Session]] is product type of a cryptographically verifiable identifier [[SessionId]] and an arbitrary data type
- * A`. The only requirement for a [[SessionStore]][B,M] to store/fetch a `Session[A]` is that there be some implicit
- * injective views from `A %> B` and `B %> Option[A]`.
+ * A [[com.lookout.borderpatrol.sessionx.Session Session]] is product type of a cryptographically verifiable
+ * identifier [[com.lookout.borderpatrol.sessionx.SessionId SessionId]] and an arbitrary data type
+ * A`. The only requirement for a [[com.lookout.borderpatrol.sessionx.SessionStore SessionStore]][B,M] to store/fetch
+ * a `Session[A]` is that there be some implicit injective views from `A %> B` and `B %> Option[A]`.
  *
  * We have provided default views for: `httpx.Request %> Buf`, `Json %> Buf` and their injective views.
  *
@@ -88,8 +89,9 @@ import scalaz.{\/-, -\/}
  *  })
  * }}}
  *
- * Let's say you have a [[Session.data]] type that doesn't have the injective [[View]] that you need, that's OK!
- * Assuming you are storing it in memcached, which requires a type of [[Buf]] for the value:
+ * Let's say you have a [[com.lookout.borderpatrol.sessionx.Session.data Session.data]] type that doesn't have the
+ * injective [[com.lookout.borderpatrol.view.View View]] that you need, that's OK!
+ * Assuming you are storing it in memcached, which requires a type of [[com.twitter.io.Buf Buf]] for the value:
  *
  * {{{
  *   trait Foo {
@@ -106,7 +108,6 @@ import scalaz.{\/-, -\/}
  *
  */
 package object sessionx extends SessionFunctions {
-
 
   implicit class SecretOps(val s: Secret) extends AnyVal {
     def expired: Boolean =
@@ -150,12 +151,12 @@ package object sessionx extends SessionFunctions {
 
 
   /**
-   * Default implementations of [[SecretStoreApi]]
+   * Default implementations of [[com.lookout.borderpatrol.sessionx.SecretStoreApi SecretStoreApi]]
    */
   object SecretStores {
 
     /**
-     * A useful [[Secrets]] mock store for quickly testing and prototyping
+     * A useful [[com.lookout.borderpatrol.sessionx.Secrets Secrets]] mock store for quickly testing and prototyping
      *
      * @param secrets the current secret and previous secret
      */
@@ -185,12 +186,13 @@ package object sessionx extends SessionFunctions {
 
 
   /**
-   * Default implementations of [[SessionStore]] with [[memcachedx]] and an in-memory store for mocking
+   * Default implementations of [[com.lookout.borderpatrol.sessionx.SessionStore SessionStore]] with
+   * [[com.twitter.finagle.memcachedx memcachedx]] and an in-memory store for mocking
    */
   object SessionStores {
 
     /**
-     * Memcached backend to [[SessionStore]]
+     * Memcached backend to [[com.lookout.borderpatrol.sessionx.SessionStore SessionStore]]
      *
      * {{{
      *   val store = MemcachedStore(Memcachedx.newKetamaClient("localhost:11211"))
@@ -205,7 +207,8 @@ package object sessionx extends SessionFunctions {
       val flag = 0 // ignored flag required by memcached api
 
       /**
-       * Fetches a [[Session]] if one exists otherwise `None`. On failure will make a [[Future.exception]].
+       * Fetches a [[com.lookout.borderpatrol.sessionx.Session Session]] if one exists otherwise `None`. On failure
+       * will make a [[com.twitter.util.Future.exception Future.exception]].
        *
        * @param key lookup key
        * @param ev evidence for converting the Buf to the type of A
@@ -221,13 +224,14 @@ package object sessionx extends SessionFunctions {
         }
 
       /**
-       * Stores a [[Session]]. On failure returns a [[Future.exception]]
+       * Stores a [[com.lookout.borderpatrol.sessionx.Session Session]]. On failure returns a
+       * [[com.twitter.util.Future.exception Future.exception]]
        *
        * @param session
        * @param ev evidence for the conversion to `Buf`
        * @tparam A [[Session.data]] type that must have a view from `A %> Buf`
        *
-       * @return a [[Future]]
+       * @return a [[com.twitter.util.Future Future]]
        */
       def update[A](session: Session[A])(implicit ev: Session[A] %> Session[Buf]): Future[Unit] =
         store.set(session.id.asBase64, flag, session.id.expires, ev(session).data)
