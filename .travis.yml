@@ -1,10 +1,13 @@
 language: scala
 sudo: false
 scala:
-  - 2.10.5
-  - 2.11.7
+- 2.10.5
+- 2.11.7
 jdk:
-  - oraclejdk7
-  - oraclejdk8
-script: "sbt ++$TRAVIS_SCALA_VERSION clean coverage test scalastyle && sbt ++$TRAVIS_SCALA_VERSION coverageAggregate"
-after_success: "sbt coveralls"
+- oraclejdk7
+- oraclejdk8
+script: sbt ++$TRAVIS_SCALA_VERSION clean coverage test scalastyle && sbt ++$TRAVIS_SCALA_VERSION
+  coverageAggregate
+after_success: sbt coveralls
+bintraykey:
+  secure: fqzmFFy1WuXUp2aHMbU/a3oo9JfVYBcdJtGFxVtfj+Q3UVWjVpCwxa4Asqdd69UASTSxiil8ywR0DMz99v1OykCoXfPdMh8a46ymJmbR2iZCbjqKSgxdEdVlQa8kWvdIssitdUEwloFa081RQaQRKLqBvb7/mzGWPO4qpoz+ALo=
