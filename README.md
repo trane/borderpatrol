@@ -1,39 +1,73 @@
-# BorderPatrol
+Border Patrol is a type-safe, immutable, functional Scala library built on top of [Finagle](https://finagle.github.io/)
+that provides modular components useful for session management and authentication. This library is used at
+[Lookout](http://lookout.com) for single sign on with support for multiple authentication backends.
 
+The original version (as a server) can be found here (nginx+lua): [ngx_borderpatrol](https://www.github
+.com/lookout/ngx_borderpatrol)
+
+Badges
+------
 [![Build Status](https://travis-ci.org/lookout/borderpatrol.png)](https://travis-ci.org/lookout/borderpatrol)
-
 [![Coverage Status](https://coveralls.io/repos/lookout/borderpatrol/badge.png)](https://coveralls.io/r/lookout/borderpatrol)
 
-BorderPatrol is an authentication and session management service that
-lives at the border of your network.
+Modules
+-------
 
-This version is a port from nginx+lua to finagle. For more information see
-[ngx_borderpatrol](https://www.github.com/lookout/ngx_borderpatrol)
+Border Patrol uses a multi-project structure and contains the following _modules_:
 
-## Developing/Contributing
+* [`borderpatrol-core`](borderpatrol-core) - the core classes/functions
+* [`borderpatrol-example`](borderpatrol-example) - the demo app showing sessions and authentication for multiple
+services
+* [`borderpatrol-auth`](borderpatrol-auth) - different authentication plugins for core auth
 
-### Installation and running
+Installation
+------------
 
-Border Patrol is based on TwitterServer and all dependencies are managed by SBT
-(Maven may or may not work and is experimental).
+Every Border Patrol module is published at Bintray and SNAPSHOT builds are published to JFrog.
 
-On OSX:
+* _stable_ release (not *officially* available yet):
 
-    * brew install sbt
-    * cd borderpatrol
-    * ./sbt
-    * project borderpatrol-core
-    * run
+```scala
+libraryDependencies ++= Seq(
+  "com.lookout.borderpatrol" %% "[borderpatrol-module]" % "0.1.0"
+)
+```
 
-This will get you a dumb little prototype responding differently to /b and /d routes
+* `SNAPSHOT` release:
 
-### IRC
+```scala
+libraryDependencies ++= Seq(
+  "com.lookout.borderpatrol" %% "[borderpatrol-module]" % "0.1.0-SNAPSHOT" changing()
+)
+```
 
-Join `#borderpatrol` on the [Freenode](http://freenode.net)
+Running the example
+-------------------
 
-## TODO
+```
+$ sbt
+> project example
+> run
+```
 
-  * Fix Maven builds
-  * Implement Auth Token client
-  * Routing
-  * much, much more
+Documentation
+-------------
+
+* Scaladoc is available at [http://lookout.github.io/borderpatrol/docs](http://hackers.lookout
+.com/borderpatrol/docs/#com.lookout.borderpatrol.package)
+
+
+Contributing
+------------
+
+We would love to make this better, so please help us!
+
+* [Submit a PR](CONTRIBUTING.md) including an issue label ["easy"](https://github
+.com/lookout/borderpatrol/issues?q=is%3Aopen+is%3Aissue+label%3Aeasy)
+* Give it a star
+* Join us on IRC `#borderpatrol` on [Freenode](http://freenode.net)
+
+License
+-------
+
+We use the MIT License [License](LICENSE)

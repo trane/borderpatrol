@@ -114,4 +114,5 @@ lazy val example = project.in(file("borderpatrol-example"))
       "com.github.finagle" %% "finch-argonaut" % "0.7.1"
     )
   )
+  .disablePlugins(JmhPlugin)
   .dependsOn(core, test % "test")
