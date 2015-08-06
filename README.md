@@ -6,6 +6,8 @@ The original version (as a server) can be found here (nginx+lua): [ngx_borderpat
 
 Badges
 ------
+
+[![Join the chat at https://gitter.im/lookout/borderpatrol](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/lookout/borderpatrol?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 [![Build Status](https://travis-ci.org/lookout/borderpatrol.png)](https://travis-ci.org/lookout/borderpatrol)
 [![Coverage Status](https://coveralls.io/repos/lookout/borderpatrol/badge.png)](https://coveralls.io/r/lookout/borderpatrol)
 
