@@ -2,8 +2,7 @@ Border Patrol is a type-safe, immutable, functional Scala library built on top o
 that provides modular components useful for session management and authentication. This library is used at
 [Lookout](http://lookout.com) for single sign on with support for multiple authentication backends.
 
-The original version (as a server) can be found here (nginx+lua): [ngx_borderpatrol](https://www.github
-.com/lookout/ngx_borderpatrol)
+The original version (as a server) can be found here (nginx+lua): [ngx_borderpatrol](https://www.github.com/lookout/ngx_borderpatrol)
 
 Badges
 ------
@@ -19,6 +18,7 @@ Border Patrol uses a multi-project structure and contains the following _modules
 * [`borderpatrol-example`](borderpatrol-example) - the demo app showing sessions and authentication for multiple
 services
 * [`borderpatrol-auth`](borderpatrol-auth) - different authentication plugins for core auth
+* [`borderpatrol-security`](borderpatrol-security) - different security plugins, e.g. CSRF protection
 
 Installation
 ------------
@@ -53,8 +53,7 @@ $ sbt
 Documentation
 -------------
 
-* Scaladoc is available at [http://lookout.github.io/borderpatrol/docs](http://hackers.lookout
-.com/borderpatrol/docs/#com.lookout.borderpatrol.package)
+* Scaladoc is available at [http://lookout.github.io/borderpatrol/docs](http://hackers.lookout.com/borderpatrol/docs/#com.lookout.borderpatrol.package)
 
 
 Contributing
@@ -62,8 +61,7 @@ Contributing
 
 We would love to make this better, so please help us!
 
-* [Submit a PR](CONTRIBUTING.md) including an issue label ["easy"](https://github
-.com/lookout/borderpatrol/issues?q=is%3Aopen+is%3Aissue+label%3Aeasy)
+* [Submit a PR](CONTRIBUTING.md) including an issue label ["easy"](https://github.com/lookout/borderpatrol/issues?q=is%3Aopen+is%3Aissue+label%3Aeasy)
 * Give it a star
 * Join us on IRC `#borderpatrol` on [Freenode](http://freenode.net)
 
