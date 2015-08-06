@@ -11,3 +11,10 @@ script: sbt ++$TRAVIS_SCALA_VERSION clean coverage test scalastyle && sbt ++$TRA
 after_success: sbt coveralls
 bintraykey:
   secure: fqzmFFy1WuXUp2aHMbU/a3oo9JfVYBcdJtGFxVtfj+Q3UVWjVpCwxa4Asqdd69UASTSxiil8ywR0DMz99v1OykCoXfPdMh8a46ymJmbR2iZCbjqKSgxdEdVlQa8kWvdIssitdUEwloFa081RQaQRKLqBvb7/mzGWPO4qpoz+ALo=
+notifications:
+  webhooks:
+    urls:
+      - https://webhooks.gitter.im/e/0a8b576604fce1b34b3e
+    on_success: change  # options: [always|never|change] default: always
+    on_failure: always  # options: [always|never|change] default: always
+    on_start: false     # default: false
