@@ -89,10 +89,10 @@ lazy val root = project.in(file("."))
         |import com.lookout.borderpatrol.auth._
       """.stripMargin
     )
-  .aggregate(core, example)
+  .aggregate(core, example, security, auth)
   .dependsOn(core)
 
-lazy val core = project.in(file("borderpatrol-core"))
+lazy val core = project
   .settings(moduleName := "borderpatrol-core")
   .settings(allSettings)
   .settings(coverageExcludedPackages := "com\\.lookout\\.borderpatrol\\.auth\\..*")
@@ -104,7 +104,7 @@ lazy val test = project
     .settings(coverageExcludedPackages := "com\\.lookout\\.borderpatrol\\.test\\..*")
     .settings(libraryDependencies ++= testDependencies)
 
-lazy val example = project.in(file("borderpatrol-example"))
+lazy val example = project
   .settings(moduleName := "borderpatrol-example")
   .settings(allSettings)
   .settings(noPublish)
@@ -115,4 +115,14 @@ lazy val example = project.in(file("borderpatrol-example"))
     )
   )
   .disablePlugins(JmhPlugin)
+  .dependsOn(core, test % "test")
+
+lazy val security = project
+  .settings(moduleName := "borderpatrol-security")
+  .settings(allSettings)
+  .dependsOn(core, test % "test")
+
+lazy val auth = project
+  .settings(moduleName := "borderpatrol-auth")
+  .settings(allSettings)
   .dependsOn(core, test % "test")

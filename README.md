@@ -14,11 +14,11 @@ Modules
 
 Border Patrol uses a multi-project structure and contains the following _modules_:
 
-* [`borderpatrol-core`](borderpatrol-core) - the core classes/functions
-* [`borderpatrol-example`](borderpatrol-example) - the demo app showing sessions and authentication for multiple
+* [`core`](core) - the core classes/functions
+* [`example`](example) - the demo app showing sessions and authentication for multiple
 services
-* [`borderpatrol-auth`](borderpatrol-auth) - different authentication plugins for core auth
-* [`borderpatrol-security`](borderpatrol-security) - different security plugins, e.g. CSRF protection
+* [`auth`](auth) - different authentication plugins for core auth
+* [`security`](security) - different security plugins, e.g. CSRF protection
 
 Installation
 ------------
@@ -41,6 +41,20 @@ libraryDependencies ++= Seq(
 )
 ```
 
+Building Border Patrol
+----------------------
+
+To build Border Patrol you should have [sbt](http://www.scala-sbt.org/0.13/tutorial/Setup.html)
+installed (prefer v0.13.8+). Run `sbt`, and then use any of the following commands:
+
+ * `compile`: compile the code
+ * `project [project]`: to switch projects, e.g. "project example"
+ * `console`: launch a REPL
+ * `test`: run the tests
+ * `unidoc`: generate the documentation
+ * `scalastyle`: run the style-checker on the code
+ * `validate`: run tests, style-checker, and doc generation
+
 Running the example
 -------------------
 
@@ -62,6 +76,10 @@ Contributing
 We would love to make this better, so please help us!
 
 * [Submit a PR](CONTRIBUTING.md) including an issue label ["easy"](https://github.com/lookout/borderpatrol/issues?q=is%3Aopen+is%3Aissue+label%3Aeasy)
+* Write ScalaDoc comments
+* Write tutorials and examples
+* Improve tests
+* Help with code review
 * Give it a star
 * Join us on IRC `#borderpatrol` on [Freenode](http://freenode.net)
 
