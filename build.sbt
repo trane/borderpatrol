@@ -3,7 +3,7 @@ import scoverage.ScoverageSbtPlugin.ScoverageKeys.coverageExcludedPackages
 
 lazy val buildSettings = Seq(
   organization := "com.lookout",
-  version := "0.1.0-SNAPSHOT",
+  version := "0.1.0",
   scalaVersion := "2.11.7",
   crossScalaVersions := Seq("2.10.5", "2.11.7")
 )
@@ -105,13 +105,14 @@ lazy val test = project
     .settings(libraryDependencies ++= testDependencies)
 
 lazy val example = project
+  .settings(resolvers += Resolver.sonatypeRepo("snapshots"))
   .settings(moduleName := "borderpatrol-example")
   .settings(allSettings)
   .settings(noPublish)
   .settings(
     libraryDependencies ++= Seq(
-      "com.github.finagle" %% "finch-core" % "0.7.1",
-      "com.github.finagle" %% "finch-argonaut" % "0.7.1"
+      "com.github.finagle" %% "finch-core" % "0.8.0",
+      "com.github.finagle" %% "finch-argonaut" % "0.8.0"
     )
   )
   .disablePlugins(JmhPlugin)
@@ -125,4 +126,14 @@ lazy val security = project
 lazy val auth = project
   .settings(moduleName := "borderpatrol-auth")
   .settings(allSettings)
+  .dependsOn(core, test % "test")
+
+lazy val server = project
+  .settings(moduleName := "borderpatrol-server")
+  .settings(allSettings)
+  .settings(
+    libraryDependencies ++= Seq(
+      "com.github.finagle" %% "finch-core" % "0.8.0"
+    )
+  )
   .dependsOn(core, test % "test")
