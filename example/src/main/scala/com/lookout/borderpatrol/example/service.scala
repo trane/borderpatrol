@@ -64,7 +64,7 @@ object service {
       if (req.cookies.contains("border_session"))
          Future.value(rb(loginForm))
       else
-        SessionId.next.map(id => rb.withCookies(generateCookie(id))(loginForm))
+        SessionId.next.map(id => rb.withCookies(id.asCookie)(loginForm))
     }
 
     def login(req: Request): Future[Response] =
@@ -87,7 +87,7 @@ object service {
     def buildAuthResponse(prev: Session[Request], next: Session[Buf]): Response =
       ResponseBuilder(Status.TemporaryRedirect)
         .withHeaders("Location" -> prev.data.uri)
-        .withCookies(generateCookie(next.id))()
+        .withCookies(next.id.asCookie)()
 
   }
 
@@ -107,7 +107,7 @@ object service {
       Session(request) map { session =>
         ResponseBuilder(Status.TemporaryRedirect)
             .withHeaders("Location" -> "/login")
-            .withCookies(generateCookie(session.id))()
+            .withCookies(session.id.asCookie)()
       }
   }
   /**

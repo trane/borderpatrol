@@ -57,53 +57,6 @@ package object borderpatrol {
       f(s)
   }
 
-  /**
-   * Contains the trait and companion object for explicit "views" from `A => B`
-   */
-  object view {
-
-    /**
-     * Express transformations explicitly as some view from `A` to `B`, since Scala's "view" bounds are deprecated
-     */
-    trait View[A, B] {
-      def apply(a: A): B
-    }
-
-    /**
-     * Helper object for creating Views
-     */
-    object View {
-
-      /**
-       * Create a View[A,B] with a function from `A => B`
-       *
-       * @param f transformation that should succeed
-       * @tparam A from type
-       * @tparam B to type
-       * @return a view from A to B
-       */
-      def apply[A, B](f: A => B): View[A, B] = new View[A, B] {
-        def apply(a: A): B =
-          f(a)
-      }
-
-      /**
-       * Handles when a View[A, A] is created
-       * @tparam A
-       * @return
-       */
-      implicit def identity[A]: View[A, A] =
-        View(a => a)
-    }
-
-  }
-
-  import view._
-
-  /** shorthand notation Thing %> Other */
-  type %>[A, B] = View[A, B]
-
-
   object errors {
     abstract class BorderError(val status: httpx.Status, val description: String) extends Exception
     class InvalidRequest(description: String = "") extends BorderError(httpx.Status.BadRequest, description)

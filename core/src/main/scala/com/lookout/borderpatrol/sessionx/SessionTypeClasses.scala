@@ -24,8 +24,6 @@
 
 package com.lookout.borderpatrol.sessionx
 
-import scalaz.{\/-, -\/, \/}
-
 trait SessionTypeClasses extends SessionTypes {
 
 
@@ -44,45 +42,10 @@ trait SessionTypeClasses extends SessionTypes {
       dec(e)(key)
   }
 
-  type SessionCrypto[E] = Crypto[PSession, SessionId, E]
-
   /*
+  TODO add when crypto is done
+  type SessionCrypto[E] = Crypto[PSession, SessionId, E]
   trait EncryptedStore[K, V, Key, EV, M] extends Store[K, V, M] with crypto[V, Key, EV]
   trait EncryptedSessionStore[EV, M] extends SessionStore[M] with SessionCrypto[EV]
   */
-  trait Serializable[A] {
-    def as[B](a: A)(implicit f: A => B): SerializedResult[B] =
-      try { SerializedResult.ok(f(a)) }
-      catch { case e: Throwable => SerializedResult.fail(e.getMessage) }
-
-    def from[B](b: B)(implicit f: B => A): SerializedResult[A] =
-      try { SerializedResult.ok(f(b)) }
-      catch { case e: Throwable => SerializedResult.fail(e.getMessage) }
-
-    case class SerializedResult[R](result: String \/ R) {
-      def isError: Boolean =
-        result.isLeft
-      def isSuccess: Boolean =
-        result.isRight
-      def toOption: Option[R] =
-        result.toOption
-      def value: Option[R] =
-        result.toOption
-      def failure: Option[String] =
-        result.swap.toOption
-      def map[B](f: R => B): SerializedResult[B] =
-        SerializedResult(result map f)
-      def flatMap[B](f: R => SerializedResult[B]): SerializedResult[B] =
-        SerializedResult(result flatMap(f(_).result))
-      override def toString(): String =
-        s"SerializedResult($result)"
-    }
-
-    object SerializedResult {
-      def ok[B](value: B): SerializedResult[B] =
-        SerializedResult(\/-(value))
-      def fail[B](e: String): SerializedResult[B] =
-        SerializedResult(-\/(e))
-    }
-  }
 }

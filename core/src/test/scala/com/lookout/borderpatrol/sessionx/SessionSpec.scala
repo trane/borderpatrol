@@ -26,12 +26,11 @@ package com.lookout.borderpatrol.sessionx
 
 import java.util.concurrent.TimeUnit
 
-import com.twitter.io.Buf
 import com.twitter.util.{Await, Duration, Time}
 import com.twitter.finagle.{httpx,memcachedx}
 import org.scalatest.{Matchers, FlatSpec}
 
-import scala.util.{Try, Failure, Success}
+import scala.util.Success
 
 class SessionSpec extends FlatSpec with Matchers {
 
@@ -113,35 +112,9 @@ class SessionSpec extends FlatSpec with Matchers {
 
   behavior of "Session"
 
-  case class StringSession(id: SessionId, data: String) extends Session[String]
-  case class IntSession(id: SessionId, data: Int) extends Session[Int]
-  case class HttpRequestSession(id: SessionId, data: httpx.Request) extends Session[httpx.Request]
-  case class BufSession(id: SessionId, data: Buf) extends Session[Buf]
-
-  implicit def s2str(s: Session[String]): String =
-    s"${s.data}:${s.id.asBase64}}"
-  implicit def s2arr(s: Session[String]): Seq[Byte] =
-    s2str(s).getBytes()
-  implicit def str2Id(s: String): Try[SessionId] =
-    SessionIdInjections.str2SessionId(s)
-  implicit def str2s(s: String): Try[Session[String]] =
-    s.split(":").toList match {
-      case List(data: String, id: String) => SessionId.from[String](id) map (Session(_, data))
-      case _ => Failure(new Exception("failed"))
-    }
-
   it should "expire" in {
-    IntSession(id, 1).expired shouldBe false
-    IntSession(expiredId, 1).expired shouldBe true
-  }
-
-  it should "be convertable" in {
-    val session = Await.result(Session[String]("hello world"))
-    val str = session.as[String]
-    val arr = session.as[Seq[Byte]]
-
-    str shouldBe a [String]
-    arr shouldBe an [Seq[_]]
+    Session(id, 1).expired shouldBe false
+    Session(expiredId, 1).expired shouldBe true
   }
 
   it should "be the same object in memory when equal" in {
@@ -153,12 +126,9 @@ class SessionSpec extends FlatSpec with Matchers {
   }
 
   behavior of "SessionStore"
-  import Session._
-  implicit val int2Buf: Int => Buf = (i: Int) => Buf.U32BE(i)
-  implicit val buf2Int: Buf => Option[Int] = (b: Buf) => Buf.U32BE.unapply(b).map(t => t._1)
 
-  val sessionStore = SessionStores.InMemoryStore
-  val memcachedSessionStore = SessionStores.MemcachedStore(new memcachedx.MockClient())
+  val sessionStore = SessionStore.InMemoryStore
+  val memcachedSessionStore = SessionStore.MemcachedStore(new memcachedx.MockClient())
 
   it should "store any type of session" in {
     val intSession = Session(Await.result(SessionId.next), 1)
@@ -169,7 +139,6 @@ class SessionSpec extends FlatSpec with Matchers {
       store.update[String](strSession)
       Await.result(store.get[String](strSession.id)).get.data shouldEqual strSession.data
       val a = Await.result(store.get[Int](strSession.id)).get // test string -> buf -> int
-      a.data shouldBe buf2Int(implicitly[String => Buf].apply(strSession.data)).get
       Await.result(store.get[Int](intSession.id)).get.data shouldBe intSession.data
       Await.result(store.get[Int](Await.result(SessionId.next))) shouldBe None
     }
