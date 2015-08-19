@@ -24,18 +24,16 @@
 
 package com.lookout.borderpatrol
 
-import com.twitter.io.Buf
+import argonaut._, Argonaut._
+import com.twitter.finagle.httpx.Cookie
 import com.twitter.util.{Time, Future}
-import com.twitter.finagle.memcachedx
-
-import scala.collection.mutable
 
 /**
- * This crypto introduces types and functions that enable identifying, fetching, and storing web session data. This
+ * This introduces types and functions that enable identifying, fetching, and storing web session data. This
  * is accomplished by a set of types that will be used by consumers of this library: `Session`, `Store`, and `Secret`.
  *
  * A [[com.lookout.borderpatrol.sessionx.Secret Secret]] is a cryptographically verifiable signing key used to sign a
- * [[com.lookout.borderpatrol.sessionx.SessionId SessionId]]. Creating a `Secret` is * simple. It defaults to expire at
+ * [[com.lookout.borderpatrol.sessionx.SessionId SessionId]]. Creating a `Secret` is simple. It defaults to expire at
  * [[com.lookout.borderpatrol.sessionx.Secret.lifetime Secret.lifetime]]
  *
  * {{{
@@ -72,7 +70,7 @@ import scala.collection.mutable
  * {{{
  *  // set up secret/session stores
  *  implicit val secretStore = SecretStores.InMemorySecretStore(Secrets(Secret(), Secret()))
- *  val sessionStore = SessionStores.InMemoryStore()
+ *  val sessionStore = SessionStore.InMemoryStore()
  *
  *  // create a Session[httpx.Request]
  *  val newSessionFuture = Session(Request("http://localhost/api/stuff")) // entropy is blocking on the JVM
@@ -107,13 +105,38 @@ import scala.collection.mutable
  * }}}
  *
  */
-package object sessionx extends SessionFunctions {
+package object sessionx extends SessionTypeClasses {
+  /**
+   * Wraps any object with a `toFuture` method
+   */
+  implicit class AnyOps[A](val any: A) extends AnyVal {
+
+    /**
+     * Wraps object into `Future`
+     */
+    def toFuture: Future[A] = Future.value[A](any)
+  }
+
+  /**
+   * Wraps any `Throwable` with a `toFutureException` method
+   */
+  implicit class ThrowableOps(val t: Throwable) extends AnyVal {
+
+    /**
+     * Wraps `Throwable` in a `Future` exception
+     */
+    def toFutureException[A]: Future[A] = Future.exception[A](t)
+  }
 
   implicit class SecretOps(val s: Secret) extends AnyVal {
     def expired: Boolean =
       s.expiry < Time.now || s.expiry > Secret.currentExpiry
   }
 
+  /**
+   * More object-style accessors on SessionId, implementation defined in
+   * [[com.lookout.borderpatrol.sessionx.SessionId SessionId]]
+   */
   implicit class SessionIdOps(val id: SessionId) extends AnyVal {
     def payload: Payload =
       SessionId.payload(id)
@@ -124,9 +147,6 @@ package object sessionx extends SessionFunctions {
     def expired: Boolean =
       SessionId.expired(id)
 
-    def as[A](implicit f: SessionId => A): A =
-      SessionId.as[A](id)(f)
-
     def asSeq: IndexedSeq[Byte] =
       SessionId.toIndexedSeq(id)
 
@@ -135,13 +155,15 @@ package object sessionx extends SessionFunctions {
 
     def asBase64: String =
       SessionId.toBase64(id)
+
+    def asCookie: Cookie =
+      SessionId.toCookie(id)
   }
 
+  /**
+   * Helpful value class for Session operations
+   */
   implicit class SessionOps[A](val s: Session[A]) extends AnyVal {
-
-    def as[B](implicit f: Session[A] => B): B =
-      f(s)
-
     def expired: Boolean =
       s.id.expired
 
@@ -149,140 +171,24 @@ package object sessionx extends SessionFunctions {
       crypto.CryptKey(s).encrypt(f(s))
   }
 
+  /**
+   * Helper for Byte -> Json
+   */
+  implicit val ByteCodecJson: CodecJson[Byte] =
+    CodecJson(
+      (b: Byte) => jNumberOrNull(b.toInt),
+      c => for (b <- c.as[Int]) yield b.toByte
+    )
 
   /**
-   * Default implementations of [[com.lookout.borderpatrol.sessionx.SecretStoreApi SecretStoreApi]]
+   * Time -> Long -> Json
    */
-  object SecretStores {
-
-    /**
-     * A useful [[com.lookout.borderpatrol.sessionx.Secrets Secrets]] mock store for quickly testing and prototyping
-     *
-     * @param secrets the current secret and previous secret
-     */
-    case class InMemorySecretStore(secrets: Secrets) extends SecretStoreApi {
-      @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.Var")) // this is for mocking
-      private[this] var _secrets: Secrets = secrets
-
-      def current: Secret = {
-        val c = _secrets.current
-        if (c.expired) {
-          _secrets = _secrets.copy(Secret(), c)
-          _secrets.current
-        }
-        else c
-      }
-
-      def previous: Secret =
-        _secrets.previous
-
-      def find(f: (Secret) => Boolean): Option[Secret] =
-        if (f(current)) Some(current)
-        else if (f(previous)) Some(previous)
-        else None
-    }
-
-  }
-
-
-  /**
-   * Default implementations of [[com.lookout.borderpatrol.sessionx.SessionStore SessionStore]] with
-   * [[com.twitter.finagle.memcachedx memcachedx]] and an in-memory store for mocking
-   */
-  object SessionStores {
-
-    /**
-     * Memcached backend to [[com.lookout.borderpatrol.sessionx.SessionStore SessionStore]]
-     *
-     * {{{
-     *   val store = MemcachedStore(Memcachedx.newKetamaClient("localhost:11211"))
-     *   val requestSession = store.get[httpx.Request](id) // default views from `Buf` %> `Request` are included
-     *   requestSession.onSuccess(s => log(s"Success! you were going to ${s.data.uri}"))
-     *                 .onFailure(log)
-     * }}}
-     * @param store finagle [[memcachedx.BaseClient]] memcached backend
-     */
-    case class MemcachedStore(store: memcachedx.BaseClient[Buf])
-        extends SessionStore[Buf, memcachedx.BaseClient[Buf]] {
-      val flag = 0 // ignored flag required by memcached api
-
-      /**
-       * Fetches a [[com.lookout.borderpatrol.sessionx.Session Session]] if one exists otherwise `None`. On failure
-       * will make a [[com.twitter.util.Future.exception Future.exception]].
-       *
-       * @param key lookup key
-       * @param ev evidence for converting the Buf to the type of A
-       * @tparam A [[Session.data]] type that must have a view from `Buf %> Option[A]`
-       *
-       * @return
-       */
-      def get[A](key: SessionId)(implicit ev: Session[Buf] %> Option[Session[A]]): Future[Option[Session[A]]] =
-        store.get(key.asBase64).map { obuf =>
-          obuf.flatMap { buf =>
-            ev(Session(key, buf))
-          }
-        }
-
-      /**
-       * Stores a [[com.lookout.borderpatrol.sessionx.Session Session]]. On failure returns a
-       * [[com.twitter.util.Future.exception Future.exception]]
-       *
-       * @param session
-       * @param ev evidence for the conversion to `Buf`
-       * @tparam A [[Session.data]] type that must have a view from `A %> Buf`
-       *
-       * @return a [[com.twitter.util.Future Future]]
-       */
-      def update[A](session: Session[A])(implicit ev: Session[A] %> Session[Buf]): Future[Unit] =
-        store.set(session.id.asBase64, flag, session.id.expires, ev(session).data)
-    }
-
-    /**
-     * An in-memory store for prototyping and testing remote stores
-     */
-    @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.MutableDataStructures"))
-    case object InMemoryStore
-        extends SessionStore[Buf, mutable.Set[Session[Buf]]] {
-
-      val store: mutable.Set[Session[Buf]] = mutable.Set[Session[Buf]]()
-
-      def get[A](key: SessionId)(implicit ev: Session[Buf] %> Option[Session[A]]): Future[Option[Session[A]]] =
-        store.find(_.id == key).flatMap(s => ev(s)).toFuture
-
-      def update[A](session: Session[A])(implicit ev: Session[A] %> Session[Buf]): Future[Unit] =
-        if (store.add(ev(session)))
-          Future.Unit
-        else
-          Future.exception[Unit](new UpdateStoreException(s"Unable to update store with $session"))
-    }
-
-    /*
-    implicit object SessionEncryptor extends Encryptable[PSession, SessionId, Array[Byte]] {
-      def apply(a: PSession)(key: SessionId): Array[Byte] =
-        CryptKey(key).encrypt[PSession](a)
-    }
-
-    implicit object SessionDecryptor extends Decryptable[Array[Byte], SessionId, PSession] {
-      def apply(e: Array[Byte])(key: SessionId): PSession =
-        CryptKey(key).decryptAs[PSession](e)
-    }
-
-    implicit object SessionCryptographer extends SessionCrypto[Array[Byte]]
-
-    case class EncryptedInMemorySessionStore(
-          store: mutable.Map[String, Encrypted] = mutable.Map[String, Encrypted]())(
-        implicit i2s: SessionId %> String)
-        extends EncryptedSessionStore[Encrypted, mutable.Map[String, Encrypted]] {
-
-      def update(key: SessionId)(value: PSession) =
-        store.put(i2s(key), value.encrypt).
-            fold(Future.exception[Unit](new
-                UpdateStoreException(s"Unable to update store with $value")))(_ => Future.value[Unit](()))
-
-      def get(key: SessionId) =
-        store.get(i2s(key)).flatMap(decrypt(_)).filterNot(session => session.id.expired).toFuture
-    }
-    */
-  }
+  implicit val TimeCodecJson: CodecJson[Time] =
+    CodecJson(
+      (t: Time) =>
+        ("ms" := t.inMilliseconds) ->: jEmptyObject,
+      c => for {
+        s <- (c --\ "ms").as[Long]
+      } yield Time.fromMilliseconds(s))
 
 }

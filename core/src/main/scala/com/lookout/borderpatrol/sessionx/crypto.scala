@@ -1,7 +1,5 @@
 package com.lookout.borderpatrol.sessionx
 
-import scala.util.Try
-
 object crypto {
   import java.security.{Key, Provider, SecureRandom, Security}
   import javax.crypto.spec.{IvParameterSpec, SecretKeySpec}
@@ -102,7 +100,7 @@ object crypto {
     def apply(id: SessionId): CryptKey =
       apply(id, id.secret)
 
-    def apply(s: PSession): CryptKey =
+    def apply(s: Session[_]): CryptKey =
       apply(s.id)
   }
 

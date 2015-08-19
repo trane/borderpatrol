@@ -1,7 +1,7 @@
 package com.lookout.borderpatrol.routers
 
 import com.lookout.borderpatrol.routers.models.ServiceIdentifier
-import com.twitter.finagle.httpx.{Status, RequestBuilder, Request}
+import com.twitter.finagle.httpx.{RequestBuilder, Request}
 import com.twitter.finagle.httpx.path.Path
 import com.twitter.util.Await
 import io.finch.response.Ok

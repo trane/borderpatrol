@@ -24,8 +24,7 @@
 
 package com.lookout.borderpatrol.example
 
-import argonaut.Argonaut._
-import argonaut._
+import argonaut._, Argonaut._
 import com.lookout.borderpatrol.sessionx._
 import com.twitter.bijection.twitter_util.UtilBijections
 import com.twitter.finagle.httpx.Request
@@ -34,12 +33,10 @@ import io.finch.request._
 
 object reader {
 
-  import com.lookout.borderpatrol.sessionx.Session._
-  import com.lookout.borderpatrol.sessionx.SessionIdInjections._
   import model._
 
   implicit val secretStore = SecretStores.InMemorySecretStore(Secrets(Secret(), Secret()))
-  implicit val sessionStore = SessionStores.InMemoryStore
+  implicit val sessionStore = SessionStore.InMemoryStore
 
   implicit val sessionIdDecoder: DecodeRequest[SessionId] =
     DecodeRequest[SessionId](s => UtilBijections.twitter2ScalaTry.inverse(SessionId.from[String](s)))
