@@ -6,9 +6,9 @@ scala:
 jdk:
 - oraclejdk7
 - oraclejdk8
-script: sbt ++$TRAVIS_SCALA_VERSION clean coverage test scalastyle && sbt ++$TRAVIS_SCALA_VERSION
-  coverageAggregate
-after_success: sbt coveralls
+script: sbt ++$TRAVIS_SCALA_VERSION clean coverage test scalastyle && sbt ++$TRAVIS_SCALA_VERSION coverageAggregate
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
 bintraykey:
   secure: fqzmFFy1WuXUp2aHMbU/a3oo9JfVYBcdJtGFxVtfj+Q3UVWjVpCwxa4Asqdd69UASTSxiil8ywR0DMz99v1OykCoXfPdMh8a46ymJmbR2iZCbjqKSgxdEdVlQa8kWvdIssitdUEwloFa081RQaQRKLqBvb7/mzGWPO4qpoz+ALo=
 notifications:
