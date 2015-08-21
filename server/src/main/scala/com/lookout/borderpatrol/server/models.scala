@@ -1,4 +1,4 @@
-package com.lookout.borderpatrol.routers
+package com.lookout.borderpatrol.server
 
 import com.twitter.finagle.httpx.path.Path
 

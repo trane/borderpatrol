@@ -1,6 +1,6 @@
-package com.lookout.borderpatrol.routers
+package com.lookout.borderpatrol.server
 
-import com.lookout.borderpatrol.routers.models.ServiceIdentifier
+import com.lookout.borderpatrol.server.models.ServiceIdentifier
 import com.twitter.finagle.httpx.path.Path
 import com.twitter.util.{Try, Future}
 import io.finch.route._
@@ -44,7 +44,7 @@ object ServiceMatchers {
    *
    * @param f A function that takes a hostname and returns a serviceidentifier name
    */
-  private[routers] case class DefaultService(name: String, f: String => Option[String])
+  private[server] case class DefaultService(name: String, f: String => Option[String])
       extends Router[Option[String]] {
 
     import Router._

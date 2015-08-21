@@ -22,6 +22,7 @@ Border Patrol uses a multi-project structure and contains the following _modules
 services
 * [`auth`](auth) - different authentication plugins for core auth
 * [`security`](security) - different security plugins, e.g. CSRF protection
+* [`server`](server) - a server composing these modules that can be configured
 
 Installation
 ------------

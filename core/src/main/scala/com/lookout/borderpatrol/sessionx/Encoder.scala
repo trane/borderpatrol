@@ -92,6 +92,10 @@ object SessionIdEncoder {
     str => SessionIdInjections.str2SessionId(str)
   )
 
+  /**
+   * A [[com.lookout.borderpatrol.sessionx.SessionIdEncoder SessionIdEncoder]] instance for
+   * [[com.twitter.finagle.httpx.Cookie Cookie]]
+   */
   implicit def encodeCookie(implicit secretStoreApi: SecretStoreApi): SessionIdEncoder[Cookie] = SessionIdEncoder(
     id => new Cookie("border_session", SessionId.toBase64(id)),
     cookie => SessionIdInjections.str2SessionId(cookie.value)
