@@ -63,9 +63,9 @@ import com.twitter.util.{Time, Future}
  * A [[com.lookout.borderpatrol.sessionx.Session Session]] is product type of a cryptographically verifiable
  * identifier [[com.lookout.borderpatrol.sessionx.SessionId SessionId]] and an arbitrary data type
  * A`. The only requirement for a [[com.lookout.borderpatrol.sessionx.SessionStore SessionStore]][B,M] to store/fetch
- * a `Session[A]` is that there be some implicit injective views from `A %> B` and `B %> Option[A]`.
+ * a `Session[A]` is that there be some implicit injective views from `A => B` and `B => Try[A]`.
  *
- * We have provided default views for: `httpx.Request %> Buf`, `Json %> Buf` and their injective views.
+ * We have provided default encodings for: `httpx.Request => Buf`, `String => Buf` and their injective views.
  *
  * {{{
  *  // set up secret/session stores
@@ -88,7 +88,7 @@ import com.twitter.util.{Time, Future}
  * }}}
  *
  * Let's say you have a [[com.lookout.borderpatrol.sessionx.Session.data Session.data]] type that doesn't have the
- * injective [[com.lookout.borderpatrol.view.View View]] that you need, that's OK!
+ * injective that you need, that's OK!
  * Assuming you are storing it in memcached, which requires a type of [[com.twitter.io.Buf Buf]] for the value:
  *
  * {{{
@@ -96,8 +96,10 @@ import com.twitter.util.{Time, Future}
  *     val value: Int
  *   }
  *
- *   implicit val foo2Int: Foo %> Buf = View(f => Buf.U32BE(f.value))
- *   implicit val int2OptFoo: Buf %> Option[Foo] = View(b => new Foo { override val value = Buf.U32BE.unapply(b) })
+ *   implicit val enc = SessionDataEncoder[Foo](
+ *     foo => Buf.U32BE(f.value),
+ *     buf => new Foo { override val value = Buf.U32BE.unapply(b) }
+ *   )
  *
  *   val foo1 = new Foo { override val value = 1 }
  *   val fooSession = Session(foo1)

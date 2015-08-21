@@ -1,6 +1,6 @@
-package com.lookout.borderpatrol.routers
+package com.lookout.borderpatrol.server
 
-import com.lookout.borderpatrol.routers.models.ServiceIdentifier
+import com.lookout.borderpatrol.server.models.ServiceIdentifier
 import com.twitter.finagle.httpx.{RequestBuilder, Request}
 import com.twitter.finagle.httpx.path.Path
 import com.twitter.util.Await

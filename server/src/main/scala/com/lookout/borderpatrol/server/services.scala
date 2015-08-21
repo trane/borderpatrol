@@ -1,4 +1,4 @@
-package com.lookout.borderpatrol.routers
+package com.lookout.borderpatrol.server
 
 /**
  * This houses the two dependencies that Border Patrol has on authenticating requests
