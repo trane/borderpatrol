@@ -79,6 +79,8 @@ object SessionId {
   def apply(expires: Time, entropy: Entropy, secret: Secret): SessionId =
     new SessionId(expires, entropy, secret, secret.sign(payload(expires, entropy, secret.id)))
 
+  import SessionIdEncoder.{encodeCookie, encodeString}
+
   def as[A](id: SessionId)(implicit ev: SessionIdEncoder[A]): A =
     ev.encode(id)
 
@@ -87,9 +89,6 @@ object SessionId {
 
   def toBase64(id: SessionId): String =
     Base64StringEncoder.encode(toArray(id))
-
-  def toBuf(id: SessionId): Buf =
-    Buf.ByteArray.Owned(toArray(id))
 
   def toCookie(id: SessionId): Cookie =
     new Cookie("border_session", toBase64(id))

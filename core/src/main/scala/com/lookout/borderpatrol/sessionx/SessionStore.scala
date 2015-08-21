@@ -50,7 +50,7 @@ object SessionStore {
       store.get(key.asBase64).flatMap(_ match {
         case None => Future.value(None)
         case Some(buf) => ev.decode(buf) match {
-          case Failure(e) => e.toFutureException
+          case Failure(e) => e.toFutureException[Option[Session[A]]]
           case Success(data) => Some(Session(key, data)).toFuture
         }
       })
@@ -78,10 +78,13 @@ object SessionStore {
     val store: mutable.Set[Session[Buf]] = mutable.Set[Session[Buf]]()
 
     def get[A](key: SessionId)(implicit ev: SessionDataEncoder[A]): Future[Option[Session[A]]] =
-      (for {
-        ses <- store.find(_.id == key)
-        data <- ev.decode(ses.data).toOption
-      } yield Session(key, data)).toFuture
+      store.find(_.id == key) match {
+        case Some(s) => ev.decode(s.data) match {
+          case Failure(e) => e.toFutureException[Option[Session[A]]]
+          case Success(data) => Some(Session(key, data)).toFuture
+        }
+        case _ => None.toFuture
+      }
 
     def update[A](session: Session[A])(implicit ev: SessionDataEncoder[A]): Future[Unit] =
       if (store.add(session.map(ev.encode))) Future.Unit

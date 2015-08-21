@@ -7,8 +7,8 @@ package com.lookout.borderpatrol.routers
  */
 object services {
 
-  case class AuthService
+  case class AuthService()
 
-  case class LoginService
+  case class LoginService()
 
 }

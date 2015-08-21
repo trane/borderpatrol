@@ -116,7 +116,7 @@ lazy val example = project
     )
   )
   .disablePlugins(JmhPlugin)
-  .dependsOn(core, test % "test")
+  .dependsOn(core)
 
 lazy val security = project
   .settings(moduleName := "borderpatrol-security")

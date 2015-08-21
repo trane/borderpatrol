@@ -2,6 +2,7 @@ package com.lookout.borderpatrol.sessionx
 
 import argonaut.Json
 import com.lookout.borderpatrol.sessionx.SessionId.SessionIdInjections
+import com.twitter.finagle.httpx.Cookie
 import com.twitter.io.Buf
 import com.twitter.finagle.httpx
 import scala.util.{Success, Failure, Try}
@@ -89,6 +90,11 @@ object SessionIdEncoder {
   implicit def encodeString(implicit secretStoreApi: SecretStoreApi): SessionIdEncoder[String] = SessionIdEncoder(
     id => SessionId.toBase64(id),
     str => SessionIdInjections.str2SessionId(str)
+  )
+
+  implicit def encodeCookie(implicit secretStoreApi: SecretStoreApi): SessionIdEncoder[Cookie] = SessionIdEncoder(
+    id => new Cookie("border_session", SessionId.toBase64(id)),
+    cookie => SessionIdInjections.str2SessionId(cookie.value)
   )
 
 }

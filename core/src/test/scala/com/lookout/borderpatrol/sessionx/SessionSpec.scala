@@ -24,133 +24,29 @@
 
 package com.lookout.borderpatrol.sessionx
 
-import java.util.concurrent.TimeUnit
-
-import com.twitter.util.{Await, Duration, Time}
-import com.twitter.finagle.{httpx,memcachedx}
-import org.scalatest.{Matchers, FlatSpec}
-
-import scala.util.Success
-
-class SessionSpec extends FlatSpec with Matchers {
-
-  behavior of "Secret"
-
-  it should "have a default constructor with an expected expiry" in {
-    Secret().expiry moreOrLessEquals(Secret.currentExpiry, Duration(1, TimeUnit.SECONDS))
-  }
-
-  it should "be unique on every construction" in {
-    Secret().entropy should not equal Secret().entropy
-  }
-
-  it should "not be expired when newly created" in {
-    Secret().expired shouldBe false
-  }
-
-  it should "be expired when expiry is < now" in {
-    val oneSecondAgo = Time.now.minus(Duration(1, TimeUnit.SECONDS))
-    Secret(oneSecondAgo).expired shouldBe true
-  }
-
-  it should "sign sequences of bytes" in {
-    val seq = Vector[Byte](0, 1, 2)
-    val s = Secret()
-    val sig = s.sign(seq)
-    sig shouldEqual s.sign(seq)
-    sig should not equal Secret().sign(seq)
-  }
-
-  behavior of "Secrets"
-
-  val current = Secret()
-  val previous = Secret(Time.fromMilliseconds(0))
-  val mockSecrets = Secrets(current, previous)
-
-  it should "give the current and previous Secret" in {
-    mockSecrets.current shouldEqual current
-    mockSecrets.previous shouldEqual previous
-  }
-
-  behavior of "SecretStoreApi"
-
-  it should "give the current and previous Secret" in {
-    val secretStore = SecretStores.InMemorySecretStore(mockSecrets)
-    secretStore.current shouldBe current
-    secretStore.previous shouldBe previous
-  }
-
-  it should "always give a non-expired current secret" in {
-    val secretStore = SecretStores.InMemorySecretStore(Secrets(previous, previous))
-    secretStore.current should not be previous
-    secretStore.current.expired shouldBe false
-  }
-
-  it should "find secrets if they exist" in {
-    val secretStore = SecretStores.InMemorySecretStore(mockSecrets)
-    secretStore.find(_.id == previous.id) shouldBe Some(previous)
-    secretStore.find(_.id == current.id) shouldBe Some(current)
-    secretStore.find(s => s.id != current.id && s.id != previous.id) shouldBe None
-  }
-
-  behavior of "SessionId"
-  implicit val secretStore = SecretStores.InMemorySecretStore(mockSecrets)
-  val id = Await.result(SessionId.next)
-  val ent = crypto.Generator.EntropyGenerator(16)
-  val sig = current.sign(ent)
-  val expiredId = SessionId(Time.fromMilliseconds(0), ent, current, sig)
-
-  it should "create a sessionId with expiry" in {
-    id.expired should not be true
-    expiredId.expired shouldBe true
-  }
-
-  it should "be convertable to a string" in {
-    val str = id.asBase64
-    SessionId.from[String](str) shouldBe Success(id)
-  }
+class SessionSpec extends BorderPatrolSuite {
+  import helpers._
 
   behavior of "Session"
 
   it should "expire" in {
-    Session(id, 1).expired shouldBe false
-    Session(expiredId, 1).expired shouldBe true
+    Session(sessionid.next, 1).expired should be(false)
+    Session(sessionid.expired, 1).expired should be(true)
+  }
+
+  it should "have a decent toString method" in {
+    val session = sessions.create(1)
+    session.toString() should be(s"Session(${session.id}, ${session.data})")
   }
 
   it should "be the same object in memory when equal" in {
-    val id = Await.result(SessionId.next)
-    Session(id, "session") shouldBe Session(id, "session")
+    val id = sessionid.next
+    val data = "session"
+    Session(id, data) shouldBe Session(id, data)
     Session(id, "session1") should not be Session(id, "session2")
 
-    Await.result(Session(1)) should not be Await.result(Session(1))
-  }
-
-  behavior of "SessionStore"
-
-  val sessionStore = SessionStore.InMemoryStore
-  val memcachedSessionStore = SessionStore.MemcachedStore(new memcachedx.MockClient())
-
-  it should "store any type of session" in {
-    val intSession = Session(Await.result(SessionId.next), 1)
-    val strSession = Session(Await.result(SessionId.next), "string")
-
-    List(sessionStore, memcachedSessionStore).map { store =>
-      store.update[Int](intSession)
-      store.update[String](strSession)
-      Await.result(store.get[String](strSession.id)).get.data shouldEqual strSession.data
-      val a = Await.result(store.get[Int](strSession.id)).get // test string -> buf -> int
-      Await.result(store.get[Int](intSession.id)).get.data shouldBe intSession.data
-      Await.result(store.get[Int](Await.result(SessionId.next))) shouldBe None
-    }
-  }
-
-  it should "store request sessions" in {
-    List(sessionStore, memcachedSessionStore).map { store =>
-      val reqSession = Session(Await.result(SessionId.next), httpx.Request("localhost:8080"))
-      sessionStore.update(reqSession)
-      val a = Await.result(sessionStore.get[httpx.Request](reqSession.id)).get
-      a.data.uri shouldEqual reqSession.data.uri
-    }
+    // generate unique ids, but same data
+    sessions.create(data) should not be sessions.create(data)
   }
 
 }

@@ -23,11 +23,6 @@ object crypto {
         tap(Array.fill[Byte](n)(0))(random.nextBytes)
     }
 
-    implicit object IndexedBytesGenerator extends Generator[IndexedSeq[Byte]] {
-      def apply(n: Int): IndexedSeq[Byte] =
-        tap(Array.fill[Byte](n)(0))(random.nextBytes).toIndexedSeq
-    }
-
     implicit object EntropyGenerator extends Generator[Entropy] {
       def apply(n: Int): Entropy =
         tap(Array.fill[Byte](n)(0))(random.nextBytes).toIndexedSeq
@@ -39,9 +34,6 @@ object crypto {
     val algo: String
     val key: Key
     lazy val hmac: Mac = tap(Mac.getInstance(algo))(mac => mac.init(key))
-
-    def sign(bytes: Seq[Byte]): Signature =
-      hmac.doFinal(bytes.toArray).toIndexedSeq
 
     def sign(bytes: IndexedSeq[Byte]): Signature =
       hmac.doFinal(bytes.toArray).toIndexedSeq

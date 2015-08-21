@@ -138,20 +138,11 @@ package object sessionx extends SessionTypeClasses {
    * [[com.lookout.borderpatrol.sessionx.SessionId SessionId]]
    */
   implicit class SessionIdOps(val id: SessionId) extends AnyVal {
-    def payload: Payload =
-      SessionId.payload(id)
-
     def signWith(s: Secret): Signature =
       SessionId.signWith(id, s)
 
     def expired: Boolean =
       SessionId.expired(id)
-
-    def asSeq: IndexedSeq[Byte] =
-      SessionId.toIndexedSeq(id)
-
-    def asArray: Array[Byte] =
-      SessionId.toArray(id)
 
     def asBase64: String =
       SessionId.toBase64(id)
@@ -166,9 +157,6 @@ package object sessionx extends SessionTypeClasses {
   implicit class SessionOps[A](val s: Session[A]) extends AnyVal {
     def expired: Boolean =
       s.id.expired
-
-    def encrypt(implicit f: Session[A] => Array[Byte]): Array[Byte] =
-      crypto.CryptKey(s).encrypt(f(s))
   }
 
   /**
