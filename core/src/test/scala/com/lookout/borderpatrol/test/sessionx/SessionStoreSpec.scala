@@ -1,11 +1,12 @@
 package com.lookout.borderpatrol.sessionx
 
+import com.lookout.borderpatrol.test._
 import com.twitter.util.{Future, Await}
 import com.twitter.finagle.httpx
 import com.twitter.finagle.memcachedx
 
 class SessionStoreSpec extends BorderPatrolSuite {
-  import helpers._
+  import sessionx.helpers._
 
   behavior of "SessionStore"
 

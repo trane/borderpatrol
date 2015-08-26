@@ -97,7 +97,7 @@ import com.twitter.util.{Time, Future}
  *   }
  *
  *   implicit val enc = SessionDataEncoder[Foo](
- *     foo => Buf.U32BE(f.value),
+ *     foo => Buf.U32BE(toBytes.value),
  *     buf => new Foo { override val value = Buf.U32BE.unapply(b) }
  *   )
  *
@@ -107,7 +107,8 @@ import com.twitter.util.{Time, Future}
  * }}}
  *
  */
-package object sessionx extends SessionTypeClasses {
+package object sessionx extends Types {
+
   /**
    * Wraps any object with a `toFuture` method
    */

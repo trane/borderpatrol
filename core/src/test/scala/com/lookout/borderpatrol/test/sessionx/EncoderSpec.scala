@@ -1,6 +1,7 @@
 package com.lookout.borderpatrol.sessionx
 
 import argonaut.Json
+import com.lookout.borderpatrol.test._
 import com.twitter.io.Buf
 import com.twitter.finagle.httpx
 
@@ -8,7 +9,7 @@ import scala.util.{Try, Success}
 
 
 class EncoderSpec extends BorderPatrolSuite {
-  import helpers._
+  import sessionx.helpers._
 
   behavior of "SecretEncoder"
 

@@ -1,9 +1,10 @@
 package com.lookout.borderpatrol.sessionx
 
+import com.lookout.borderpatrol.test._
 import com.twitter.finagle.httpx.Cookie
 
 class SessionIdSpec extends BorderPatrolSuite {
-  import helpers._
+  import sessionx.helpers._
 
   behavior of "SessionId"
 
