@@ -1,8 +1,6 @@
 package com.lookout.borderpatrol.server
 
-import com.lookout.borderpatrol.sessionx.SecretStoreApi
 import com.twitter.bijection.twitter_util.UtilBijections
-import com.twitter.finagle.httpx
 import com.twitter.util.Future
 import io.finch.request._
 
@@ -14,15 +12,19 @@ object readers {
   import com.lookout.borderpatrol.sessionx._
 
   implicit def sessionIdDecoder(implicit secretStoreApi: SecretStoreApi): DecodeRequest[SessionId] =
-    DecodeRequest[SessionId](s => UtilBijections.twitter2ScalaTry.inverse(SessionId.from[String](s)))
+    DecodeRequest[SessionId](str =>
+      UtilBijections.twitter2ScalaTry.inverse( // convert to twitter Try
+        SessionId.from[String](str)
+      )
+    )
 
   val sessionIdReader: RequestReader[SessionId] =
     cookie("border_session").map(_.value).as[SessionId]
 
-  def sessionReader(store: SessionStore): RequestReader[Session[httpx.Request]] =
-    sessionIdReader.embedFlatMap(store.get[httpx.Request]).embedFlatMap {
+  def sessionReader[A](store: SessionStore): RequestReader[Session[A]] =
+    sessionIdReader.embedFlatMap(store.get[A]).embedFlatMap {
       case Some(s) => Future.value(s)
-      case None => Future.exception(new RequestError("invalid session"))
+      case None => Future.exception(new SessionError("invalid session"))
     }
 
 }

@@ -1,15 +1,15 @@
 package com.lookout.borderpatrol.server
 
 import com.lookout.borderpatrol.server.models.ServiceIdentifier
+import com.lookout.borderpatrol.test.BorderPatrolSuite
 import com.twitter.finagle.httpx.{RequestBuilder, Request}
 import com.twitter.finagle.httpx.path.Path
 import com.twitter.util.Await
 import io.finch.response.Ok
 import io.finch.route._
 import ServiceMatchers._
-import org.scalatest.{Matchers, FlatSpec}
 
-class ServiceMatchersSpec extends FlatSpec with Matchers {
+class ServiceMatchersSpec extends BorderPatrolSuite {
 
   val one = ServiceIdentifier("one", Path("/ent"), "enterprise")
   val two = ServiceIdentifier("two", Path("/api"), "api")
