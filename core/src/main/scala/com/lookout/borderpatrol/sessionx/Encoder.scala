@@ -1,6 +1,7 @@
 package com.lookout.borderpatrol.sessionx
 
 import argonaut.Json
+import com.lookout.borderpatrol.crypto.{Decryptable, Encryptable}
 import com.lookout.borderpatrol.sessionx.SessionId.SessionIdInjections
 import com.twitter.finagle.httpx.Cookie
 import com.twitter.io.Buf
@@ -17,6 +18,25 @@ trait Encoder[A, B] {
 trait SessionDataEncoder[A] extends Encoder[A, Buf]
 trait SessionIdEncoder[A] extends Encoder[SessionId, A]
 trait SecretEncoder[A] extends Encoder[Secret, A]
+
+trait EncryptedDataEncoder[A] extends Encryptable[Buf] with Decryptable[Buf] {
+  implicit val encoder: SessionDataEncoder[A]
+  implicit val toArr: Buf => Array[Byte] = buf => Buf.ByteArray.Owned.extract(buf)
+  implicit val fromArr: Array[Byte] => Buf = arr => Buf.ByteArray.Owned(arr)
+
+  def encrypted(session: Session[A]): Buf =
+    fromArr(encrypt(session.map(data => encoder.encode(data))))
+
+  def decrypted(id: SessionId, bytes: Buf): Try[Session[A]] =
+    decrypt(id, toArr(bytes)).flatMap(s => encoder.decode(s.data)).map(Session(id, _))
+}
+
+object Encoder {
+  def apply[A, B](fa: A => B, fb: B => A): Encoder[A, B] = new Encoder[A, B] {
+    def encode(a: A): B = fa(a)
+    def decode(b: B): Try[A] = Try { fb(b) }
+  }
+}
 
 /**
  * Instances of SessionDataEncoder for A => [[com.twitter.io.Buf]]
@@ -64,8 +84,6 @@ object SessionDataEncoder {
   implicit val encodeInt: SessionDataEncoder[Int] = SessionDataEncoder(
     data => Buf.U32BE(data),
     buf => Buf.U32BE.unapply(buf).map(t => t._1) getOrElse (throw new SessionError("Buf conversion to Int failed"))
-
-
   )
 
 }
