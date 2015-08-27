@@ -60,7 +60,7 @@ object CryptKey {
   def apply(session: Session[_]): CryptKey =
     apply(session.id)
 
-  implicit val bytesToBuf: Array[Byte] => Try[Buf] = a => Try { Buf.ByteArray.Owned(a) }
+  implicit val bytesToBuf: Array[Byte] => Buf = a => Buf.ByteArray.Owned(a)
   implicit val bufToBytes: Buf => Array[Byte] = b => Buf.ByteArray.Owned.extract(b)
 }
 

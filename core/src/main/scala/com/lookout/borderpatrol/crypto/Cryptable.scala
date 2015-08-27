@@ -40,9 +40,10 @@ object Encryptable {
    * Given a A => Buf, we can transform that into an A => Array[Byte] for any A
    * with a [[com.lookout.borderpatrol.sessionx.SessionDataEncoder SessionDataEncoder]] instance
    */
-  implicit def anyBytes[A](implicit ev: SessionDataEncoder[A]) = new Encryptable[A] {
-    implicit val toArr: A => Array[Byte] = a => encryptableBuf.toArr(ev.encode(a))
-  }
+  implicit def anyBytes[A](implicit ev: SessionDataEncoder[A]): Encryptable[A] =
+    new Encryptable[A] {
+      implicit val toArr: A => Array[Byte] = a => encryptableBuf.toArr(ev.encode(a))
+    }
 }
 
 /**
@@ -58,7 +59,8 @@ object Decryptable {
    * Given a Buf => A, we can transform that into an Array[Byte] => A for any A
    * with a [[com.lookout.borderpatrol.sessionx.SessionDataEncoder SessionDataEncoder]] instance
    */
-  implicit def anyBytes[A](implicit ev: SessionDataEncoder[A]) = new Decryptable[A] {
-    implicit val fromArr: Array[Byte] => A = arr => ev.decode(Buf.ByteArray.Owned(arr)).get
-  }
+  implicit def anyBytes[A](implicit ev: SessionDataEncoder[A]): Decryptable[A] =
+    new Decryptable[A] {
+      implicit val fromArr: Array[Byte] => A = arr => ev.decode(Buf.ByteArray.Owned(arr)).get
+    }
 }

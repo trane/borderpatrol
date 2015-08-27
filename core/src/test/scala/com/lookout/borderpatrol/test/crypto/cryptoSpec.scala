@@ -27,10 +27,12 @@ package com.lookout.borderpatrol.test.crypto
 import java.security.Key
 import javax.crypto.spec.SecretKeySpec
 
-import com.lookout.borderpatrol.sessionx.{SessionId, Session, SecretStores}
-import com.lookout.borderpatrol.test.BorderPatrolSuite
+import com.lookout.borderpatrol.sessionx.{SessionId, Session}
 import com.lookout.borderpatrol.crypto._
-import com.twitter.util.Await
+import com.lookout.borderpatrol.test._
+import com.twitter.finagle.{httpx, memcachedx}
+import com.twitter.io.Buf
+import com.twitter.util.{Future, Await}
 
 import scala.util.Try
 
@@ -90,7 +92,50 @@ class cryptoSpec extends BorderPatrolSuite {
     def dec[A : Decryptable](id: SessionId, bytes: Array[Byte]): Try[Session[A]] =
       implicitly[Decryptable[A]].decrypt(id, bytes)
 
-    val id = Await.result(SessionId.next)
+    val id = SessionId.next.results
     dec[String](id, enc[String](Session(id, "hello"))).success.value should be(Session(id, "hello"))
+  }
+
+  it should "automatically convert to/from com.twitter.io.Buf" in {
+    import CryptKey.{bufToBytes, bytesToBuf}
+    val buf = Buf.ByteArray.Owned(Generator.BytesGenerator(16).toArray)
+    val key = CryptKey(ckey, iv)
+    key.decrypt[Buf](key.encrypt(buf)).success.value should be(buf)
+  }
+
+  behavior of "EncryptedSessionStore"
+  import com.lookout.borderpatrol.test.sessionx.helpers._
+
+  val store = EncryptedSessionStore.MemcachedStore(new memcachedx.MockClient())
+  val strSession = Session("hello").results
+  val intSession = Session(1).results
+  val reqSession = Session(httpx.Request("/api")).results
+
+  Await.all(
+    store.update[Int](intSession),
+    store.update[String](strSession),
+    store.update[httpx.Request](reqSession)
+  )
+
+  it should s"fetch sessions that are stored in $store" in {
+    store.get[String](strSession.id).results.value.data shouldEqual strSession.data
+    store.get[Int](intSession.id).results.value.data shouldBe intSession.data
+  }
+
+  it should s"return a None when not present in $store" in {
+    store.get[Int](sessionid.next).results shouldBe None
+  }
+
+  it should s"store request sessions $store" in {
+    store.get[httpx.Request](reqSession.id).results.get.data.uri shouldEqual reqSession.data.uri
+  }
+
+  it should s"return a Future exception when decoding to wrong type in $store" in {
+    // try to make an Session[Int] => Session[httpx.Request]
+    store.get[httpx.Request](intSession.id).isThrowable should be(true)
+
+    /* TODO: Disallow this: Int -> Buf -> String
+    isThrow(store.get[Int](strSession.id)) should be(false)
+    */
   }
 }

@@ -9,7 +9,7 @@ import com.twitter.finagle.httpx
 import scala.util.{Success, Failure, Try}
 
 /**
- * Typeclass for Encoding data within sessions
+ * Typeclasses for Encoding data within sessions
  */
 trait Encoder[A, B] {
   def encode(a: A): B
@@ -19,18 +19,65 @@ trait SessionDataEncoder[A] extends Encoder[A, Buf]
 trait SessionIdEncoder[A] extends Encoder[SessionId, A]
 trait SecretEncoder[A] extends Encoder[Secret, A]
 
-trait EncryptedDataEncoder[A] extends Encryptable[Buf] with Decryptable[Buf] {
+/**
+ * This type uses the [[com.lookout.borderpatrol.sessionx.SessionDataEncoder SessionDataEncoder]] to encode
+ * generic types to [[com.twitter.io.Buf]], then the [[Encryptable]] and [[Decryptable]] types will unwrap the `Buf`
+ * encrypt/decrypt it, and then rewrap it.
+ */
+trait EncryptedDataEncoder[A] {
+  val encrypter = Encryptable.encryptableBuf
+  val decrypter = Decryptable.decryptableBuf
   implicit val encoder: SessionDataEncoder[A]
+
   implicit val toArr: Buf => Array[Byte] = buf => Buf.ByteArray.Owned.extract(buf)
   implicit val fromArr: Array[Byte] => Buf = arr => Buf.ByteArray.Owned(arr)
 
+  /**
+   * Wrap [[com.lookout.borderpatrol.sessionx.Encoder.encode]] with encryption
+   */
   def encrypted(session: Session[A]): Buf =
-    fromArr(encrypt(session.map(data => encoder.encode(data))))
+    fromArr(
+      encrypter.encrypt(
+        session.map(data => encoder.encode(data))
+      )
+    )
 
-  def decrypted(id: SessionId, bytes: Buf): Try[Session[A]] =
-    decrypt(id, toArr(bytes)).flatMap(s => encoder.decode(s.data)).map(Session(id, _))
+  /**
+   * Wrap [[com.lookout.borderpatrol.sessionx.Encoder.encode]] with decryption
+   */
+  def decrypted(id: SessionId, buf: Buf): Try[Session[A]] =
+    for {
+      s <- decrypter.decrypt(id, toArr(buf))
+      d <- encoder.decode(s.data)
+    } yield Session(id, d)
+
+    //decrypter.decrypt(id, fromArr(bytes)).flatMap(s => encoder.decode(s.data)).map(Session(id, _))
 }
 
+/**
+ * Instances of EncryptedDataEncoder only need to contain a SessionDataEncoder
+ * TODO: remove this whole concept of an EncryptedDataEncoder type class, it's worthless.
+ * We can treat [[com.lookout.borderpatrol.sessionx.Session Session]] as a `Functor` and apply the encryption/decryption
+ * via mixins to the base [[com.lookout.borderpatrol.sessionx.SessionStore SessionStore]]
+ */
+object EncryptedDataEncoder {
+  implicit object EncryptedStringEncoder extends EncryptedDataEncoder[String] {
+    implicit val encoder: SessionDataEncoder[String] = SessionDataEncoder.encodeString
+  }
+  implicit object EncryptedIntEncoder extends EncryptedDataEncoder[Int] {
+    implicit val encoder: SessionDataEncoder[Int] = SessionDataEncoder.encodeInt
+  }
+  implicit object EncryptedReqEncoder extends EncryptedDataEncoder[httpx.Request] {
+    implicit val encoder: SessionDataEncoder[httpx.Request] = SessionDataEncoder.encodeRequest
+  }
+  implicit object EncryptedBytesEncoder extends EncryptedDataEncoder[Array[Byte]] {
+    implicit val encoder: SessionDataEncoder[Array[Byte]] = SessionDataEncoder.encodeByteArray
+  }
+}
+
+/**
+ * Create instances of Encoder
+ */
 object Encoder {
   def apply[A, B](fa: A => B, fb: B => A): Encoder[A, B] = new Encoder[A, B] {
     def encode(a: A): B = fa(a)

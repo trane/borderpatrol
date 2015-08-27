@@ -18,12 +18,6 @@ class SessionStoreSpec extends BorderPatrolSuite {
 
   val stores: List[SessionStore] = List(sessionStore, memcachedSessionStore)
 
-  def result[A](f: Future[A]): A =
-    Await.result(f)
-
-  def isThrow[A](f: Future[A]): Boolean =
-    Await.ready(f).poll.get.isThrow
-
   stores.map { store =>
     /* setup */
     Await.all(
@@ -33,21 +27,21 @@ class SessionStoreSpec extends BorderPatrolSuite {
     )
 
     it should s"fetch sessions that are stored in $store" in {
-      result(store.get[String](strSession.id)).value.data shouldEqual strSession.data
-      result(store.get[Int](intSession.id)).value.data shouldBe intSession.data
+      store.get[String](strSession.id).results.value.data shouldEqual strSession.data
+      store.get[Int](intSession.id).results.value.data shouldBe intSession.data
     }
 
     it should s"return a None when not present in $store" in {
-      result(store.get[Int](sessionid.next)) shouldBe None
+      store.get[Int](sessionid.next).results shouldBe None
     }
 
     it should s"store request sessions $store" in {
-      result(store.get[httpx.Request](reqSession.id)).get.data.uri shouldEqual reqSession.data.uri
+      store.get[httpx.Request](reqSession.id).results.get.data.uri shouldEqual reqSession.data.uri
     }
 
     it should s"return a Future exception when decoding to wrong type in $store" in {
       // try to make an Session[Int] => Session[httpx.Request]
-      isThrow(store.get[httpx.Request](intSession.id)) should be(true)
+      store.get[httpx.Request](intSession.id).isThrowable should be(true)
 
       /* TODO: Disallow this: Int -> Buf -> String
       isThrow(store.get[Int](strSession.id)) should be(false)

@@ -8,7 +8,9 @@ import com.twitter.finagle.memcachedx
 import scala.util.{Success, Failure}
 
 /**
- * Session store that will store encrypted `Session[_]` data into
+ * Session store that will store encrypted `Session[_]` data into a backend
+ * TODO: This is silly, let's remove this EncryptedDataEncoder type and treat Session as a Functor, apply the encryption
+ * and decryption with mixins into the base SessionStore
  */
 trait EncryptedSessionStore {
   def update[A](session: Session[A])(implicit ev: EncryptedDataEncoder[A]): Future[Unit]
