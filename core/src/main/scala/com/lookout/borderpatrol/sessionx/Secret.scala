@@ -2,13 +2,12 @@ package com.lookout.borderpatrol.sessionx
 
 import java.util.concurrent.TimeUnit
 import javax.crypto.spec.SecretKeySpec
-
-import com.lookout.borderpatrol.sessionx.crypto.{Generator, Signer}
+import com.lookout.borderpatrol.crypto.{Generator, Signer}
 import com.twitter.util.{Duration, Time}
 
 /**
  * Creates a new [[com.lookout.borderpatrol.sessionx.Secret Secret]] that can
- * be used to [[com.lookout.borderpatrol.sessionx.crypto.Signer.sign]]
+ * be used to [[com.lookout.borderpatrol.crypto.Signer.sign Signer.sign]]
  *
  * @param id unique identifier for this secret
  * @param expiry how long this signer is valid
@@ -34,7 +33,7 @@ object Secret {
   private[sessionx] val idSize = 1
   private[sessionx] val lifetime = Duration(1, TimeUnit.DAYS)
 
-  private[sessionx] def currentExpiry: Time =
+  private[borderpatrol] def currentExpiry: Time =
     Time.now + lifetime
 
   private[sessionx] def id: SecretId =

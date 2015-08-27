@@ -1,11 +1,9 @@
 package com.lookout.borderpatrol.sessionx
 
 import java.util.concurrent.TimeUnit
-
-import com.lookout.borderpatrol.sessionx.crypto.Generator
+import com.lookout.borderpatrol.crypto.Generator
 import com.twitter.bijection.Injection
 import com.twitter.finagle.httpx.Cookie
-import com.twitter.io.Buf
 import com.twitter.util._
 
 import scala.util.{Success, Failure, Try}

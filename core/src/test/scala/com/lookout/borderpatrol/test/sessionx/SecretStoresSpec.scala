@@ -1,9 +1,9 @@
 package com.lookout.borderpatrol.sessionx
 
-import com.lookout.borderpatrol.sessionx.SecretStores.InMemorySecretStore
+import com.lookout.borderpatrol.test._
 
 class SecretStoresSpec extends BorderPatrolSuite {
-  import helpers.{secretStore => store, _}, secrets._
+  import sessionx.helpers.{secretStore => store, _}, secrets._
 
   behavior of "SecretStoreApi"
 
@@ -14,7 +14,7 @@ class SecretStoresSpec extends BorderPatrolSuite {
 
   it should "always give a non-expired current secret" in {
     // set the current to an expired secret
-    val tempStore = InMemorySecretStore(Secrets(previous, previous))
+    val tempStore = SecretStores.InMemorySecretStore(Secrets(previous, previous))
     tempStore.current should not be previous
     tempStore.current.expired shouldBe false
   }
