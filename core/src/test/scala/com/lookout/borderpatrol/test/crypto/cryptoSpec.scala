@@ -30,7 +30,7 @@ import javax.crypto.spec.SecretKeySpec
 import com.lookout.borderpatrol.sessionx.{SessionId, Session}
 import com.lookout.borderpatrol.crypto._
 import com.lookout.borderpatrol.test._
-import com.twitter.finagle.{httpx, memcachedx}
+import com.twitter.finagle.{httpx, memcached}
 import com.twitter.io.Buf
 import com.twitter.util.{Future, Await}
 
@@ -106,7 +106,7 @@ class cryptoSpec extends BorderPatrolSuite {
   behavior of "EncryptedSessionStore"
   import com.lookout.borderpatrol.test.sessionx.helpers._
 
-  val store = EncryptedSessionStore.MemcachedStore(new memcachedx.MockClient())
+  val store = EncryptedSessionStore.MemcachedStore(new memcached.MockClient())
   val strSession = Session("hello").results
   val intSession = Session(1).results
   val reqSession = Session(httpx.Request("/api")).results

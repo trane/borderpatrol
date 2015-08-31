@@ -13,8 +13,6 @@ import com.twitter.finagle.httpx
  *
  */
 package object borderpatrol {
-  import auth._
-  import sessionx._
 
   /**
    * Wraps any object with a `toFuture` method
@@ -74,12 +72,6 @@ package object borderpatrol {
     case class AuthRequest[A](request: httpx.Request) extends RequestBase
 
     case class AuthResourceRequest[A](request: httpx.Request) extends RequestBase
-
-    trait BorderRequest[A] {
-      val authInfo: AuthInfo[A]
-      val request: httpx.Request
-      val sessionId: SessionId
-    }
 
   }
 

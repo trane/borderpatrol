@@ -3,7 +3,7 @@ package com.lookout.borderpatrol.crypto
 import com.lookout.borderpatrol.sessionx.{EncryptedDataEncoder, SessionDataEncoder, SessionId, Session}
 import com.twitter.io.Buf
 import com.twitter.util.Future
-import com.twitter.finagle.memcachedx
+import com.twitter.finagle.memcached
 
 import scala.util.{Success, Failure}
 
@@ -19,7 +19,7 @@ trait EncryptedSessionStore {
 
 /**
  * Default implementations of [[com.lookout.borderpatrol.crypto.EncryptedSessionStore EncryptedSessionStore]] with
- * [[com.twitter.finagle.memcachedx memcachedx]] and an in-memory store for mocking
+ * [[com.twitter.finagle.memcached memcached]] and an in-memory store for mocking
  */
 object EncryptedSessionStore {
 
@@ -27,14 +27,14 @@ object EncryptedSessionStore {
    * Memcached backend to [[com.lookout.borderpatrol.crypto.EncryptedSessionStore EncryptedSessionStore]]
    *
    * {{{
-   *   val store = MemcachedStore(Memcachedx.newKetamaClient("localhost:11211"))
+   *   val store = MemcachedStore(Memcached.newKetamaClient("localhost:11211"))
    *   val requestSession = store.get[httpx.Request](id)
    *   requestSession.onSuccess(s => log(s"Success! you were going to ${s.data.uri}"))
    *                 .onFailure(log)
    * }}}
-   * @param store finagle [[com.twitter.finagle.memcachedx.BaseClient memcachedx.BaseClient]] memcached backend
+   * @param store finagle [[com.twitter.finagle.memcached.BaseClient memcached.BaseClient]] memcached backend
    */
-  case class MemcachedStore(store: memcachedx.BaseClient[Buf])
+  case class MemcachedStore(store: memcached.BaseClient[Buf])
       extends EncryptedSessionStore {
     val flag = 0 // ignored flag required by memcached api
 

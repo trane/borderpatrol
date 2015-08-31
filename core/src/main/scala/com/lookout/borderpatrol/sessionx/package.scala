@@ -25,8 +25,10 @@
 package com.lookout.borderpatrol
 
 import argonaut._, Argonaut._
-import com.twitter.finagle.httpx.Cookie
+import com.twitter.finagle.httpx.{Request, Cookie}
 import com.twitter.util.{Time, Future}
+
+import scala.util.{Failure, Success}
 
 /**
  * This introduces types and functions that enable identifying, fetching, and storing web session data. This
@@ -97,8 +99,8 @@ import com.twitter.util.{Time, Future}
  *   }
  *
  *   implicit val enc = SessionDataEncoder[Foo](
- *     foo => Buf.U32BE(toBytes.value),
- *     buf => new Foo { override val value = Buf.U32BE.unapply(b) }
+ *     foo => Buf.U32BE(foo.value),
+ *     buf => new Foo { override val value = Buf.U32BE.unapply(buf) }
  *   )
  *
  *   val foo1 = new Foo { override val value = 1 }

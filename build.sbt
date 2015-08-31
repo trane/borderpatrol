@@ -31,8 +31,8 @@ val testDependencies = Seq(
 val baseSettings = Seq(
   resolvers += "twitter-repo" at "http://maven.twttr.com",
   libraryDependencies ++= Seq(
-    "com.twitter" %% "finagle-httpx" % "6.27.0",
-    "com.twitter" %% "finagle-memcachedx" % "6.27.0",
+    "com.twitter" %% "finagle-httpx" % "6.28.0",
+    "com.twitter" %% "finagle-memcached" % "6.28.0",
     "org.scala-lang" % "scala-reflect" % scalaVersion.value,
     "com.twitter" %% "bijection-core" % "0.8.1",
     "com.twitter" %% "bijection-util" % "0.8.1",
@@ -128,6 +128,13 @@ lazy val security = project
 lazy val auth = project
   .settings(moduleName := "borderpatrol-auth")
   .settings(allSettings)
+  .settings(
+    libraryDependencies ++= Seq(
+      "io.circe" %% "circe-core" % "0.1.1",
+      "io.circe" %% "circe-generic" % "0.1.1",
+      "io.circe" %% "circe-jawn" % "0.1.1"
+    )
+  )
   .dependsOn(core, test % "test")
 
 lazy val server = project
