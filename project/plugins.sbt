@@ -4,6 +4,10 @@ resolvers ++= Seq(
   "sonatype-releases" at "https://oss.sonatype.org/content/repositories/releases/",
   Resolver.jcenterRepo
 )
+resolvers += Resolver.url(
+  "tpolecat-sbt-plugin-releases",
+    url("http://dl.bintray.com/content/tpolecat/sbt-plugin-releases"))(
+        Resolver.ivyStylePatterns)
 
 addSbtPlugin("com.github.mpeltonen" % "sbt-idea" % "1.6.0")
 addSbtPlugin("org.scoverage" % "sbt-scoverage" % "1.1.0")
@@ -15,3 +19,4 @@ addSbtPlugin("org.scalastyle" %% "scalastyle-sbt-plugin" % "0.6.0")
 addSbtPlugin("org.brianmckenna" % "sbt-wartremover" % "0.13")
 addSbtPlugin("pl.project13.scala" % "sbt-jmh" % "0.1.15")
 addSbtPlugin("me.lessis" % "bintray-sbt" % "0.3.0")
+addSbtPlugin("org.tpolecat" % "tut-plugin" % "0.4.0")
