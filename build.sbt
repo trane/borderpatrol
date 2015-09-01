@@ -64,10 +64,6 @@ lazy val publishSettings = Seq(
   bintrayOrganization := Some("lookout")
 )
 
-lazy val tutExtraSettings = Seq(
-  tutSourceDirectory := baseDirectory.value / "docs" / "src" / "main" / "tut"
-)
-
 lazy val noPublish = Seq(
   publish := {},
   publishLocal := {}
@@ -75,18 +71,18 @@ lazy val noPublish = Seq(
 
 lazy val allSettings = baseSettings ++ buildSettings ++ publishSettings
 
-lazy val docSettings = tutExtraSettings ++ site.settings ++ ghpages.settings ++ unidocSettings ++ Seq(
+lazy val docSettings = site.settings ++ ghpages.settings ++ unidocSettings ++ Seq(
   site.addMappingsToSiteDir(mappings in (ScalaUnidoc, packageDoc), "docs"),
   git.remoteRepo := s"git@github.com:lookout/borderpatrol.git",
-  unidocProjectFilter in (ScalaUnidoc, unidoc) := inAnyProject
+  unidocProjectFilter in (ScalaUnidoc, unidoc) := inAnyProject,
+  tutSourceDirectory := baseDirectory.value / "docs" / "src" / "main" / "tut"
 )
 
 lazy val root = project.in(file("."))
   .settings(moduleName := "borderpatrol")
   .settings(allSettings)
-  .settings(docSettings)
   .settings(tutSettings)
-  .settings(tutExtraSettings)
+  .settings(docSettings)
   .settings(noPublish)
   .settings(
     initialCommands in console :=

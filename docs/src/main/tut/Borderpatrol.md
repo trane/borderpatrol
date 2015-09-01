@@ -6,12 +6,12 @@ A `com.lookout.borderpatrol.sessionx.Secret Secret` is a cryptographically verif
 `com.lookout.borderpatrol.sessionx.Secret.lifetime Secret.lifetime`
 
 
-```tut:silent
+```tut
 import argonaut._, Argonaut._
 import com.twitter.util.{Time, Await}
 import com.twitter.finagle.httpx.Cookie
 import com.lookout.borderpatrol.sessionx.{Secret, Secrets, Session, SessionId, SessionStore, SessionDataEncoder}
-import com.lookout.borderpatrol.sessionx.crypto.Generator.EntropyGenerator
+import com.lookout.borderpatrol.crypto.Generator
 import com.lookout.borderpatrol.sessionx.SecretStores.InMemorySecretStore
 import com.lookout.borderpatrol.sessionx.SecretStores
 import com.twitter.finagle.httpx
@@ -22,8 +22,8 @@ import com.twitter.io.Buf
   val secret = Secret() // default secret expiry
   val expiringSecret = Secret(Time.now)
 
-  val randomBytes = EntropyGenerator(16) // 16 bytes of randomness
-  val randomId = EntropyGenerator(1).head // 1 byte of randomness for an id
+  val randomBytes = Generator.EntropyGenerator(16) // 16 bytes of randomness
+  val randomId = Generator.EntropyGenerator(1).head // 1 byte of randomness for an id
   val expiry = Time.fromSeconds(0) // very expired
   val constructedSecret = Secret(randomId, expiry, randomBytes)
   println(s"secret has expired: ${constructedSecret.expired == true}")
