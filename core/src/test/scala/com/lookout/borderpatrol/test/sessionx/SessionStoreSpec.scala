@@ -3,7 +3,7 @@ package com.lookout.borderpatrol.sessionx
 import com.lookout.borderpatrol.test._
 import com.twitter.util.{Future, Await}
 import com.twitter.finagle.httpx
-import com.twitter.finagle.memcachedx
+import com.twitter.finagle.memcached
 
 class SessionStoreSpec extends BorderPatrolSuite {
   import sessionx.helpers._
@@ -11,7 +11,7 @@ class SessionStoreSpec extends BorderPatrolSuite {
   behavior of "SessionStore"
 
   val sessionStore = SessionStore.InMemoryStore
-  val memcachedSessionStore = SessionStore.MemcachedStore(new memcachedx.MockClient())
+  val memcachedSessionStore = SessionStore.MemcachedStore(new memcached.MockClient())
   val intSession = sessions.create(1)
   val strSession = sessions.create("hello")
   val reqSession = sessions.create(httpx.Request("localhost:8080/api/hello"))
