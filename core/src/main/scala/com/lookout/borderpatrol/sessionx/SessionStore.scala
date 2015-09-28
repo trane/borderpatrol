@@ -2,7 +2,7 @@ package com.lookout.borderpatrol.sessionx
 
 import com.twitter.io.Buf
 import com.twitter.util.Future
-import com.twitter.finagle.memcachedx
+import com.twitter.finagle.memcached
 
 import scala.collection.mutable
 import scala.util.{Success, Failure}
@@ -17,7 +17,7 @@ trait SessionStore {
 
 /**
  * Default implementations of [[com.lookout.borderpatrol.sessionx.SessionStore SessionStore]] with
- * [[com.twitter.finagle.memcachedx memcachedx]] and an in-memory store for mocking
+ * [[com.twitter.finagle.memcached memcached]] and an in-memory store for mocking
  */
 object SessionStore {
 
@@ -25,14 +25,14 @@ object SessionStore {
    * Memcached backend to [[com.lookout.borderpatrol.sessionx.SessionStore SessionStore]]
    *
    * {{{
-   *   val store = MemcachedStore(Memcachedx.newKetamaClient("localhost:11211"))
+   *   val store = MemcachedStore(Memcached.newKetamaClient("localhost:11211"))
    *   val requestSession = store.get[httpx.Request](id) // default views from `Buf` %> `Request` are included
    *   requestSession.onSuccess(s => log(s"Success! you were going to ${s.data.uri}"))
    *                 .onFailure(log)
    * }}}
-   * @param store finagle [[com.twitter.finagle.memcachedx.BaseClient memcachedx.BaseClient]] memcached backend
+   * @param store finagle [[com.twitter.finagle.memcached.BaseClient memcached.BaseClient]] memcached backend
    */
-  case class MemcachedStore(store: memcachedx.BaseClient[Buf])
+  case class MemcachedStore(store: memcached.BaseClient[Buf])
       extends SessionStore {
     val flag = 0 // ignored flag required by memcached api
 

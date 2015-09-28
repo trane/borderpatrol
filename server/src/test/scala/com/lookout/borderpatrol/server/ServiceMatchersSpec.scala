@@ -1,6 +1,6 @@
 package com.lookout.borderpatrol.server
 
-import com.lookout.borderpatrol.server.models.ServiceIdentifier
+import com.lookout.borderpatrol.{ServiceMatcher, ServiceIdentifier}
 import com.lookout.borderpatrol.test.BorderPatrolSuite
 import com.twitter.finagle.httpx.{RequestBuilder, Request}
 import com.twitter.finagle.httpx.path.Path
@@ -11,14 +11,15 @@ import ServiceMatchers._
 
 class ServiceMatchersSpec extends BorderPatrolSuite {
 
-  val one = ServiceIdentifier("one", Path("/ent"), "enterprise")
-  val two = ServiceIdentifier("two", Path("/api"), "api")
-  val three = ServiceIdentifier("three", Path("/apis"), "api.subdomain")
-  implicit val sids = Set(one, two, three )
+  val one = ServiceIdentifier("one", Path("/ent"), "enterprise", "/a/login")
+  val two = ServiceIdentifier("two", Path("/api"), "api", "/login")
+  val three = ServiceIdentifier("three", Path("/apis"), "api.subdomain", "http://example.com/login")
+  val sids = Set(one, two, three )
+  val serviceMatchers = ServiceMatcher(sids)
 
-  object servicePath extends Extractor("service", ServicesMatcher.path)
+  object servicePath extends Extractor("service", serviceMatchers.path(_).map(_.name))
   object rest extends TailExtractor("restOfPath", identity)
-  val subdomain = DefaultService("defaultService", ServicesMatcher.subdomain)
+  val subdomain = DefaultService("defaultService", serviceMatchers.subdomain(_).map(_.name))
 
   val router = (servicePath | subdomain) / rest /> { (sub, path) =>
     Ok(sub.getOrElse(
