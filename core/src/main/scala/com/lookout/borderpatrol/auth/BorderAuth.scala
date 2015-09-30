@@ -22,7 +22,7 @@ trait BorderAuth {
 
 case class BorderRequest[A](access: Access[A], request: Request)
 case class ServiceRequest(req: Request, id: ServiceIdentifier)
-case class SessionIdRequest(req: Request, sid: SessionId)
+//case class SessionIdRequest(req: Request, sid: SessionId)
 
 /**
  * Given an incoming request to an authenticated endpoint, this filter has two duties:
@@ -37,7 +37,6 @@ case class SessionIdRequest(req: Request, sid: SessionId)
 class BorderFilter[A](store: SessionStore)
     extends Filter[AccessRequest[A], Response, BorderRequest[A], Response] {
 
-
   def apply(req: AccessRequest[A], service: Service[BorderRequest[A], Response]): Future[Response] =
     sys.error("not implemented")
 }
@@ -47,9 +46,9 @@ class BorderFilter[A](store: SessionStore)
  * If the service doesn't exist, it returns a 404 Not Found response
  *
  * @param matchers
- * @param identifiers
+ *
  */
-class ServiceFilter(matchers: ServiceMatcher, identifiers: Set[ServiceIdentifier])
+class ServiceFilter(matchers: ServiceMatcher)
     extends Filter[Request, Response, ServiceRequest, Response] {
 
   def apply(req: Request, service: Service[ServiceRequest, Response]): Future[Response] =
@@ -75,10 +74,10 @@ class IdentityFilter[A : SessionDataEncoder](store: SessionStore)(implicit secre
    */
   def identity(req: ServiceRequest): Future[Identity[A]] =
     (for {
-      sessionId <- SessionId.fromRequest(req.req).toFuture
-      sessionMaybe <- store.get[A](sessionId)
+      sessionId <- { val found = SessionId.fromRequest(req.req).toFuture; println("***MVK: sessionId: " + found); found }
+      sessionMaybe <- { val data = store.get[A](sessionId); println("***MVK: SessionData: " + data); data }
     } yield sessionMaybe.fold[Identity[A]](EmptyIdentity)(s => Id(s.data))) handle {
-      case e => EmptyIdentity
+      case e => { println("***MVK: exception: " + e.getMessage); EmptyIdentity }//***FIXME: We need a log here
     }
 
   def apply(req: ServiceRequest, service: Service[AccessRequest[A], Response]): Future[Response] =

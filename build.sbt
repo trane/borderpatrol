@@ -25,7 +25,8 @@ lazy val compilerOptions = Seq(
 
 val testDependencies = Seq(
   "org.scalacheck" %% "scalacheck" % "1.12.4",
-  "org.scalatest" %% "scalatest" % "2.2.5"
+  "org.scalatest" %% "scalatest" % "2.2.5",
+  "org.mockito" % "mockito-all" % "1.9.5"
 )
 
 val baseSettings = Seq(
@@ -97,7 +98,6 @@ lazy val root = project.in(file("."))
 lazy val core = project
   .settings(moduleName := "borderpatrol-core")
   .settings(allSettings)
-  .settings(coverageExcludedPackages := "com\\.lookout\\.borderpatrol\\.auth\\..*")
   .dependsOn(test % "test")
 
 lazy val test = project
@@ -118,7 +118,7 @@ lazy val example = project
     )
   )
   .disablePlugins(JmhPlugin)
-  .dependsOn(core)
+  .dependsOn(core, auth)
 
 lazy val security = project
   .settings(moduleName := "borderpatrol-security")
@@ -137,12 +137,3 @@ lazy val auth = project
   )
   .dependsOn(core, test % "test")
 
-lazy val server = project
-  .settings(moduleName := "borderpatrol-server")
-  .settings(allSettings)
-  .settings(
-    libraryDependencies ++= Seq(
-      "com.github.finagle" %% "finch-core" % "0.8.0"
-    )
-  )
-  .dependsOn(core, test % "test")
