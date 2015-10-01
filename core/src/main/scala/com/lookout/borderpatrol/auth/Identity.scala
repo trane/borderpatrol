@@ -31,7 +31,7 @@ case object EmptyIdentity extends Identity[Nothing]
 case class Id[+A](id: A) extends Identity[A]
 
 object Identity {
-  def apply[A](a: A): Identity[A] =
+  def apply[A](a: A): Id[A] =
     Id(a)
 }
 
@@ -52,7 +52,7 @@ trait IdentifyRequest[A] {
  * Example: SAML POST response to a successful login to a third party IdP
  */
 trait IdentifyResponse[A] {
-  val identity: Identity[A]
+  val identity: Id[A]
 }
 
 /**

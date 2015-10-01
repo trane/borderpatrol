@@ -1,9 +1,12 @@
 package com.lookout.borderpatrol.auth.keymaster
 
+import com.lookout.borderpatrol.util.Combinators.tap
+
+import com.lookout.borderpatrol.sessionx._
 import com.lookout.borderpatrol.{sessionx, ServiceIdentifier}
 import com.lookout.borderpatrol.auth._
-import com.twitter.finagle.Service
-import com.twitter.finagle.httpx.{RequestBuilder, Response, Request}
+import com.twitter.finagle.{Filter, Service}
+import com.twitter.finagle.httpx.{Status, RequestBuilder, Response, Request}
 import com.twitter.util.Future
 
 object Keymaster {
@@ -24,7 +27,7 @@ object Keymaster {
    * identity (master token)
    * @param service Keymaster service
    */
-  case class KeymasterIdentityProvider(service: Service[Request, Response], store: sessionx.SessionStore)
+  case class KeymasterIdentityProvider(service: Service[Request, Response])
       extends IdentityProvider[Credential, Tokens] {
     val endpoint = "/api/auth/service/v1/account_master_token"
 
@@ -43,6 +46,48 @@ object Keymaster {
           err => Future.exception(err),
           t => Future.value(KeymasterIdentifyRes(t))
         )
+      )
+  }
+
+  /**
+   * Handles logins to the KeymasterIdentityProvider:
+   * - saves the Tokens after a successful login
+   * - sends the User to their original request location from before they logged in or the default location based on
+   *   their service
+   * @param store
+   * @param secretStoreApi
+   */
+  case class KeymasterLoginFilter(store: sessionx.SessionStore)(implicit secretStoreApi: sessionx.SecretStoreApi)
+      extends Filter[ServiceRequest, Response, IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
+
+    def createIdentifyReq(req: ServiceRequest): Option[IdentifyRequest[Credential]] =
+      for {
+        u <- req.req.params.get("username")
+        p <- req.req.params.get("password")
+      } yield KeymasterIdentifyReq(Credential(u, p, req.id))
+
+    /**
+     * Grab the original request from the session store, otherwise just send them to the default location of '/'
+     */
+    def originalRequestOrDefault(id: SessionId, req: ServiceRequest): Future[Request] =
+      for {
+        maybeReq <- store.get[Request](id)
+      } yield maybeReq.fold(tap(Request("/"))(r => r.host = req.req.host.get))(_.data)
+
+    def apply(req: ServiceRequest,
+              service: Service[IdentifyRequest[Credential], IdentifyResponse[Tokens]]): Future[Response] =
+      createIdentifyReq(req).fold(Future.value(Response(Status.BadRequest)))(credReq =>
+        for {
+          sid <- SessionId.fromRequest(req.req).toFuture
+          originReq <- originalRequestOrDefault(sid, req)
+          tokenResponse <- service(credReq)
+          session <- Session(tokenResponse.identity.id)
+          _ <- store.update[Tokens](session)
+          _ <- store.delete(sid)
+        } yield tap(Response(Status.TemporaryRedirect))(res => {
+          res.location = originReq.uri
+          res.addCookie(session.id.asCookie)
+        })
       )
   }
 
