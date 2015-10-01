@@ -19,7 +19,7 @@ object Keymaster {
   case class KeymasterIdentifyRes(tokens: Tokens) extends IdentifyResponse[Tokens] {
     val identity = Identity(tokens)
   }
-  case class KeymasterAccessReq(identity: Id[Token], serviceId: ServiceIdentifier) extends AccessRequest[Token]
+  case class KeymasterAccessReq(identity: Id[Tokens], serviceId: ServiceIdentifier) extends AccessRequest[Tokens]
   case class KeymasterAccessRes(access: Access[ServiceToken]) extends AccessResponse[ServiceToken]
 
   /**
@@ -96,28 +96,30 @@ object Keymaster {
    * @param service Keymaster service
    */
   case class KeymasterAccessIssuer(service: Service[Request, Response], store: sessionx.SessionStore)
-      extends AccessIssuer[MasterToken, ServiceToken] {
+      extends AccessIssuer[Tokens, ServiceToken] {
     val endpoint = "/api/auth/service/v1/account_token.json"
 
-    def api(req: AccessRequest[MasterToken]): Request =
+    def api(req: AccessRequest[Tokens]): Request =
       RequestBuilder.create
-          .addHeader("Auth-Token", req.identity.id.value)
+          .addHeader("Auth-Token", req.identity.id.master.value)
           .addFormElement(("services", req.serviceId.name))
           .url(endpoint)
           .buildFormPost()
 
     /**
-     * Sends MasterToken, will return a ServiceToken otherwise a Future.exception
+     * Fetch a valid ServiceToken, will return a ServiceToken otherwise a Future.exception
      */
-    def apply(req: AccessRequest[MasterToken]): Future[AccessResponse[ServiceToken]]  =
-      service(api(req)).flatMap(res =>
-        Tokens.derive[Tokens](res.contentString).fold[Future[AccessResponse[ServiceToken]]](
-          e => Future.exception(e),
-          t => t.service(req.serviceId.name).fold[Future[AccessResponse[ServiceToken]]](
-            Future.exception(AccessDenied)
-          )(st => Future.value(KeymasterAccessRes(Access(st))))
+    def apply(req: AccessRequest[Tokens]): Future[AccessResponse[ServiceToken]]  =
+      req.identity.id.service(req.serviceId.name).fold[Future[ServiceToken]](
+        service(api(req)).flatMap(res =>
+          Tokens.derive[Tokens](res.contentString).fold[Future[ServiceToken]](
+            e => Future.exception(e),
+            t => t.service(req.serviceId.name).fold[Future[ServiceToken]](
+              Future.exception(AccessDenied)
+            )(st => Future.value(st))
+          )
         )
-      )
+      )(t => Future.value(t)).map(t => KeymasterAccessRes(Access(t)))
   }
 
 }
