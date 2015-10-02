@@ -22,7 +22,7 @@ trait BorderAuth {
 
 case class BorderRequest[A](access: Access[A], request: Request)
 case class ServiceRequest(req: Request, id: ServiceIdentifier)
-//case class SessionIdRequest(req: Request, sid: SessionId)
+case class SessionIdRequest(req: ServiceRequest, sid: SessionId)
 
 /**
  * Given an incoming request to an authenticated endpoint, this filter has two duties:
@@ -59,37 +59,47 @@ class ServiceFilter(matchers: ServiceMatcher)
 }
 
 /**
+ * Ensures we have a SessionId present in this request, sending a Redirect to the service login page if it doesn't
+ */
+case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStoreApi)
+  extends Filter[ServiceRequest, Response, SessionIdRequest, Response] {
+
+  def apply(req: ServiceRequest, service: Service[SessionIdRequest, Response]): Future[Response] =
+    (for {
+      id <- SessionId.fromRequest(req.req).toFuture
+      res <- service(SessionIdRequest(req, id))
+    } yield res) or (for {
+      session <- Session(req.req)
+      _ <- store.update(session)
+    } yield tap(Response(Status.TemporaryRedirect)) { res =>
+        res.location = req.id.login
+        res.addCookie(session.id.asCookie)
+      })
+
+}
+
+/**
  * Determines the identity of the requester, if no identity it responds with a redirect to the login page for that
  * service
  *
  * Note: this filter does not handle the POST to login url with identity information
  */
 class IdentityFilter[A : SessionDataEncoder](store: SessionStore)(implicit secretStore: SecretStoreApi)
-    extends Filter[ServiceRequest, Response, AccessRequest[A], Response] {
+    extends Filter[SessionIdRequest, Response, AccessRequest[A], Response] {
 
-  /**
-   * Get any existing identity for this request, or EmptyIdentity.
-   * This happens two ways:
-   *  1) If the request has a SessionId, we check the SessionStore for the identity yielding an EmptyIdentity if it
-   *  doesn't exist
-   *  2) If there is no SessionId we skip the lookup from the SessionStore
-   */
-  def identity(req: ServiceRequest): Future[Identity[A]] =
-    (for {
-      sessionId <- SessionId.fromRequest(req.req).toFuture
-      sessionMaybe <- store.get[A](sessionId)
-    } yield sessionMaybe.fold[Identity[A]](EmptyIdentity)(s => Id(s.data))) handle {
-      case e => EmptyIdentity //***FIXME: We need a log here
-    }
+  def identity(sid: SessionId): Future[Identity[A]] =
+    for {
+      sessionMaybe <- store.get[A](sid)
+    } yield sessionMaybe.fold[Identity[A]](EmptyIdentity)(s => Id(s.data))
 
-  def apply(req: ServiceRequest, service: Service[AccessRequest[A], Response]): Future[Response] =
-    identity(req).flatMap(i => i match {
-      case id: Id[A] => service(AccessRequest(id, req.id))
+  def apply(req: SessionIdRequest, service: Service[AccessRequest[A], Response]): Future[Response] =
+    identity(req.sid).flatMap(i => i match {
+      case id: Id[A] => service(AccessRequest(id, req.req.id, req.sid))
       case EmptyIdentity => for {
-        s <- Session[Request](req.req)
+        s <- Session(req.req.req)
         _ <- store.update(s)
       } yield tap(Response(Status.TemporaryRedirect)) { res =>
-          res.location = req.id.login // set to login url
+          res.location = req.req.id.login // set to login url
           res.addCookie(s.id.asCookie) // add SessionId value as a Cookie
         }
     })

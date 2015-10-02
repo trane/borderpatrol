@@ -13,13 +13,14 @@ import scala.util.{Success, Failure}
 trait SessionStore {
   def update[A](session: Session[A])(implicit ev: SessionDataEncoder[A]): Future[Unit]
   def get[A](key: SessionId)(implicit ev: SessionDataEncoder[A]): Future[Option[Session[A]]]
+  def delete(key: SessionId): Future[Unit]
 }
 
 /**
  * Default implementations of [[com.lookout.borderpatrol.sessionx.SessionStore SessionStore]] with
  * [[com.twitter.finagle.memcached memcached]] and an in-memory store for mocking
  */
-object SessionStore {
+object SessionStores {
 
   /**
    * Memcached backend to [[com.lookout.borderpatrol.sessionx.SessionStore SessionStore]]
@@ -67,6 +68,9 @@ object SessionStore {
      */
     def update[A](session: Session[A])(implicit ev: SessionDataEncoder[A]): Future[Unit] =
       store.set(session.id.asBase64, flag, session.id.expires, ev.encode(session.data))
+
+    def delete(key: SessionId): Future[Unit] =
+      store.delete(key.id.asBase64).map(_ => ())
   }
 
   /**
@@ -89,6 +93,12 @@ object SessionStore {
     def update[A](session: Session[A])(implicit ev: SessionDataEncoder[A]): Future[Unit] =
       if (store.add(session.map(ev.encode))) Future.Unit
       else Future.exception[Unit](new SessionStoreError(s"update failed with $session"))
+
+    def delete(key: SessionId): Future[Unit] =
+      store.find(_.id == key) match {
+        case Some(s) => Future.value(store.remove(s)).map(_ => ())
+        case None => Future.value(())
+      }
   }
 
   /*

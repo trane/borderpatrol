@@ -1,8 +1,11 @@
 package com.lookout.borderpatrol.auth.keymaster
 
+import com.lookout.borderpatrol.sessionx.{SessionDataError, SessionDataEncoder}
 import com.twitter.finagle.httpx.Response
-import io.circe._
-import cats.data.Xor
+import com.twitter.io.Buf
+
+import scala.util.{Try, Success, Failure}
+
 
 /**
  * A Token is an abstraction for the opaque string value for the JSON map that Keymaster returns
@@ -30,6 +33,9 @@ case class ServiceToken(value: String) extends Token
 case class ServiceTokens(services: Map[String, ServiceToken] = Map.empty[String, ServiceToken]) {
   def find(name: String): Option[ServiceToken] =
     services.get(name)
+
+  def add(name: String, token: ServiceToken): ServiceTokens =
+    copy(services = (this.services + ((name, token))))
 }
 
 /**
@@ -47,9 +53,15 @@ case class ServiceTokens(services: Map[String, ServiceToken] = Map.empty[String,
 case class Tokens(master: MasterToken, services: ServiceTokens) {
   def service(name: String): Option[ServiceToken] =
     services.find(name)
+
+  def add(name: String, serviceToken: ServiceToken): Tokens =
+    copy(services = this.services.add(name, serviceToken))
 }
 
 object Tokens {
+  import io.circe._
+  import io.circe.generic.semiauto._
+  import cats.data.Xor
 
   def derive[A : Decoder](input: String): Xor[Error, A] =
     jawn.decode[A](input)
@@ -64,6 +76,10 @@ object Tokens {
     } yield MasterToken(value)
   )
 
+  implicit val MasterTokenEncoder: Encoder[MasterToken] = Encoder.instance[MasterToken](t =>
+    Json.obj(("auth_service", Json.string(t.value)))
+  )
+
   /**
    * {"service_tokens": {"a": "a", "b": "b"}} -> ServiceTokens(Map((a->ServiceToken(a)), (b->ServiceToken(b)))
    * {} -> ServiceTokens(Map())
@@ -74,11 +90,21 @@ object Tokens {
     } yield services.fold(ServiceTokens())(m => ServiceTokens(m.mapValues(ServiceToken(_))))
   )
 
-  implicit val TokensDecoder: Decoder[Tokens] = Decoder.instance[Tokens](c =>
-    for {
-      master <- MasterTokenDecoder(c)
-      services <- ServiceTokensDecoder(c)
-    } yield Tokens(master, services)
+  implicit val ServiceTokensEncoder: Encoder[ServiceTokens] = Encoder.instance[ServiceTokens](st =>
+    Json.fromFields(st.services.map(t => (t._1, Json.string(t._2.value))).toSeq)
   )
+
+  implicit val TokensDecoder: Decoder[Tokens] = deriveFor[Tokens].decoder
+
+  implicit val TokensEncoder: Encoder[Tokens] = deriveFor[Tokens].encoder
+
+  implicit val SessionDataTokenEncoder: SessionDataEncoder[Tokens] = new SessionDataEncoder[Tokens] {
+    def encode(tokens: Tokens): Buf =
+      SessionDataEncoder.encodeString.encode(TokensEncoder(tokens).toString())
+
+    def decode(buf: Buf): Try[Tokens] =
+      SessionDataEncoder.encodeString.decode(buf).map(Json.string).flatMap(j =>
+        TokensDecoder.decodeJson(j).fold[Try[Tokens]](e => Failure(SessionDataError(e)), t => Success(t)))
+  }
 }
 
