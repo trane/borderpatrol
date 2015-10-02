@@ -19,7 +19,8 @@ object Keymaster {
   case class KeymasterIdentifyRes(tokens: Tokens) extends IdentifyResponse[Tokens] {
     val identity = Identity(tokens)
   }
-  case class KeymasterAccessReq(identity: Id[Tokens], serviceId: ServiceIdentifier) extends AccessRequest[Tokens]
+  case class KeymasterAccessReq(identity: Id[Tokens],
+                                serviceId: ServiceIdentifier, sessionId: SessionId) extends AccessRequest[Tokens]
   case class KeymasterAccessRes(access: Access[ServiceToken]) extends AccessResponse[ServiceToken]
 
   /**
@@ -116,7 +117,9 @@ object Keymaster {
             e => Future.exception(e),
             t => t.service(req.serviceId.name).fold[Future[ServiceToken]](
               Future.exception(AccessDenied)
-            )(st => Future.value(st))
+            )(st => for {
+              _ <- store.update(Session(req.sessionId, req.identity.id.add(req.serviceId.name, st)))
+            } yield st)
           )
         )
       )(t => Future.value(t)).map(t => KeymasterAccessRes(Access(t)))

@@ -33,6 +33,9 @@ case class ServiceToken(value: String) extends Token
 case class ServiceTokens(services: Map[String, ServiceToken] = Map.empty[String, ServiceToken]) {
   def find(name: String): Option[ServiceToken] =
     services.get(name)
+
+  def add(name: String, token: ServiceToken): ServiceTokens =
+    copy(services = (this.services + ((name, token))))
 }
 
 /**
@@ -50,6 +53,9 @@ case class ServiceTokens(services: Map[String, ServiceToken] = Map.empty[String,
 case class Tokens(master: MasterToken, services: ServiceTokens) {
   def service(name: String): Option[ServiceToken] =
     services.find(name)
+
+  def add(name: String, serviceToken: ServiceToken): Tokens =
+    copy(services = this.services.add(name, serviceToken))
 }
 
 object Tokens {
