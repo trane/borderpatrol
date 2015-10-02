@@ -61,6 +61,8 @@ class ServiceFilter(matchers: ServiceMatcher)
 /**
  * Determines the identity of the requester, if no identity it responds with a redirect to the login page for that
  * service
+ *
+ * Note: this filter does not handle the POST to login url with identity information
  */
 class IdentityFilter[A : SessionDataEncoder](store: SessionStore)(implicit secretStore: SecretStoreApi)
     extends Filter[ServiceRequest, Response, AccessRequest[A], Response] {
@@ -74,10 +76,10 @@ class IdentityFilter[A : SessionDataEncoder](store: SessionStore)(implicit secre
    */
   def identity(req: ServiceRequest): Future[Identity[A]] =
     (for {
-      sessionId <- { val found = SessionId.fromRequest(req.req).toFuture; println("***MVK: sessionId: " + found); found }
-      sessionMaybe <- { val data = store.get[A](sessionId); println("***MVK: SessionData: " + data); data }
+      sessionId <- SessionId.fromRequest(req.req).toFuture
+      sessionMaybe <- store.get[A](sessionId)
     } yield sessionMaybe.fold[Identity[A]](EmptyIdentity)(s => Id(s.data))) handle {
-      case e => { println("***MVK: exception: " + e.getMessage); EmptyIdentity }//***FIXME: We need a log here
+      case e => EmptyIdentity //***FIXME: We need a log here
     }
 
   def apply(req: ServiceRequest, service: Service[AccessRequest[A], Response]): Future[Response] =

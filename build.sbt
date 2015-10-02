@@ -25,8 +25,7 @@ lazy val compilerOptions = Seq(
 
 val testDependencies = Seq(
   "org.scalacheck" %% "scalacheck" % "1.12.4",
-  "org.scalatest" %% "scalatest" % "2.2.5",
-  "org.mockito" % "mockito-all" % "1.9.5"
+  "org.scalatest" %% "scalatest" % "2.2.5"
 )
 
 val baseSettings = Seq(
