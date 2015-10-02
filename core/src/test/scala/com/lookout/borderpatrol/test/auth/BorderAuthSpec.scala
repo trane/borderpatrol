@@ -73,7 +73,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     Await.result(output).status should be (Status.NotFound)
   }
 
-  behavior of "IdentifyFilter"
+  behavior of "IdentityFilter"
 
   it should "Lack of SessionId in the ServiceRequest returns a Redirect to login URI" in {
     // Create request
