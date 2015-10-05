@@ -58,7 +58,7 @@ object Keymaster {
    * @param store
    * @param secretStoreApi
    */
-  case class KeymasterLoginFilter(store: sessionx.SessionStore)(implicit secretStoreApi: sessionx.SecretStoreApi)
+  case class KeymasterLoginFilter(store: SessionStore)(implicit secretStoreApi: sessionx.SecretStoreApi)
       extends Filter[ServiceRequest, Response, IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
 
     def createIdentifyReq(req: ServiceRequest): Option[IdentifyRequest[Credential]] =
@@ -96,7 +96,7 @@ object Keymaster {
    * The access issuer will use the MasterToken to gain access to service tokens
    * @param service Keymaster service
    */
-  case class KeymasterAccessIssuer(service: Service[Request, Response], store: sessionx.SessionStore)
+  case class KeymasterAccessIssuer(service: Service[Request, Response], store: SessionStore)
       extends AccessIssuer[Tokens, ServiceToken] {
     val endpoint = "/api/auth/service/v1/account_token.json"
 

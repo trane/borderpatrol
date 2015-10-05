@@ -65,17 +65,19 @@ case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStor
   extends Filter[ServiceRequest, Response, SessionIdRequest, Response] {
 
   def apply(req: ServiceRequest, service: Service[SessionIdRequest, Response]): Future[Response] =
-    (for {
-      id <- SessionId.fromRequest(req.req).toFuture
-      res <- service(SessionIdRequest(req, id))
-    } yield res) or (for {
-      session <- Session(req.req)
-      _ <- store.update(session)
-    } yield tap(Response(Status.TemporaryRedirect)) { res =>
-        res.location = req.id.login
-        res.addCookie(session.id.asCookie)
-      })
-
+    SessionId.fromRequest(req.req) match {
+      //  Propagate the failures from "service" to the caller
+      case Success(id) => service(SessionIdRequest(req, id))
+      //  For all failures encountered while decoding SessionId from request, send redirects
+      case Failure(e) =>
+        for {
+          session <- Session(req.req)
+          _ <- store.update(session)
+        } yield tap(Response(Status.TemporaryRedirect)) { res =>
+          res.location = req.id.login
+          res.addCookie(session.id.asCookie)
+        }
+    }
 }
 
 /**
