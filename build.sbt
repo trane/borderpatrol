@@ -134,5 +134,6 @@ lazy val auth = project
       "io.circe" %% "circe-jawn" % "0.1.1"
     )
   )
-  .dependsOn(core, test % "test")
+  .aggregate(core)
+  .dependsOn(core % "test->test;compile->compile", test % "test")
 

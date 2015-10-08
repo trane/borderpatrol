@@ -1,10 +1,10 @@
 package com.lookout.borderpatrol.auth.keymaster
 
 import com.lookout.borderpatrol.util.Combinators.tap
-
 import com.lookout.borderpatrol.sessionx._
 import com.lookout.borderpatrol.{sessionx, ServiceIdentifier}
 import com.lookout.borderpatrol.auth._
+import com.twitter.finagle.httpx.path.Path
 import com.twitter.finagle.{Filter, Service}
 import com.twitter.finagle.httpx.{Status, RequestBuilder, Response, Request}
 import com.twitter.util.Future
@@ -26,11 +26,11 @@ object Keymaster {
   /**
    * The identity provider for Keymaster, will connect to the remote keymaster server to authenticate and get an
    * identity (master token)
-   * @param service Keymaster service
+   * @param client Keymaster service
+   * @param endpoint Keymaster service endpoint path
    */
-  case class KeymasterIdentityProvider(service: Service[Request, Response])
+  case class KeymasterIdentityProvider(client: Service[Request, Response], endpoint: String)
       extends IdentityProvider[Credential, Tokens] {
-    val endpoint = "/api/auth/service/v1/account_master_token"
 
     def api(cred: Credential): Request =
       RequestBuilder.create
@@ -42,7 +42,8 @@ object Keymaster {
      * Sends credentials, if authenticated successfully will return a MasterToken otherwise a Future.exception
      */
     def apply(req: IdentifyRequest[Credential]): Future[IdentifyResponse[Tokens]] =
-      service(api(req.credential)).flatMap(res =>
+      client(api(req.credential)).flatMap(res =>
+        //***FIXME: If response is NOT ok, then just return it; dont parse
         Tokens.derive[Tokens](res.contentString).fold[Future[IdentifyResponse[Tokens]]](
           err => Future.exception(err),
           t => Future.value(KeymasterIdentifyRes(t))
@@ -58,7 +59,7 @@ object Keymaster {
    * @param store
    * @param secretStoreApi
    */
-  case class KeymasterLoginFilter(store: SessionStore)(implicit secretStoreApi: sessionx.SecretStoreApi)
+  case class KeymasterLoginFilter(store: SessionStore)(implicit secretStoreApi: SecretStoreApi)
       extends Filter[ServiceRequest, Response, IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
 
     def createIdentifyReq(req: ServiceRequest): Option[IdentifyRequest[Credential]] =
@@ -73,7 +74,7 @@ object Keymaster {
     def originalRequestOrDefault(id: SessionId, req: ServiceRequest): Future[Request] =
       for {
         maybeReq <- store.get[Request](id)
-      } yield maybeReq.fold(tap(Request("/"))(r => r.host = req.req.host.get))(_.data)
+      } yield maybeReq.fold(throw new SessionStoreError(s"failed for ${id}"))(d => d.data)
 
     def apply(req: ServiceRequest,
               service: Service[IdentifyRequest[Credential], IdentifyResponse[Tokens]]): Future[Response] =
@@ -94,12 +95,12 @@ object Keymaster {
 
   /**
    * The access issuer will use the MasterToken to gain access to service tokens
-   * @param service Keymaster service
+   * @param client Keymaster service
+   * @param endpoint Keymaster service endpoint path
+   * @param store Session store
    */
-  case class KeymasterAccessIssuer(service: Service[Request, Response], store: SessionStore)
+  case class KeymasterAccessIssuer(client: Service[Request, Response], endpoint: String, store: SessionStore)
       extends AccessIssuer[Tokens, ServiceToken] {
-    val endpoint = "/api/auth/service/v1/account_token.json"
-
     def api(req: AccessRequest[Tokens]): Request =
       RequestBuilder.create
           .addHeader("Auth-Token", req.identity.id.master.value)
@@ -111,8 +112,10 @@ object Keymaster {
      * Fetch a valid ServiceToken, will return a ServiceToken otherwise a Future.exception
      */
     def apply(req: AccessRequest[Tokens]): Future[AccessResponse[ServiceToken]]  =
+      //  Check if ServiceToken is already available for Service
       req.identity.id.service(req.serviceId.name).fold[Future[ServiceToken]](
-        service(api(req)).flatMap(res =>
+        //  Fetch ServiceToken from the Service
+        client(api(req)).flatMap(res =>
           Tokens.derive[Tokens](res.contentString).fold[Future[ServiceToken]](
             e => Future.exception(e),
             t => t.service(req.serviceId.name).fold[Future[ServiceToken]](

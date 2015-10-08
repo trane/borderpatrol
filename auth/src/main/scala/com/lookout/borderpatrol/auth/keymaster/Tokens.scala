@@ -1,9 +1,9 @@
 package com.lookout.borderpatrol.auth.keymaster
 
 import com.lookout.borderpatrol.sessionx.{SessionDataError, SessionDataEncoder}
-import com.twitter.finagle.httpx.Response
 import com.twitter.io.Buf
-
+import io.circe._
+import io.circe.generic.auto._
 import scala.util.{Try, Success, Failure}
 
 
@@ -59,7 +59,7 @@ case class Tokens(master: MasterToken, services: ServiceTokens) {
 }
 
 object Tokens {
-  import io.circe._
+
   import io.circe.generic.semiauto._
   import cats.data.Xor
 
@@ -91,7 +91,7 @@ object Tokens {
   )
 
   implicit val ServiceTokensEncoder: Encoder[ServiceTokens] = Encoder.instance[ServiceTokens](st =>
-    Json.fromFields(st.services.map(t => (t._1, Json.string(t._2.value))).toSeq)
+    Json.obj(("service_tokens", Json.fromFields(st.services.map(t => (t._1, Json.string(t._2.value))).toSeq)))
   )
 
   implicit val TokensDecoder: Decoder[Tokens] = deriveFor[Tokens].decoder
@@ -103,8 +103,12 @@ object Tokens {
       SessionDataEncoder.encodeString.encode(TokensEncoder(tokens).toString())
 
     def decode(buf: Buf): Try[Tokens] =
-      SessionDataEncoder.encodeString.decode(buf).map(Json.string).flatMap(j =>
-        TokensDecoder.decodeJson(j).fold[Try[Tokens]](e => Failure(SessionDataError(e)), t => Success(t)))
+      SessionDataEncoder.encodeString.decode(buf).flatMap(s =>
+        derive[Tokens](s).fold[Try[Tokens]](
+          e => Failure(SessionDataError(e)),
+          t => Success(t)
+        )
+      )
   }
 }
 
