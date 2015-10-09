@@ -12,7 +12,6 @@ import com.twitter.finagle.{memcached, Service}
 import com.twitter.finagle.httpx.path.Path
 import com.twitter.finagle.httpx.{Request, Status, Response}
 import com.twitter.util.{Await, Future}
-import io.circe._
 
 
 class KeymasterSpec extends BorderPatrolSuite  {
@@ -38,7 +37,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
   val tokens2 = tokens.add("one", serviceToken2)
 
   // Endpoint path
-  val endpoint = "http://localhost/api/auth/service/v1/account_master_token"
+  val path = Path("/api/auth/service/v1/account_master_token")
 
   // Method to decode SessionData from the sessionId
   def getTokensFromSessionId(sid: SessionId): Future[Tokens] =
@@ -56,80 +55,97 @@ class KeymasterSpec extends BorderPatrolSuite  {
       toks <- getTokensFromSessionId(sessionId)
     } yield toks
 
-  val keymasterLoginFilterTestService = new Service[IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
-    def apply(request: IdentifyRequest[Credential]) = Future(new KeymasterIdentifyRes(tokens))
+  // Test services
+  def mkTestService[A, B](f: (A) => Future[B]) : Service[A, B] = new Service[A, B] {
+    def apply(request: A) = f(request)
   }
-
-  val keymasterTestService = new Service[Request, Response] {
-    def apply(request: Request) = Response(Status.Ok).toFuture
-  }
+  val keymasterLoginFilterTestService = mkTestService[IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
+    req => Future(new KeymasterIdentifyRes(tokens)) }
+  val keymasterTestService = mkTestService[Request, Response] { req => Response(Status.Ok).toFuture }
 
   behavior of "KeymasterIdentityProvider"
 
-  it should "Exception raised by api method in KeymasterIdentityProvider is propagated back" in {
-    // Execute
-    // Validate
-    val caught = the [java.net.MalformedURLException] thrownBy {
-      val output = new KeymasterIdentityProvider(keymasterTestService, "/api/endpoint")(new KeymasterIdentifyReq(new Credential("foo", "bar", one)))
-    }
-    caught.getMessage should equal ("no protocol: /api/endpoint")
-  }
-
-  it should "Error response from Keymaster service, KeymasterIdentityProvider raises a parsing exception" in {
-    val testService = new Service[Request, Response] {
-      def apply(request: Request) = Response(Status.NotAcceptable).toFuture
+  it should "succeed and return IdentityResponse with tokens received from upstream Keymaster Service" in {
+    val testService = mkTestService[Request, Response] {
+      request => tap(Response(Status.Ok))(res => {
+        res.contentString = TokensEncoder(tokens).toString()
+        res.contentType = "application/json"
+      }).toFuture
     }
 
     // Execute
-    val output = new KeymasterIdentityProvider(testService, endpoint)(new KeymasterIdentifyReq(new Credential("foo", "bar", one)))
+    val output = new KeymasterIdentityProvider(testService, path)(new KeymasterIdentifyReq(new Credential("foo", "bar", one)))
 
     // Validate
-    //***FIXME: need to revisit this logic
-    val caught = the [ParsingFailure] thrownBy {
-      Await.result(output)
-    }
-    caught.getMessage should equal ("exhausted input")
-  }
-
-  it should "Invalid response content from Keymaster service, KeymasterIdentityProvider raises a parsing exception" in {
-    val testService = new Service[Request, Response] {
-      def apply(request: Request) =
-        tap(Response(Status.Ok))(res => {
-          res.contentString = "invalid string"; res.contentType = "application/json"
-        }).toFuture
-    }
-    val endpoint = "http://localhost/api/auth/service/v1/account_master_token"
-
-    // Execute
-    val output = new KeymasterIdentityProvider(testService, endpoint)(new KeymasterIdentifyReq(new Credential("foo", "bar", one)))
-
-    // Validate
-    val caught = the [ParsingFailure] thrownBy {
-      Await.result(output)
-    }
-    caught.getMessage should equal ("expected json value got i (line 1, column 1)")
-  }
-
-  it should "On successful Keymaster response, KeymasterIdentityProvider returns the IdentityResponse with tokens" in {
-    val testService = new Service[Request, Response] {
-      def apply(request: Request) =
-        tap(Response(Status.Ok))(res => {
-          res.contentString = TokensEncoder(tokens).toString(); res.contentType = "application/json"
-        }).toFuture
-    }
-    val endpoint = "http://localhost/api/auth/service/v1/account_master_token"
-
-    // Execute
-    val output = new KeymasterIdentityProvider(testService, endpoint)(new KeymasterIdentifyReq(new Credential("foo", "bar", one)))
-
-    // Validate
-    Await.result(output) shouldBe a [KeymasterIdentifyRes]
     Await.result(output).identity should be (Id(tokens))
+  }
+
+  it should "propagate the error Status code from Keymaster service in the AccessDenied exception" in {
+    val testService = mkTestService[Request, Response] { request => Response(Status.NotFound).toFuture }
+
+    // Execute
+    val output = new KeymasterIdentityProvider(testService, path)(new KeymasterIdentifyReq(new Credential("foo", "bar", one)))
+
+    // Validate
+    val caught = the [AccessDenied] thrownBy {
+      Await.result(output)
+    }
+    caught.getMessage should equal ("Invalid credentials for user foo")
+    caught.status should be (Status.NotFound)
+  }
+
+  it should "propagate the failure parsing the response from Keymaster service as an AccessDenied exception" in {
+    val testService = mkTestService[Request, Response] {
+      request => tap(Response(Status.Ok))(res => {
+        res.contentString = "invalid string"
+        res.contentType = "application/json"
+      }).toFuture
+    }
+
+    // Execute
+    val output = new KeymasterIdentityProvider(testService, path)(new KeymasterIdentifyReq(new Credential("foo", "bar", one)))
+
+    // Validate
+    val caught = the [AccessDenied] thrownBy {
+      Await.result(output)
+    }
+    caught.getMessage should equal ("Failed to parse the Keymaster Identity Response")
+    caught.status should be (Status.InternalServerError)
   }
 
   behavior of "KeymasterLoginFilter"
 
-  it should "Missing credentials in the request, should send a 400 back" in {
+  it should "succeed and saves tokens, sends redirect with tokens returned by IDP" in {
+    val testService = mkTestService[IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
+      request => Future(new KeymasterIdentifyRes(tokens))
+    }
+
+    // Allocate and Session
+    val sessionId = sessionid.next
+    val cooki = sessionId.asCookie
+
+    // Login POST request
+    val loginRequest = req("enterprise", "/login", ("username" -> "foo"), ("password" -> "bar"))
+    loginRequest.addCookie(cooki)
+
+    // Original request
+    val origReq = req("enterprise", "/dang", ("fake" -> "drake"))
+    sessionStore.update[Request](Session(sessionId, origReq))
+
+    // Execute
+    val output = (new KeymasterLoginFilter(sessionStore) andThen testService)(new ServiceRequest(loginRequest, one))
+
+    // Validate
+    Await.result(output).status should be (Status.TemporaryRedirect)
+    Await.result(output).location should be equals ("/dang")
+    val returnedSessionId = SessionId.fromResponse(Await.result(output)).toFuture
+    returnedSessionId should not be sessionId
+    val session_d = sessionStore.get[Tokens](Await.result(returnedSessionId))
+    val tokensz = sessionDataFromResponse(Await.result(output))
+    Await.result(tokensz) should be (tokens)
+  }
+
+  it should "return BadRequest Status if credentials are not present in the request" in {
     // Allocate and Session
     val sessionId = sessionid.next
     val cooki = sessionId.asCookie
@@ -145,7 +161,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     Await.result(output).status should be (Status.BadRequest)
   }
 
-  it should "Missing sessionId in the request, throws a SessionIdError" in {
+  it should "throw a SessionIdError, if sessionId is missing from the Request" in {
     // Login POST request
     val loginRequest = req("enterprise", "/login", ("username" -> "foo"), ("password" -> "bar"))
 
@@ -159,7 +175,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     caught.getMessage should equal ("An error occurred reading SessionId: no border_session cookie")
   }
 
-  it should "Failure to find original request from sessionStore, returns " in {
+  it should "return SessionStoreError if it fails find the original request from sessionStore" in {
     // Allocate and Session
     val sessionId = sessionid.next
     val cooki = sessionId.asCookie
@@ -178,7 +194,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     caught.getMessage should be equals ("An error occurred interacting with the session store: failed for SessionId")
   }
 
-  it should "Exception throw by original request lookup from sessionStore, returns " in {
+  it should "propagate the Exception thrown by Session lookup operation" in {
     //  Mock SessionStore client
     case object FailingMockClient extends memcached.MockClient {
       override def getResult(keys: Iterable[String]): Future[GetResult] = {
@@ -207,143 +223,90 @@ class KeymasterSpec extends BorderPatrolSuite  {
     caught.getMessage should equal ("oopsie")
   }
 
-  it should "On a successful validation, this filter should send redirect with tokens" in {
-    val service = new Service[IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
-      def apply(request: IdentifyRequest[Credential]) = {
-        Future(new KeymasterIdentifyRes(tokens))
-      }
-    }
-
-    // Allocate and Session
-    val sessionId = sessionid.next
-    val cooki = sessionId.asCookie
-
-    // Login POST request
-    val loginRequest = req("enterprise", "/login", ("username" -> "foo"), ("password" -> "bar"))
-    loginRequest.addCookie(cooki)
-
-    // Original request
-    val origReq = req("enterprise", "/dang", ("fake" -> "drake"))
-    sessionStore.update[Request](Session(sessionId, origReq))
-
-    // Execute
-    val output = (new KeymasterLoginFilter(sessionStore) andThen service)(new ServiceRequest(loginRequest, one))
-
-    // Validate
-    Await.result(output).status should be (Status.TemporaryRedirect)
-    Await.result(output).location should be equals ("/dang")
-    val returnedSessionId = SessionId.fromResponse(Await.result(output)).toFuture
-    returnedSessionId should not be sessionId
-    val session_d = sessionStore.get[Tokens](Await.result(returnedSessionId))
-    val tokensz = sessionDataFromResponse(Await.result(output))
-    Await.result(tokensz) should be (tokens)
-  }
-
   behavior of "KeymasterAccessIssuer"
 
-  it should "Exception raised by api method in KeymasterAccessIssuer is propagated back" in {
+  it should "succeed, return service token found in the ServiceTokens cache" in {
+    val testService = mkTestService[Request, Response] {
+      request => { assert(false); Response(Status.Ok).toFuture }
+    }
     val sessionId = sessionid.next
 
     // Execute
+    val output = new KeymasterAccessIssuer(testService, path, sessionStore)(new KeymasterAccessReq(Id(tokens2), one, sessionId))
+
     // Validate
-    val caught = the [java.net.MalformedURLException] thrownBy {
-      val output = new KeymasterAccessIssuer(keymasterTestService, "/api/endpoint", sessionStore)(new KeymasterAccessReq(Id(tokens), one, sessionId))
-    }
-    caught.getMessage should equal ("no protocol: /api/endpoint")
+    Await.result(output).access.access should be (serviceToken2)
   }
 
-  it should "Error response from Keymaster service, KeymasterAccessIssuer raises a parsing exception" in {
-    val testService = new Service[Request, Response] {
-      def apply(request: Request) = Response(Status.NotAcceptable).toFuture
+  it should "succeed, save in SessionStore and return the ServiceToken received from the Keymaster Service" in {
+    val testService = mkTestService[Request, Response] {
+      request => tap(Response(Status.Ok))(res => {
+        res.contentString = TokensEncoder(tokens2).toString()
+        res.contentType = "application/json"
+      }).toFuture
     }
     val sessionId = sessionid.next
 
     // Execute
-    val output = new KeymasterAccessIssuer(testService, endpoint, sessionStore)(new KeymasterAccessReq(Id(tokens), one, sessionId))
+    val output = new KeymasterAccessIssuer(testService, path, sessionStore)(new KeymasterAccessReq(Id(tokens), one, sessionId))
 
     // Validate
-    //***FIXME: need to revisit this logic
-    val caught = the [ParsingFailure] thrownBy {
-      Await.result(output)
-    }
-    caught.getMessage should equal ("exhausted input")
-  }
-
-  it should "Invalid response content from Keymaster service, KeymasterAccessIssuer raises a parsing exception" in {
-    val testService = new Service[Request, Response] {
-      def apply(request: Request) =
-        tap(Response(Status.Ok))(res => {
-          res.contentString = "invalid string"; res.contentType = "application/json"
-        }).toFuture
-    }
-    val sessionId = sessionid.next
-
-    // Execute
-    val output = new KeymasterAccessIssuer(testService, endpoint, sessionStore)(new KeymasterAccessReq(Id(tokens), one, sessionId))
-
-    // Validate
-    val caught = the [ParsingFailure] thrownBy {
-      Await.result(output)
-    }
-    caught.getMessage should equal ("expected json value got i (line 1, column 1)")
-  }
-
-
-  it should "If token for serviceId - one - is missing from response, KeymasterAccessIssuer raises AccessDenied error" in {
-    val testService = new Service[Request, Response] {
-      def apply(request: Request) =
-        tap(Response(Status.Ok))(res => {
-          res.contentString = TokensEncoder(tokens).toString();
-          res.contentType = "application/json"
-        }).toFuture
-    }
-    val sessionId = sessionid.next
-
-    // Execute
-    val output = new KeymasterAccessIssuer(testService, endpoint, sessionStore)(new KeymasterAccessReq(Id(tokens), one, sessionId))
-
-    // Validate
-    val caught = the [AccessDenied.type] thrownBy {
-      Await.result(output)
-    }
-    caught.getMessage should equal ("no access available for this service")
-  }
-
-  it should "On successful Keymaster response, KeymasterAccessIssuer returns the AccessResponse with tokens" in {
-    val testService = new Service[Request, Response] {
-      def apply(request: Request) = {
-        tap(Response(Status.Ok))(res => {
-          res.contentString = TokensEncoder(tokens2).toString();
-          res.contentType = "application/json"
-        }).toFuture
-      }
-    }
-    val sessionId = sessionid.next
-
-    // Execute
-    val output = new KeymasterAccessIssuer(testService, endpoint, sessionStore)(new KeymasterAccessReq(Id(tokens), one, sessionId))
-
-    // Validate
-    Await.result(output) shouldBe a [KeymasterAccessRes]
     Await.result(output).access.access should be (serviceToken2)
     val tokIt = getTokensFromSessionId(sessionId)
     Await.result(tokIt) should be (tokens2)
   }
 
-  it should "KeymasterAccessIssuer uses service token from the cache" in {
-    val testService = new Service[Request, Response] {
-      def apply(request: Request) = {
-        assert(false) // Should not get here
-        Response(Status.Ok).toFuture
-      }
+  it should "propagate the error Status code returned by the Keymaster service, as the AccessDenied exception" in {
+    val testService = mkTestService[Request, Response] { request => Response(Status.NotFound).toFuture }
+    val sessionId = sessionid.next
+
+    // Execute
+    val output = new KeymasterAccessIssuer(testService, path, sessionStore)(new KeymasterAccessReq(Id(tokens), one, sessionId))
+
+    // Validate
+    val caught = the [AccessDenied] thrownBy {
+      Await.result(output)
+    }
+    caught.getMessage should equal ("No access allowed to service one")
+    caught.status should be (Status.NotFound)
+  }
+
+  it should "propagate the failure to parse response content from Keymaster service, as AccessDenied exception" in {
+    val testService = mkTestService[Request, Response] {
+      request => tap(Response(Status.Ok))(res => {
+        res.contentString = "invalid string"
+        res.contentType = "application/json"
+      }).toFuture
     }
     val sessionId = sessionid.next
 
     // Execute
-    val output = new KeymasterAccessIssuer(testService, endpoint, sessionStore)(new KeymasterAccessReq(Id(tokens2), one, sessionId))
+    val output = new KeymasterAccessIssuer(testService, path, sessionStore)(new KeymasterAccessReq(Id(tokens), one, sessionId))
 
     // Validate
-    Await.result(output) shouldBe a [KeymasterAccessRes]
-    Await.result(output).access.access should be (serviceToken2)
+    val caught = the [AccessDenied] thrownBy {
+      Await.result(output)
+    }
+    caught.getMessage should equal ("Failed to parse the Keymaster Access Response")
+  }
+
+  it should "return an AccessDenied exception, if it fails to find the ServiceToken in the Keymaster response" in {
+    val testService = mkTestService[Request, Response] {
+      request => tap(Response(Status.Ok))(res => {
+        res.contentString = TokensEncoder(tokens).toString()
+        res.contentType = "application/json"
+      }).toFuture
+    }
+    val sessionId = sessionid.next
+
+    // Execute
+    val output = new KeymasterAccessIssuer(testService, path, sessionStore)(new KeymasterAccessReq(Id(tokens), one, sessionId))
+
+    // Validate
+    val caught = the [AccessDenied] thrownBy {
+      Await.result(output)
+    }
+    caught.getMessage should equal ("No access allowed to service one")
+    caught.status should be (Status.NotAcceptable)
   }
 }

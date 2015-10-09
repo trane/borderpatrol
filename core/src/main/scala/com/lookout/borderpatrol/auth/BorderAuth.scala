@@ -2,12 +2,10 @@ package com.lookout.borderpatrol.auth
 
 import com.lookout.borderpatrol.util.Combinators.tap
 import com.lookout.borderpatrol.{ServiceIdentifier, ServiceMatcher}
-
 import com.lookout.borderpatrol.sessionx._
 import com.twitter.finagle.httpx.{Status,  Request, Response}
 import com.twitter.finagle.{Service, Filter}
 import com.twitter.util.Future
-
 import scala.util.{Failure, Success}
 
 /**
@@ -46,7 +44,6 @@ class BorderFilter[A](store: SessionStore)
  * If the service doesn't exist, it returns a 404 Not Found response
  *
  * @param matchers
- *
  */
 class ServiceFilter(matchers: ServiceMatcher)
     extends Filter[Request, Response, ServiceRequest, Response] {
@@ -64,11 +61,15 @@ class ServiceFilter(matchers: ServiceMatcher)
 case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStoreApi)
   extends Filter[ServiceRequest, Response, SessionIdRequest, Response] {
 
+  /**
+   *  Passes the SessionId to the next in the filter chain. If any failures decoding the SessionId occur
+   *  (expired, not there, etc), we will terminate early and send a redirect
+   * @param req
+   * @param service
+   */
   def apply(req: ServiceRequest, service: Service[SessionIdRequest, Response]): Future[Response] =
     SessionId.fromRequest(req.req) match {
-      //  Propagate the failures from "service" to the caller
       case Success(id) => service(SessionIdRequest(req, id))
-      //  For all failures encountered while decoding SessionId from request, send redirects
       case Failure(e) =>
         for {
           session <- Session(req.req)
@@ -83,8 +84,6 @@ case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStor
 /**
  * Determines the identity of the requester, if no identity it responds with a redirect to the login page for that
  * service
- *
- * Note: this filter does not handle the POST to login url with identity information
  */
 class IdentityFilter[A : SessionDataEncoder](store: SessionStore)(implicit secretStore: SecretStoreApi)
     extends Filter[SessionIdRequest, Response, AccessRequest[A], Response] {

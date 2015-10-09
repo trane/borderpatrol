@@ -1,6 +1,7 @@
 package com.lookout.borderpatrol.auth
 
 import com.lookout.borderpatrol.ServiceIdentifier
+import com.twitter.finagle.httpx.Status
 
 class AuthError(val message: String, cause: Throwable) extends Exception(message, cause) {
   // scalastyle:off null
@@ -12,3 +13,8 @@ class AuthError(val message: String, cause: Throwable) extends Exception(message
  * Example: In the case of SAML it would be an http redirect to their IdP
  */
 case class IdentityRequired(id: ServiceIdentifier, cause: Throwable = new Exception) extends AuthError("", cause)
+
+/**
+ * This exception stores the response code
+ */
+case class AccessDenied(status: Status, msg: String) extends AuthError(msg, null)

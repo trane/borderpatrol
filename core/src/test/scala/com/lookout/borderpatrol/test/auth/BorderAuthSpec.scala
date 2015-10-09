@@ -37,17 +37,12 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     })
 
   //  Test Services
-  val serviceFilterTestService = new Service[ServiceRequest, Response] {
-    def apply(request: ServiceRequest) = Future.value(Response(Status.Ok))
+  def mkTestService[A](f: (A) => Future[Response]) : Service[A, Response] = new Service[A, Response] {
+    def apply(request: A) = f(request)
   }
-  val sessionIdFilterTestService = new Service[SessionIdRequest, Response] {
-    def apply(request: SessionIdRequest) = {
-      println(request); Future.value(Response(Status.Ok))
-    }
-  }
-  val identityFilterTestService = new Service[AccessRequest[Request], Response] {
-    def apply(request: AccessRequest[Request]) = Future.value(Response(Status.Ok))
-  }
+  val serviceFilterTestService = mkTestService[ServiceRequest] { req => Future.value(Response(Status.Ok)) }
+  val sessionIdFilterTestService = mkTestService[SessionIdRequest] { req => Future.value(Response(Status.Ok)) }
+  val identityFilterTestService = mkTestService[AccessRequest[Request]] { req => Future.value(Response(Status.Ok)) }
 
   //  Mock SessionStore client
   case object FailingMockClient extends memcached.MockClient {
@@ -61,7 +56,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
 
   behavior of "ServiceFilter"
 
-  it should "find the valid Service by match" in {
+  it should "succeed and return output of upstream Service if Request is destined to a known Service" in {
     // Execute
     val output = (new ServiceFilter(serviceMatcher) andThen serviceFilterTestService)(req("enterprise", "/dang"))
 
@@ -69,7 +64,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     Await.result(output).status should be (Status.Ok)
   }
 
-  it should "return NotFound if Service not found by path or subdomain match" in {
+  it should "return NotFound Status if Request is destined to an unknown Service" in {
     // Execute
     val output = (new ServiceFilter(serviceMatcher) andThen serviceFilterTestService)(req("foo", "/bar"))
 
@@ -79,7 +74,31 @@ class BorderAuthSpec extends BorderPatrolSuite  {
 
   behavior of "SessionIdFilter"
 
-  it should "Lack of SessionId in the SessionIdRequest returns a Redirect to login URI" in {
+  it should "succeed and return output of upstream Service if ServiceRequest contains SessionId" in {
+    val testService = mkTestService[SessionIdRequest] {
+      request => {
+        assert(request.req.req.path == "/dang")
+        assert(request.req.id == one)
+        Future.value(Response(Status.Ok))
+      }
+    }
+
+    //  Allocate and Session
+    val sessionId = sessionid.next
+    val cooki = sessionId.asCookie
+
+    //  Create request
+    val request = req("enterprise", "/dang")
+    request.addCookie(cooki)
+
+    //  Execute
+    val output = (new SessionIdFilter(sessionStore) andThen testService)(new ServiceRequest(request, one))
+
+    //  Verify
+    Await.result(output).status should be (Status.Ok)
+  }
+
+  it should "return redirect to login URI, if no SessionId present in the SessionIdRequest" in {
 
     // Create request
     val request = req("enterprise", "/dang")
@@ -94,10 +113,8 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     Await.result(sessionData).path should be equals(request.path)
   }
 
-  it should "Failure returned by the Service, is propogated back as-is" in {
-    val service = new Service[SessionIdRequest, Response] {
-      def apply(request: SessionIdRequest) = Future.value(Response(Status.NotFound))
-    }
+  it should "propagate the error Status code returned by the upstream Service" in {
+    val testService = mkTestService[SessionIdRequest] { request => Future.value(Response(Status.NotFound))}
 
     // Allocate and Session
     val sessionId = sessionid.next
@@ -108,15 +125,15 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     request.addCookie(cooki)
 
     // Execute
-    val output = (new SessionIdFilter(sessionStore) andThen service)(new ServiceRequest(request, one))
+    val output = (new SessionIdFilter(sessionStore) andThen testService)(new ServiceRequest(request, one))
 
     // Verify
     Await.result(output).status should be (Status.NotFound)
   }
 
-  it should "Exception returned by the Service, is propogated back as-is" in {
-    val service = new Service[SessionIdRequest, Response] {
-      def apply(request: SessionIdRequest) = Future.exception(new Exception("SessionIdFilter test failure"))
+  it should "propagate the Exception thrown by the upstream Service" in {
+    val testService = mkTestService[SessionIdRequest] {
+      request => Future.exception(new Exception("SessionIdFilter test failure"))
     }
 
     // Allocate and Session
@@ -128,7 +145,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     request.addCookie(cooki)
 
     // Execute
-    val output = (new SessionIdFilter(sessionStore) andThen service)(new ServiceRequest(request, one))
+    val output = (new SessionIdFilter(sessionStore) andThen testService)(new ServiceRequest(request, one))
 
     // Verify
     val caught = the [Exception] thrownBy {
@@ -137,7 +154,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     caught.getMessage should equal ("SessionIdFilter test failure")
   }
 
-  it should "Exception thrown by SessionStore.update, is propogated as-is" in {
+  it should "propagate the Exception thrown while storing the Session using SessionStore.update" in {
     // Mock sessionStore
     val mockSessionStore = MemcachedStore(FailingMockClient)
 
@@ -154,13 +171,13 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     caught.getMessage should equal ("oopsie")
   }
 
-  it should "For a ServiceRequest with SessionId, a Service response of 200 OK is propogated back" in {
-    val service = new Service[SessionIdRequest, Response] {
-      def apply(request: SessionIdRequest) = {
-        assert(request.req.req.path == "/dang")
-        assert(request.req.id == one)
-        Future.value(Response(Status.Ok))
-      }
+  behavior of "IdentityFilter"
+
+  it should "succeed and return output of upstream Service, if Session is found for SessionId" in {
+    val testService = mkTestService[AccessRequest[Int]] {
+      request => {
+        assert(request.identity == Identity(999))
+        Future.value(Response(Status.Ok)) }
     }
 
     //  Allocate and Session
@@ -170,17 +187,17 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     //  Create request
     val request = req("enterprise", "/dang")
     request.addCookie(cooki)
+    val sessionData = 999
+    sessionStore.update[Int](Session(sessionId, sessionData))
 
     //  Execute
-    val output = (new SessionIdFilter(sessionStore) andThen service)(new ServiceRequest(request, one))
+    val output = (new IdentityFilter[Int](sessionStore) andThen testService)(SessionIdRequest(ServiceRequest(request, one), sessionId))
 
     //  Verify
     Await.result(output).status should be (Status.Ok)
   }
 
-  behavior of "IdentityFilter"
-
-  it should "Failure to find Session by SessionId returns a Redirect to login URI" in {
+  it should "return a redirect to login UTI, if it fails Session lookup using SessionId" in {
 
     // Allocate and Session
     val sessionId = sessionid.next
@@ -202,7 +219,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     Await.result(sessionData).path should be equals(request.path)
   }
 
-  it should "Exception thrown by SessionStore.get, is propogated as-is" in {
+  it should "propagate the exception thrown by SessionStore.get operation" in {
     // Allocate and Session
     val sessionId = sessionid.next
     val cooki = sessionId.asCookie
@@ -224,7 +241,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     caught.getMessage should equal ("oopsie")
   }
 
-  it should "Exception thrown by SessionStore.update, is propogated as-is" in {
+  it should "propagate the Exception thrown by SessionStore.update operation" in {
     //  Mock SessionStore client
     case object FailingUpdateMockClient extends memcached.MockClient {
       override def set(key: String, flags: Int, expiry: Time, value: Buf) : Future[Unit] = {
@@ -251,29 +268,5 @@ class BorderAuthSpec extends BorderPatrolSuite  {
       Await.result(output)
     }
     caught.getMessage should equal ("whoopsie")
-  }
-
-  it should "A ServiceRequest with SessionId available in SessionStore returns 200 OK" in {
-    val service = new Service[AccessRequest[Int], Response] {
-      def apply(request: AccessRequest[Int]) = {
-        assert(request.identity == Identity(999))
-        Future.value(Response(Status.Ok)) }
-    }
-
-    //  Allocate and Session
-    val sessionId = sessionid.next
-    val cooki = sessionId.asCookie
-
-    //  Create request
-    val request = req("enterprise", "/dang")
-    request.addCookie(cooki)
-    val sessionData = 999
-    sessionStore.update[Int](Session(sessionId, sessionData))
-
-    //  Execute
-    val output = (new IdentityFilter[Int](sessionStore) andThen service)(SessionIdRequest(ServiceRequest(request, one), sessionId))
-
-    //  Verify
-    Await.result(output).status should be (Status.Ok)
   }
 }
