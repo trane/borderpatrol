@@ -2,12 +2,10 @@ package com.lookout.borderpatrol.auth
 
 import com.lookout.borderpatrol.util.Combinators.tap
 import com.lookout.borderpatrol.{ServiceIdentifier, ServiceMatcher}
-
 import com.lookout.borderpatrol.sessionx._
 import com.twitter.finagle.httpx.{Status,  Request, Response}
 import com.twitter.finagle.{Service, Filter}
 import com.twitter.util.Future
-
 import scala.util.{Failure, Success}
 
 /**
@@ -37,7 +35,6 @@ case class SessionIdRequest(req: ServiceRequest, sid: SessionId)
 class BorderFilter[A](store: SessionStore)
     extends Filter[AccessRequest[A], Response, BorderRequest[A], Response] {
 
-
   def apply(req: AccessRequest[A], service: Service[BorderRequest[A], Response]): Future[Response] =
     sys.error("not implemented")
 }
@@ -47,9 +44,8 @@ class BorderFilter[A](store: SessionStore)
  * If the service doesn't exist, it returns a 404 Not Found response
  *
  * @param matchers
- * @param identifiers
  */
-class ServiceFilter(matchers: ServiceMatcher, identifiers: Set[ServiceIdentifier])
+class ServiceFilter(matchers: ServiceMatcher)
     extends Filter[Request, Response, ServiceRequest, Response] {
 
   def apply(req: Request, service: Service[ServiceRequest, Response]): Future[Response] =
@@ -65,18 +61,24 @@ class ServiceFilter(matchers: ServiceMatcher, identifiers: Set[ServiceIdentifier
 case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStoreApi)
   extends Filter[ServiceRequest, Response, SessionIdRequest, Response] {
 
+  /**
+   *  Passes the SessionId to the next in the filter chain. If any failures decoding the SessionId occur
+   *  (expired, not there, etc), we will terminate early and send a redirect
+   * @param req
+   * @param service
+   */
   def apply(req: ServiceRequest, service: Service[SessionIdRequest, Response]): Future[Response] =
-    (for {
-      id <- SessionId.fromRequest(req.req).toFuture
-      res <- service(SessionIdRequest(req, id))
-    } yield res) or (for {
-      session <- Session(req.req)
-      _ <- store.update(session)
-    } yield tap(Response(Status.TemporaryRedirect)) { res =>
-        res.location = req.id.login
-        res.addCookie(session.id.asCookie)
-      })
-
+    SessionId.fromRequest(req.req) match {
+      case Success(id) => service(SessionIdRequest(req, id))
+      case Failure(e) =>
+        for {
+          session <- Session(req.req)
+          _ <- store.update(session)
+        } yield tap(Response(Status.TemporaryRedirect)) { res =>
+          res.location = req.id.login
+          res.addCookie(session.id.asCookie)
+        }
+    }
 }
 
 /**

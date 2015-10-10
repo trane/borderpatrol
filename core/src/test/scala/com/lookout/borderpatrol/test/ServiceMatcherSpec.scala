@@ -1,11 +1,10 @@
-
 package com.lookout.borderpatrol.test
 
 import com.lookout.borderpatrol.{ServiceIdentifier,ServiceMatcher}
 import com.twitter.finagle.httpx.{RequestBuilder, Request}
 import com.twitter.finagle.httpx.path.Path
 
-class ServiceMatchersSpec extends BorderPatrolSuite {
+class ServiceMatcherSpec extends BorderPatrolSuite {
 
   val one = ServiceIdentifier("one", Path("/ent"), "enterprise", "/a/login")
   val two = ServiceIdentifier("two", Path("/api"), "api", "/login")
