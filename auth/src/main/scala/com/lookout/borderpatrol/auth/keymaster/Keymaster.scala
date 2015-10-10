@@ -48,7 +48,8 @@ object Keymaster {
             t => Future.value(KeymasterIdentifyRes(t))
           )
         //  Preserve Response Status code by throwing AccessDenied exceptions
-        case _ => Future.exception(IdentityProviderError(res.status, s"Invalid credentials for user ${req.credential.email}"))
+        case _ => Future.exception(IdentityProviderError(res.status,
+          s"Invalid credentials for user ${req.credential.email}"))
       })
   }
 
@@ -128,7 +129,8 @@ object Keymaster {
               } yield st)
             )
           //  Preserve Response Status code by throwing AccessDenied exceptions
-          case _ => Future.exception(AccessIssuerError(res.status, s"No access allowed to service ${req.serviceId.name}"))
+          case _ => Future.exception(AccessIssuerError(res.status,
+            s"No access allowed to service ${req.serviceId.name}"))
         })
       )(t => Future.value(t)).map(t => KeymasterAccessRes(Access(t)))
   }
