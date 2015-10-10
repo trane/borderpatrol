@@ -16,3 +16,6 @@ case class SessionStoreError(msg: String)
 
 case class SecretDecodeError(msg: String)
     extends SessionError(s"An error decoding a Secret occurred: $msg")
+
+case class OriginalRequestNotFound(msg: String)
+  extends SessionError(s"An error occurred interacting with the session store: $msg")

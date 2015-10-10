@@ -92,7 +92,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     request.addCookie(cooki)
 
     //  Execute
-    val output = (new SessionIdFilter(sessionStore) andThen testService)(new ServiceRequest(request, one))
+    val output = (new SessionIdFilter(sessionStore) andThen testService)(ServiceRequest(request, one))
 
     //  Verify
     Await.result(output).status should be (Status.Ok)
@@ -104,7 +104,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val request = req("enterprise", "/dang")
 
     // Execute
-    val output = (new SessionIdFilter(sessionStore) andThen sessionIdFilterTestService)(new ServiceRequest(request, one))
+    val output = (new SessionIdFilter(sessionStore) andThen sessionIdFilterTestService)(ServiceRequest(request, one))
 
     // Validate
     Await.result(output).status should be (Status.TemporaryRedirect)
@@ -125,7 +125,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     request.addCookie(cooki)
 
     // Execute
-    val output = (new SessionIdFilter(sessionStore) andThen testService)(new ServiceRequest(request, one))
+    val output = (new SessionIdFilter(sessionStore) andThen testService)(ServiceRequest(request, one))
 
     // Verify
     Await.result(output).status should be (Status.NotFound)
@@ -145,7 +145,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     request.addCookie(cooki)
 
     // Execute
-    val output = (new SessionIdFilter(sessionStore) andThen testService)(new ServiceRequest(request, one))
+    val output = (new SessionIdFilter(sessionStore) andThen testService)(ServiceRequest(request, one))
 
     // Verify
     val caught = the [Exception] thrownBy {
@@ -162,7 +162,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val request = req("enterprise", "/dang")
 
     // Execute
-    val output = (new SessionIdFilter(mockSessionStore) andThen sessionIdFilterTestService)(new ServiceRequest(request, one))
+    val output = (new SessionIdFilter(mockSessionStore) andThen sessionIdFilterTestService)(ServiceRequest(request, one))
 
     // Verify
     val caught = the [Exception] thrownBy {

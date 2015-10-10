@@ -28,12 +28,9 @@ class KeymasterSpec extends BorderPatrolSuite  {
     Request(s"http://${subdomain + "."}example.com${path.toString}", params:_*)
 
   //  Tokens
-  val serviceToken1 = new ServiceToken("SomeServiceTokenData1")
-  val serviceToken2 = new ServiceToken("SomeServiceTokenData2")
-  val serviceTokens = new ServiceTokens().add("service1", serviceToken1)
-  val serviceTokens2 = serviceTokens.add("service2", serviceToken2)
-
-  val tokens = new Tokens(new MasterToken("masterT"), serviceTokens)
+  val serviceToken2 = ServiceToken("SomeServiceTokenData2")
+  val serviceTokens = ServiceTokens().add("service1", ServiceToken("SomeServiceTokenData1"))
+  val tokens = Tokens(MasterToken("masterT"), serviceTokens)
   val tokens2 = tokens.add("one", serviceToken2)
 
   // Endpoint path
@@ -60,7 +57,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     def apply(request: A) = f(request)
   }
   val keymasterLoginFilterTestService = mkTestService[IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
-    req => Future(new KeymasterIdentifyRes(tokens)) }
+    req => Future(KeymasterIdentifyRes(tokens)) }
   val keymasterTestService = mkTestService[Request, Response] { req => Response(Status.Ok).toFuture }
 
   behavior of "KeymasterIdentityProvider"
@@ -74,27 +71,27 @@ class KeymasterSpec extends BorderPatrolSuite  {
     }
 
     // Execute
-    val output = new KeymasterIdentityProvider(testService, path)(new KeymasterIdentifyReq(new Credential("foo", "bar", one)))
+    val output = KeymasterIdentityProvider(testService, path)(KeymasterIdentifyReq(Credential("foo", "bar", one)))
 
     // Validate
     Await.result(output).identity should be (Id(tokens))
   }
 
-  it should "propagate the error Status code from Keymaster service in the AccessDenied exception" in {
+  it should "propagate the error Status code from Keymaster service in the IdentityProviderError exception" in {
     val testService = mkTestService[Request, Response] { request => Response(Status.NotFound).toFuture }
 
     // Execute
-    val output = new KeymasterIdentityProvider(testService, path)(new KeymasterIdentifyReq(new Credential("foo", "bar", one)))
+    val output = KeymasterIdentityProvider(testService, path)(KeymasterIdentifyReq(Credential("foo", "bar", one)))
 
     // Validate
-    val caught = the [AccessDenied] thrownBy {
+    val caught = the [IdentityProviderError] thrownBy {
       Await.result(output)
     }
     caught.getMessage should equal ("Invalid credentials for user foo")
     caught.status should be (Status.NotFound)
   }
 
-  it should "propagate the failure parsing the response from Keymaster service as an AccessDenied exception" in {
+  it should "propagate the failure parsing the response from Keymaster service as an IdentityProviderError exception" in {
     val testService = mkTestService[Request, Response] {
       request => tap(Response(Status.Ok))(res => {
         res.contentString = "invalid string"
@@ -103,10 +100,10 @@ class KeymasterSpec extends BorderPatrolSuite  {
     }
 
     // Execute
-    val output = new KeymasterIdentityProvider(testService, path)(new KeymasterIdentifyReq(new Credential("foo", "bar", one)))
+    val output = KeymasterIdentityProvider(testService, path)(KeymasterIdentifyReq(Credential("foo", "bar", one)))
 
     // Validate
-    val caught = the [AccessDenied] thrownBy {
+    val caught = the [IdentityProviderError] thrownBy {
       Await.result(output)
     }
     caught.getMessage should equal ("Failed to parse the Keymaster Identity Response")
@@ -117,7 +114,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
 
   it should "succeed and saves tokens, sends redirect with tokens returned by IDP" in {
     val testService = mkTestService[IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
-      request => Future(new KeymasterIdentifyRes(tokens))
+      request => Future(KeymasterIdentifyRes(tokens))
     }
 
     // Allocate and Session
@@ -133,7 +130,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     sessionStore.update[Request](Session(sessionId, origReq))
 
     // Execute
-    val output = (new KeymasterLoginFilter(sessionStore) andThen testService)(new ServiceRequest(loginRequest, one))
+    val output = (KeymasterLoginFilter(sessionStore) andThen testService)(ServiceRequest(loginRequest, one))
 
     // Validate
     Await.result(output).status should be (Status.TemporaryRedirect)
@@ -155,7 +152,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     loginRequest.addCookie(cooki)
 
     // Execute
-    val output = (new KeymasterLoginFilter(sessionStore) andThen keymasterLoginFilterTestService)(new ServiceRequest(loginRequest, one))
+    val output = (KeymasterLoginFilter(sessionStore) andThen keymasterLoginFilterTestService)(ServiceRequest(loginRequest, one))
 
     // Validate
     Await.result(output).status should be (Status.BadRequest)
@@ -166,16 +163,15 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val loginRequest = req("enterprise", "/login", ("username" -> "foo"), ("password" -> "bar"))
 
     // Execute
-    val output = (new KeymasterLoginFilter(sessionStore) andThen keymasterLoginFilterTestService)(new ServiceRequest(loginRequest, one))
+    val output = (KeymasterLoginFilter(sessionStore) andThen keymasterLoginFilterTestService)(ServiceRequest(loginRequest, one))
 
     // Validate
     val caught = the [SessionIdError] thrownBy {
       Await.result(output)
     }
-    caught.getMessage should equal ("An error occurred reading SessionId: no border_session cookie")
   }
 
-  it should "return SessionStoreError if it fails find the original request from sessionStore" in {
+  it should "return OriginalRequestNotFound if it fails find the original request from sessionStore" in {
     // Allocate and Session
     val sessionId = sessionid.next
     val cooki = sessionId.asCookie
@@ -185,13 +181,12 @@ class KeymasterSpec extends BorderPatrolSuite  {
     loginRequest.addCookie(cooki)
 
     // Execute
-    val output = (new KeymasterLoginFilter(sessionStore) andThen keymasterLoginFilterTestService)(new ServiceRequest(loginRequest, one))
+    val output = (KeymasterLoginFilter(sessionStore) andThen keymasterLoginFilterTestService)(ServiceRequest(loginRequest, one))
 
     // Validate
-    val caught = the [SessionStoreError] thrownBy {
+    val caught = the [OriginalRequestNotFound] thrownBy {
       Await.result(output)
     }
-    caught.getMessage should be equals ("An error occurred interacting with the session store: failed for SessionId")
   }
 
   it should "propagate the Exception thrown by Session lookup operation" in {
@@ -214,7 +209,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     loginRequest.addCookie(cooki)
 
     // Execute
-    val output = (new KeymasterLoginFilter(mockSessionStore) andThen keymasterLoginFilterTestService)(new ServiceRequest(loginRequest, one))
+    val output = (KeymasterLoginFilter(mockSessionStore) andThen keymasterLoginFilterTestService)(ServiceRequest(loginRequest, one))
 
     // Validate
     val caught = the [Exception] thrownBy {
@@ -232,7 +227,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val sessionId = sessionid.next
 
     // Execute
-    val output = new KeymasterAccessIssuer(testService, path, sessionStore)(new KeymasterAccessReq(Id(tokens2), one, sessionId))
+    val output = KeymasterAccessIssuer(testService, path, sessionStore)(KeymasterAccessReq(Id(tokens2), one, sessionId))
 
     // Validate
     Await.result(output).access.access should be (serviceToken2)
@@ -248,7 +243,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val sessionId = sessionid.next
 
     // Execute
-    val output = new KeymasterAccessIssuer(testService, path, sessionStore)(new KeymasterAccessReq(Id(tokens), one, sessionId))
+    val output = KeymasterAccessIssuer(testService, path, sessionStore)(KeymasterAccessReq(Id(tokens), one, sessionId))
 
     // Validate
     Await.result(output).access.access should be (serviceToken2)
@@ -256,22 +251,22 @@ class KeymasterSpec extends BorderPatrolSuite  {
     Await.result(tokIt) should be (tokens2)
   }
 
-  it should "propagate the error Status code returned by the Keymaster service, as the AccessDenied exception" in {
+  it should "propagate the error Status code returned by the Keymaster service, as the AccessIssuerError exception" in {
     val testService = mkTestService[Request, Response] { request => Response(Status.NotFound).toFuture }
     val sessionId = sessionid.next
 
     // Execute
-    val output = new KeymasterAccessIssuer(testService, path, sessionStore)(new KeymasterAccessReq(Id(tokens), one, sessionId))
+    val output = KeymasterAccessIssuer(testService, path, sessionStore)(KeymasterAccessReq(Id(tokens), one, sessionId))
 
     // Validate
-    val caught = the [AccessDenied] thrownBy {
+    val caught = the [AccessIssuerError] thrownBy {
       Await.result(output)
     }
     caught.getMessage should equal ("No access allowed to service one")
     caught.status should be (Status.NotFound)
   }
 
-  it should "propagate the failure to parse response content from Keymaster service, as AccessDenied exception" in {
+  it should "propagate the failure to parse response content from Keymaster service, as AccessIssuerError exception" in {
     val testService = mkTestService[Request, Response] {
       request => tap(Response(Status.Ok))(res => {
         res.contentString = "invalid string"
@@ -281,10 +276,10 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val sessionId = sessionid.next
 
     // Execute
-    val output = new KeymasterAccessIssuer(testService, path, sessionStore)(new KeymasterAccessReq(Id(tokens), one, sessionId))
+    val output = KeymasterAccessIssuer(testService, path, sessionStore)(KeymasterAccessReq(Id(tokens), one, sessionId))
 
     // Validate
-    val caught = the [AccessDenied] thrownBy {
+    val caught = the [AccessIssuerError] thrownBy {
       Await.result(output)
     }
     caught.getMessage should equal ("Failed to parse the Keymaster Access Response")
@@ -300,7 +295,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val sessionId = sessionid.next
 
     // Execute
-    val output = new KeymasterAccessIssuer(testService, path, sessionStore)(new KeymasterAccessReq(Id(tokens), one, sessionId))
+    val output = KeymasterAccessIssuer(testService, path, sessionStore)(KeymasterAccessReq(Id(tokens), one, sessionId))
 
     // Validate
     val caught = the [AccessDenied] thrownBy {

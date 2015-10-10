@@ -18,3 +18,13 @@ case class IdentityRequired(id: ServiceIdentifier, cause: Throwable = new Except
  * This exception stores the response code
  */
 case class AccessDenied(status: Status, msg: String) extends AuthError(msg, null)
+
+/**
+ * This exception stores the response code
+ */
+case class IdentityProviderError(status: Status, msg: String) extends AuthError(msg, null)
+
+/**
+ * This exception stores the response code
+ */
+case class AccessIssuerError(status: Status, msg: String) extends AuthError(msg, null)

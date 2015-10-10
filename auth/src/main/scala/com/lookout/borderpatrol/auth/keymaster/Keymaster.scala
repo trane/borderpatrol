@@ -43,11 +43,12 @@ object Keymaster {
         //  Parse for Tokens if Status.Ok
         case Status.Ok =>
           Tokens.derive[Tokens](res.contentString).fold[Future[IdentifyResponse[Tokens]]](
-            err => Future.exception(AccessDenied(Status.InternalServerError, "Failed to parse the Keymaster Identity Response")),
+            err => Future.exception(IdentityProviderError(Status.InternalServerError,
+              "Failed to parse the Keymaster Identity Response")),
             t => Future.value(KeymasterIdentifyRes(t))
           )
         //  Preserve Response Status code by throwing AccessDenied exceptions
-        case anyOtherStatus => Future.exception(AccessDenied(anyOtherStatus, s"Invalid credentials for user ${req.credential.email}"))
+        case _ => Future.exception(IdentityProviderError(res.status, s"Invalid credentials for user ${req.credential.email}"))
       })
   }
 
@@ -74,7 +75,7 @@ object Keymaster {
     def getRequestFromSessionStore(id: SessionId, req: ServiceRequest): Future[Request] =
       store.get[Request](id).flatMap(_ match {
         case Some(session) => Future.value(session.data)
-        case None => Future.exception(SessionStoreError(s"no request stored for $id"))
+        case None => Future.exception(OriginalRequestNotFound(s"no request stored for $id"))
       })
 
     def apply(req: ServiceRequest,
@@ -117,15 +118,17 @@ object Keymaster {
           //  Parse for Tokens if Status.Ok
           case Status.Ok =>
             Tokens.derive[Tokens](res.contentString).fold[Future[ServiceToken]](
-              e => Future.exception(AccessDenied(Status.NotAcceptable, "Failed to parse the Keymaster Access Response")),
+              e => Future.exception(AccessIssuerError(Status.NotAcceptable,
+                "Failed to parse the Keymaster Access Response")),
               t => t.service(req.serviceId.name).fold[Future[ServiceToken]](
-                Future.exception(AccessDenied(Status.NotAcceptable, s"No access allowed to service ${req.serviceId.name}"))
+                Future.exception(AccessDenied(Status.NotAcceptable,
+                  s"No access allowed to service ${req.serviceId.name}"))
               )(st => for {
                 _ <- store.update(Session(req.sessionId, req.identity.id.add(req.serviceId.name, st)))
               } yield st)
             )
           //  Preserve Response Status code by throwing AccessDenied exceptions
-          case anyOtherStatus => Future.exception(AccessDenied(anyOtherStatus, s"No access allowed to service ${req.serviceId.name}"))
+          case _ => Future.exception(AccessIssuerError(res.status, s"No access allowed to service ${req.serviceId.name}"))
         })
       )(t => Future.value(t)).map(t => KeymasterAccessRes(Access(t)))
   }
