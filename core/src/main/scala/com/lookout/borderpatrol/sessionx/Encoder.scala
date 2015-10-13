@@ -142,7 +142,8 @@ object SessionIdEncoder {
   /**
    * Helper method for creating new [[com.lookout.borderpatrol.sessionx.SessionIdEncoder]] instances
    */
-  def apply[A](f: SessionId => A, g: A => Try[SessionId]): SessionIdEncoder[A] =
+  def apply[A](f: SessionId => A, g: A => Try[SessionId])(implicit secretStoreApi: SecretStoreApi):
+      SessionIdEncoder[A] =
     new SessionIdEncoder[A] {
       def encode(id: SessionId): A = f(id)
       def decode(a: A): Try[SessionId] = g(a)
