@@ -308,6 +308,32 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     Await.result(output).contentString should be ("An error occurred interacting with the session store: update failed")
   }
 
+  it should "succeed and convert the AccessIssuerError exception into error Response" in {
+    val testService = mkTestService[Request] { req =>
+      Future.exception(AccessIssuerError(Status.NotAcceptable, "Some access issuer error"))
+    }
+
+    // Execute
+    val output = (new ExceptionFilter andThen testService)(req("enterprise", "/dang"))
+
+    // Validate
+    Await.result(output).status should be (Status.NotAcceptable)
+    Await.result(output).contentString should be ("Some access issuer error")
+  }
+
+  it should "succeed and convert the IdentityProviderError exception into error Response" in {
+    val testService = mkTestService[Request] { req =>
+      Future.exception(IdentityProviderError(Status.NotAcceptable, "Some identity provider error"))
+    }
+
+    // Execute
+    val output = (new ExceptionFilter andThen testService)(req("enterprise", "/dang"))
+
+    // Validate
+    Await.result(output).status should be (Status.NotAcceptable)
+    Await.result(output).contentString should be ("Some identity provider error")
+  }
+
   it should "succeed and convert the Runtime exception into error Response" in {
     val testService = mkTestService[Request] { req =>
       Future.exception(new RuntimeException("some weird exception"))

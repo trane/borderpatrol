@@ -106,11 +106,6 @@ object Keymaster {
       tap(Request(Method.Post, Request.queryString(path.toString(),
         ("services" -> req.serviceId.name))))(r => r.headerMap.add("Auth-Token", req.identity.id.master.value))
 
-    def identity(sid: SessionId): Future[Identity[Tokens]] =
-      for {
-        sessionMaybe <- store.get[Tokens](sid)
-      } yield sessionMaybe.fold[Identity[Tokens]](EmptyIdentity)(s => Id(s.data))
-
     /**
      * Fetch a valid ServiceToken, will return a ServiceToken otherwise a Future.exception
      */

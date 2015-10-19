@@ -112,9 +112,6 @@ class ExceptionFilter
     case error: Exception => tap(Response(Status.InternalServerError))(
       r => { r.contentString = error.getMessage; r.contentType = "text/plain"}
     )
-    case _ => tap(Response(Status.BadRequest))(
-      r => { r.contentString = "WHATS GOING ON!"; r.contentType = "text/plain"}
-    )
   }
 
   def apply(req: Request, service: Service[Request, Response]): Future[Response] =
