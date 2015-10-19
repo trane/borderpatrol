@@ -2,6 +2,7 @@ package com.lookout.borderpatrol.sessionx
 
 import java.util.concurrent.TimeUnit
 import com.lookout.borderpatrol.crypto.Generator
+import com.lookout.borderpatrol.util.Combinators.tap
 import com.twitter.bijection.Injection
 import com.twitter.finagle.httpx.{Response, Request, Cookie}
 import com.twitter.util._
@@ -89,7 +90,11 @@ object SessionId {
     Base64StringEncoder.encode(toArray(id))
 
   def toCookie(id: SessionId): Cookie =
-    new Cookie("border_session", toBase64(id))
+    tap(new Cookie("border_session", toBase64(id))) { cookie =>
+      cookie.path = "/"
+      cookie.httpOnly = true
+      cookie.maxAge = Time.now.until(id.expires)
+    }
 
   def fromCookie(cooki: Option[Cookie])(implicit ev: SecretStoreApi): Try[SessionId] =
     cooki match {

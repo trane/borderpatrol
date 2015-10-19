@@ -38,6 +38,7 @@ val baseSettings = Seq(
     "com.twitter" %% "bijection-util" % "0.8.1",
     "io.argonaut" %% "argonaut" % "6.1",
     "org.bouncycastle" % "bcprov-jdk15on" % "1.52",
+    "com.twitter" %% "finagle-stats" % "6.28.0",
     compilerPlugin("org.scalamacros" % "paradise" % "2.0.1" cross CrossVersion.full)
   ) ++ testDependencies.map(_ % "test"),
   scalacOptions ++= compilerOptions ++ (
@@ -109,9 +110,11 @@ lazy val example = project
   .settings(resolvers += Resolver.sonatypeRepo("snapshots"))
   .settings(moduleName := "borderpatrol-example")
   .settings(allSettings)
+  .settings(coverageExcludedPackages := "com\\.lookout\\.borderpatrol\\.example\\..*")
   .settings(noPublish)
   .settings(
     libraryDependencies ++= Seq(
+      "com.twitter" %% "twitter-server" % "1.14.0",
       "com.github.finagle" %% "finch-core" % "0.8.0",
       "com.github.finagle" %% "finch-argonaut" % "0.8.0"
     )

@@ -2,7 +2,7 @@ package com.lookout.borderpatrol.auth.keymaster
 
 import com.lookout.borderpatrol.util.Combinators.tap
 import com.lookout.borderpatrol.sessionx._
-import com.lookout.borderpatrol.{sessionx, ServiceIdentifier}
+import com.lookout.borderpatrol.ServiceIdentifier
 import com.lookout.borderpatrol.auth._
 import com.twitter.finagle.httpx.path.Path
 import com.twitter.finagle.{Filter, Service}
@@ -12,7 +12,6 @@ import com.twitter.util.Future
 
 object Keymaster {
   case class Credential(email: String, password: String, serviceId: ServiceIdentifier)
-
   case class KeymasterIdentifyReq(credential: Credential) extends IdentifyRequest[Credential]
   case class KeymasterIdentifyRes(tokens: Tokens) extends IdentifyResponse[Tokens] {
     val identity = Identity(tokens)
@@ -49,7 +48,7 @@ object Keymaster {
           )
         //  Preserve Response Status code by throwing AccessDenied exceptions
         case _ => Future.exception(IdentityProviderError(res.status,
-          s"Invalid credentials for user ${req.credential.email}"))
+            s"Invalid credentials for user ${req.credential.email}"))
       })
   }
 
@@ -57,38 +56,37 @@ object Keymaster {
    * Handles logins to the KeymasterIdentityProvider:
    * - saves the Tokens after a successful login
    * - sends the User to their original request location from before they logged in or the default location based on
-   *   their service
+   * their service
    * @param store
    * @param secretStoreApi
    */
   case class KeymasterLoginFilter(store: SessionStore)(implicit secretStoreApi: SecretStoreApi)
-      extends Filter[ServiceRequest, Response, IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
+      extends Filter[SessionIdRequest, Response, IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
 
-    def createIdentifyReq(req: ServiceRequest): Option[IdentifyRequest[Credential]] =
+    def createIdentifyReq(req: SessionIdRequest): Option[IdentifyRequest[Credential]] =
       for {
-        u <- req.req.params.get("username")
-        p <- req.req.params.get("password")
-      } yield KeymasterIdentifyReq(Credential(u, p, req.id))
+        u <- req.req.req.params.get("username")
+        p <- req.req.req.params.get("password")
+      } yield KeymasterIdentifyReq(Credential(u, p, req.req.serviceId))
 
     /**
      * Grab the original request from the session store, otherwise just send them to the default location of '/'
      */
-    def getRequestFromSessionStore(id: SessionId, req: ServiceRequest): Future[Request] =
+    def getRequestFromSessionStore(id: SessionId): Future[Request] =
       store.get[Request](id).flatMap(_ match {
         case Some(session) => Future.value(session.data)
         case None => Future.exception(OriginalRequestNotFound(s"no request stored for $id"))
       })
 
-    def apply(req: ServiceRequest,
+    def apply(req: SessionIdRequest,
               service: Service[IdentifyRequest[Credential], IdentifyResponse[Tokens]]): Future[Response] =
       createIdentifyReq(req).fold(Future.value(Response(Status.BadRequest)))(credReq =>
         for {
-          sid <- SessionId.fromRequest(req.req).toFuture
-          originReq <- getRequestFromSessionStore(sid, req)
           tokenResponse <- service(credReq)
           session <- Session(tokenResponse.identity.id)
           _ <- store.update[Tokens](session)
-          _ <- store.delete(sid)
+          originReq <- getRequestFromSessionStore(req.sid)
+          _ <- store.delete(req.sid)
         } yield tap(Response(Status.TemporaryRedirect))(res => {
           res.location = originReq.uri
           res.addCookie(session.id.asCookie)
@@ -111,7 +109,7 @@ object Keymaster {
     /**
      * Fetch a valid ServiceToken, will return a ServiceToken otherwise a Future.exception
      */
-    def apply(req: AccessRequest[Tokens]): Future[AccessResponse[ServiceToken]]  =
+    def apply(req: AccessRequest[Tokens]): Future[AccessResponse[ServiceToken]] =
       //  Check if ServiceToken is already available for Service
       req.identity.id.service(req.serviceId.name).fold[Future[ServiceToken]](
         //  Fetch ServiceToken from the Keymaster
@@ -135,4 +133,17 @@ object Keymaster {
       )(t => Future.value(t)).map(t => KeymasterAccessRes(Access(t)))
   }
 
+  /**
+   * This filter acquires the access and then forwards the request to upstream service
+   *
+   * @param upstreamClient
+   */
+  case class KeymasterAccessFilter(upstreamClient: Service[Request, Response])
+      extends Filter[AccessIdRequest[Tokens], Response, AccessRequest[Tokens], AccessResponse[ServiceToken]] {
+    def apply(req: AccessIdRequest[Tokens],
+              accessService: Service[AccessRequest[Tokens], AccessResponse[ServiceToken]]): Future[Response] =
+      accessService(AccessRequest(req.id, req.req.req.serviceId, req.req.sid)).flatMap(accessResp =>
+        upstreamClient(tap(req.req.req.req) { r => r.headerMap.add("Auth-Token", accessResp.access.access.value)})
+      )
+  }
 }

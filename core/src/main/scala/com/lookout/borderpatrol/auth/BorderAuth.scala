@@ -3,41 +3,17 @@ package com.lookout.borderpatrol.auth
 import com.lookout.borderpatrol.util.Combinators.tap
 import com.lookout.borderpatrol.{ServiceIdentifier, ServiceMatcher}
 import com.lookout.borderpatrol.sessionx._
-import com.twitter.finagle.httpx.{Status,  Request, Response}
+import com.twitter.finagle.httpx.{Method, Status, Request, Response}
 import com.twitter.finagle.{Service, Filter}
 import com.twitter.util.Future
 import scala.util.{Failure, Success}
 
 /**
- * Given an authenticated route/endpoint, this type class will allow us to handle two use cases
- *  - Identified entity is asking for access to service at authenticated route/endpoint
- *  - Entity has not identified itself, must be prompted to identify
+ * PODs
  */
-trait BorderAuth {
-  def identify[A, B](req: Request, idp: IdentityProvider[A, B]): Future[Identity[B]]
-  def issueAccess[A](a: A): Future[Access[A]]
-}
-
-case class BorderRequest[A](access: Access[A], request: Request)
-case class ServiceRequest(req: Request, id: ServiceIdentifier)
+case class ServiceRequest(req: Request, serviceId: ServiceIdentifier)
 case class SessionIdRequest(req: ServiceRequest, sid: SessionId)
-
-/**
- * Given an incoming request to an authenticated endpoint, this filter has two duties:
- *  - If there is no identity:
- *    - we must send the browser a redirect to a page where we can get credentials
- *    - save the requested url with their session so that once they have authenticated, we can send them there
- *  - If there is an identity, i.e. they have a sessionid with some stored auth `Identity[A]`:
- *    - get `Access[A]` for the service they are requesting, either already cached in their session or by asking
- *    the `AccessIssuer` for that access
- *    - issue the request to the downstream service with that access injected
- */
-class BorderFilter[A](store: SessionStore)
-    extends Filter[AccessRequest[A], Response, BorderRequest[A], Response] {
-
-  def apply(req: AccessRequest[A], service: Service[BorderRequest[A], Response]): Future[Response] =
-    sys.error("not implemented")
-}
+case class AccessIdRequest[A](req: SessionIdRequest, id: Id[A])
 
 /**
  * Determines the service that the request is trying to contact
@@ -51,7 +27,10 @@ class ServiceFilter(matchers: ServiceMatcher)
   def apply(req: Request, service: Service[ServiceRequest, Response]): Future[Response] =
     matchers.get(req) match {
       case Some(id) => service(ServiceRequest(req, id))
-      case None => Future.value(Response(Status.NotFound))
+      case None => tap(Response(Status.NotFound))(r => {
+        r.contentString = s"${req.path}: Unknown Path/Service(${Status.NotFound.code})"
+        r.contentType = "text/plain"
+      }).toFuture
     }
 }
 
@@ -59,7 +38,7 @@ class ServiceFilter(matchers: ServiceMatcher)
  * Ensures we have a SessionId present in this request, sending a Redirect to the service login page if it doesn't
  */
 case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStoreApi)
-  extends Filter[ServiceRequest, Response, SessionIdRequest, Response] {
+    extends Filter[ServiceRequest, Response, SessionIdRequest, Response] {
 
   /**
    *  Passes the SessionId to the next in the filter chain. If any failures decoding the SessionId occur
@@ -69,13 +48,13 @@ case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStor
    */
   def apply(req: ServiceRequest, service: Service[SessionIdRequest, Response]): Future[Response] =
     SessionId.fromRequest(req.req) match {
-      case Success(id) => service(SessionIdRequest(req, id))
+      case Success(sid) => service(SessionIdRequest(req, sid))
       case Failure(e) =>
         for {
           session <- Session(req.req)
           _ <- store.update(session)
         } yield tap(Response(Status.TemporaryRedirect)) { res =>
-          res.location = req.id.login
+          res.location = req.serviceId.login
           res.addCookie(session.id.asCookie)
         }
     }
@@ -86,22 +65,55 @@ case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStor
  * service
  */
 class IdentityFilter[A : SessionDataEncoder](store: SessionStore)(implicit secretStore: SecretStoreApi)
-    extends Filter[SessionIdRequest, Response, AccessRequest[A], Response] {
+    extends Filter[SessionIdRequest, Response, AccessIdRequest[A], Response] {
 
   def identity(sid: SessionId): Future[Identity[A]] =
-    for {
+    (for {
       sessionMaybe <- store.get[A](sid)
-    } yield sessionMaybe.fold[Identity[A]](EmptyIdentity)(s => Id(s.data))
+    } yield sessionMaybe.fold[Identity[A]](EmptyIdentity)(s => Id(s.data))) handle {
+      case e => EmptyIdentity
+    }
 
-  def apply(req: SessionIdRequest, service: Service[AccessRequest[A], Response]): Future[Response] =
+  def apply(req: SessionIdRequest, service: Service[AccessIdRequest[A], Response]): Future[Response] =
     identity(req.sid).flatMap(i => i match {
-      case id: Id[A] => service(AccessRequest(id, req.req.id, req.sid))
+      case id: Id[A] => service(AccessIdRequest(req, id))
       case EmptyIdentity => for {
         s <- Session(req.req.req)
         _ <- store.update(s)
       } yield tap(Response(Status.TemporaryRedirect)) { res =>
-          res.location = req.req.id.login // set to login url
+          res.location = req.req.serviceId.login // set to login url
           res.addCookie(s.id.asCookie) // add SessionId value as a Cookie
         }
     })
+}
+
+/**
+ * Top level filter that maps exceptions into appropriate status codes
+ */
+class ExceptionFilter
+    extends Filter[Request, Response, Request, Response] {
+
+  /**
+   * Tells the service how to handle certain types of servable errors (i.e. PetstoreError)
+   */
+  def errorHandler: PartialFunction[Throwable, Response] = {
+    case error: SessionError => tap(Response(Status.InternalServerError))(
+      r => { r.contentString = error.message; r.contentType = "text/plain"}
+    )
+    case error: AccessDenied => tap(Response(error.status))(
+      r => { r.contentString = "AccessDenied: " + error.msg; r.contentType = "text/plain"}
+    )
+    case error: AccessIssuerError => tap(Response(error.status))(
+      r => { r.contentString = error.msg; r.contentType = "text/plain"}
+    )
+    case error: IdentityProviderError => tap(Response(error.status))(
+      r => { r.contentString = error.msg; r.contentType = "text/plain"}
+    )
+    case error: Exception => tap(Response(Status.InternalServerError))(
+      r => { r.contentString = error.getMessage; r.contentType = "text/plain"}
+    )
+  }
+
+  def apply(req: Request, service: Service[Request, Response]): Future[Response] =
+    service(req) handle errorHandler
 }
