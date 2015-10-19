@@ -61,7 +61,7 @@ object service {
       ("test3@example.com" -> "password3")
     )
 
-    def apply(request: Request) = {
+    def apply(request: Request): Future[Response] = {
       val tokens = Tokens(MasterToken("masterT"), ServiceTokens())
       (for {
         email <- request.getParam("e").toFuture
@@ -77,7 +77,7 @@ object service {
 
   //  Mock Keymaster AccessIssuer
   val keymasterAccessTestService = new Service[Request, Response] {
-    def apply(request: Request) = {
+    def apply(request: Request): Future[Response] = {
       val tokens = Tokens(MasterToken("masterT"), ServiceTokens().add("one", ServiceToken("SomeServiceOneData")))
       tap(Response(Status.Ok))(res => {
         res.contentString = TokensEncoder(tokens).toString()
@@ -113,7 +113,7 @@ object service {
 
   //  Mock Upstream service
   val upstreamService = new Service[Request, Response] {
-    def apply(request: Request) =
+    def apply(request: Request): Future[Response] =
       tap(Response(Status.Ok))(res => {
         res.contentString = """
           |<html><body>
