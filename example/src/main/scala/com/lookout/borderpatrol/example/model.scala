@@ -25,12 +25,4 @@
 package com.lookout.borderpatrol.example
 
 object model {
-  case class User(e: String, p: String)
-  case class Token(s: String, u: User)
-  object Token {
-    def generate(user: User): Token =
-      Token(s"supersecret${user.e}", user)
-
-  }
-
 }

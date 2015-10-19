@@ -42,7 +42,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
   }
   val serviceFilterTestService = mkTestService[ServiceRequest] { req => Future.value(Response(Status.Ok)) }
   val sessionIdFilterTestService = mkTestService[SessionIdRequest] { req => Future.value(Response(Status.Ok)) }
-  val identityFilterTestService = mkTestService[AccessRequest[Request]] { req => Future.value(Response(Status.Ok)) }
+  val identityFilterTestService = mkTestService[AccessIdRequest[Request]] { req => Future.value(Response(Status.Ok)) }
 
   //  Mock SessionStore client
   case object FailingMockClient extends memcached.MockClient {
@@ -78,7 +78,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val testService = mkTestService[SessionIdRequest] {
       request => {
         assert(request.req.req.path == "/dang")
-        assert(request.req.id == one)
+        assert(request.req.serviceId == one)
         Future.value(Response(Status.Ok))
       }
     }
@@ -174,9 +174,9 @@ class BorderAuthSpec extends BorderPatrolSuite  {
   behavior of "IdentityFilter"
 
   it should "succeed and return output of upstream Service, if Session is found for SessionId" in {
-    val testService = mkTestService[AccessRequest[Int]] {
+    val testService = mkTestService[AccessIdRequest[Int]] {
       request => {
-        assert(request.identity == Identity(999))
+        assert(request.id == Identity(999))
         Future.value(Response(Status.Ok)) }
     }
 
@@ -268,5 +268,56 @@ class BorderAuthSpec extends BorderPatrolSuite  {
       Await.result(output)
     }
     caught.getMessage should equal ("whoopsie")
+  }
+
+  behavior of "ExceptionFilter"
+
+  it should "succeed and act as a passthru for the valid Response returned by Service" in {
+    val testService = mkTestService[Request] { req => Future.value(Response(Status.Ok)) }
+
+    // Execute
+    val output = (new ExceptionFilter andThen testService)(req("enterprise", "/dang"))
+
+    // Validate
+    Await.result(output).status should be (Status.Ok)
+  }
+
+  it should "succeed and convert the AccessDenied exception into error Response" in {
+    val testService = mkTestService[Request] { req =>
+      Future.exception(AccessDenied(Status.NotAcceptable, "No access allowed to service"))
+    }
+
+    // Execute
+    val output = (new ExceptionFilter andThen testService)(req("enterprise", "/dang"))
+
+    // Validate
+    Await.result(output).status should be (Status.NotAcceptable)
+    Await.result(output).contentString should be ("AccessDenied: No access allowed to service")
+  }
+
+  it should "succeed and convert the SessionStoreError exception into error Response" in {
+    val testService = mkTestService[Request] { req =>
+      Future.exception(new SessionStoreError("update failed"))
+    }
+
+    // Execute
+    val output = (new ExceptionFilter andThen testService)(req("enterprise", "/dang"))
+
+    // Validate
+    Await.result(output).status should be (Status.InternalServerError)
+    Await.result(output).contentString should be ("An error occurred interacting with the session store: update failed")
+  }
+
+  it should "succeed and convert the Runtime exception into error Response" in {
+    val testService = mkTestService[Request] { req =>
+      Future.exception(new RuntimeException("some weird exception"))
+    }
+
+    // Execute
+    val output = (new ExceptionFilter andThen testService)(req("enterprise", "/dang"))
+
+    // Validate
+    Await.result(output).status should be (Status.InternalServerError)
+    Await.result(output).contentString should be ("some weird exception")
   }
 }

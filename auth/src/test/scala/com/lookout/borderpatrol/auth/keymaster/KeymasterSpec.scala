@@ -119,18 +119,17 @@ class KeymasterSpec extends BorderPatrolSuite  {
 
     // Allocate and Session
     val sessionId = sessionid.next
-    val cooki = sessionId.asCookie
 
     // Login POST request
     val loginRequest = req("enterprise", "/login", ("username" -> "foo"), ("password" -> "bar"))
-    loginRequest.addCookie(cooki)
 
     // Original request
     val origReq = req("enterprise", "/dang", ("fake" -> "drake"))
     sessionStore.update[Request](Session(sessionId, origReq))
 
     // Execute
-    val output = (KeymasterLoginFilter(sessionStore) andThen testService)(ServiceRequest(loginRequest, one))
+    val output = (KeymasterLoginFilter(sessionStore) andThen testService)(
+      SessionIdRequest(ServiceRequest(loginRequest, one), sessionId))
 
     // Validate
     Await.result(output).status should be (Status.TemporaryRedirect)
@@ -145,43 +144,28 @@ class KeymasterSpec extends BorderPatrolSuite  {
   it should "return BadRequest Status if credentials are not present in the request" in {
     // Allocate and Session
     val sessionId = sessionid.next
-    val cooki = sessionId.asCookie
 
     // Login POST request
     val loginRequest = req("enterprise", "/login", ("username" -> "foo"))
-    loginRequest.addCookie(cooki)
 
     // Execute
-    val output = (KeymasterLoginFilter(sessionStore) andThen keymasterLoginFilterTestService)(ServiceRequest(loginRequest, one))
+    val output = (KeymasterLoginFilter(sessionStore) andThen keymasterLoginFilterTestService)(
+      SessionIdRequest(ServiceRequest(loginRequest, one), sessionId))
 
     // Validate
     Await.result(output).status should be (Status.BadRequest)
   }
 
-  it should "throw a SessionIdError, if sessionId is missing from the Request" in {
-    // Login POST request
-    val loginRequest = req("enterprise", "/login", ("username" -> "foo"), ("password" -> "bar"))
-
-    // Execute
-    val output = (KeymasterLoginFilter(sessionStore) andThen keymasterLoginFilterTestService)(ServiceRequest(loginRequest, one))
-
-    // Validate
-    val caught = the [SessionIdError] thrownBy {
-      Await.result(output)
-    }
-  }
-
   it should "return OriginalRequestNotFound if it fails find the original request from sessionStore" in {
     // Allocate and Session
     val sessionId = sessionid.next
-    val cooki = sessionId.asCookie
 
     // Login POST request
     val loginRequest = req("enterprise", "/login", ("username" -> "foo"), ("password" -> "bar"))
-    loginRequest.addCookie(cooki)
 
     // Execute
-    val output = (KeymasterLoginFilter(sessionStore) andThen keymasterLoginFilterTestService)(ServiceRequest(loginRequest, one))
+    val output = (KeymasterLoginFilter(sessionStore) andThen keymasterLoginFilterTestService)(
+      SessionIdRequest(ServiceRequest(loginRequest, one), sessionId))
 
     // Validate
     val caught = the [OriginalRequestNotFound] thrownBy {
@@ -202,14 +186,13 @@ class KeymasterSpec extends BorderPatrolSuite  {
 
     // Allocate and Session
     val sessionId = sessionid.next
-    val cooki = sessionId.asCookie
 
     // Login POST request
     val loginRequest = req("enterprise", "/login", ("username" -> "foo"), ("password" -> "bar"))
-    loginRequest.addCookie(cooki)
 
     // Execute
-    val output = (KeymasterLoginFilter(mockSessionStore) andThen keymasterLoginFilterTestService)(ServiceRequest(loginRequest, one))
+    val output = (KeymasterLoginFilter(mockSessionStore) andThen keymasterLoginFilterTestService)(
+      SessionIdRequest(ServiceRequest(loginRequest, one), sessionId))
 
     // Validate
     val caught = the [Exception] thrownBy {
@@ -241,6 +224,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
       }).toFuture
     }
     val sessionId = sessionid.next
+    sessionStore.update[Tokens](Session(sessionId, tokens))
 
     // Execute
     val output = KeymasterAccessIssuer(testService, path, sessionStore)(KeymasterAccessReq(Id(tokens), one, sessionId))
@@ -303,5 +287,87 @@ class KeymasterSpec extends BorderPatrolSuite  {
     }
     caught.getMessage should equal ("No access allowed to service one")
     caught.status should be (Status.NotAcceptable)
+  }
+
+  behavior of "KeymasterAccessFilter"
+
+  it should "succeed and include service token in the request and invoke the REST API of upstream service" in {
+    val accessService = mkTestService[AccessRequest[Tokens], AccessResponse[ServiceToken]] {
+      request => KeymasterAccessRes(Access(serviceToken2)).toFuture
+    }
+    val upstreamService = mkTestService[Request, Response] {
+      request => {
+        // Verify service token in the request
+        assert (request.headerMap.get("Auth-Token") == Some(serviceToken2.value))
+        Response(Status.Ok).toFuture
+      }
+    }
+
+    // Allocate and Session
+    val sessionId = sessionid.next
+
+    // Create request
+    val request = req("enterprise", "/dang")
+
+    // Execute
+    val output = (KeymasterAccessFilter(upstreamService) andThen accessService)(
+      AccessIdRequest(SessionIdRequest(ServiceRequest(request, one), sessionId), Id(tokens)))
+
+    // Validate
+    Await.result(output).status should be (Status.Ok)
+  }
+
+  it should "propagate the failure status code returned by upstream service" in {
+    val accessService = mkTestService[AccessRequest[Tokens], AccessResponse[ServiceToken]] {
+      request => KeymasterAccessRes(Access(serviceToken2)).toFuture
+    }
+    val upstreamService = mkTestService[Request, Response] {
+      request => {
+        // Verify service token in the request
+        assert (request.headerMap.get("Auth-Token") == Some(serviceToken2.value))
+        Response(Status.NotFound).toFuture
+      }
+    }
+
+    // Allocate and Session
+    val sessionId = sessionid.next
+
+    // Create request
+    val request = req("enterprise", "/dang")
+
+    // Execute
+    val output = (KeymasterAccessFilter(upstreamService) andThen accessService)(
+      AccessIdRequest(SessionIdRequest(ServiceRequest(request, one), sessionId), Id(tokens)))
+
+    // Validate
+    Await.result(output).status should be (Status.NotFound)
+  }
+
+  it should "propagate the exception returned by Access Issuer Service" in {
+    val accessService = mkTestService[AccessRequest[Tokens], AccessResponse[ServiceToken]] {
+      request => Future.exception(new Exception("Oopsie"))
+    }
+    val upstreamService = mkTestService[Request, Response] {
+      request => {
+        // Verify service token in the request
+        assert (request.headerMap.get("Auth-Token") == Some(serviceToken2.value))
+        Response(Status.NotFound).toFuture
+      }
+    }
+
+    // Allocate and Session
+    val sessionId = sessionid.next
+
+    // Create request
+    val request = req("enterprise", "/dang")
+
+    // Execute
+    val output = (KeymasterAccessFilter(upstreamService) andThen accessService)(
+      AccessIdRequest(SessionIdRequest(ServiceRequest(request, one), sessionId), Id(tokens)))
+
+    // Validate
+    val caught = the [Exception] thrownBy {
+      Await.result(output)
+    }
   }
 }

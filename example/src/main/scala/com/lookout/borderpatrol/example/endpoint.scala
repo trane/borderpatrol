@@ -24,14 +24,6 @@
 
 package com.lookout.borderpatrol.example
 
-import io.finch.route._
-
 object endpoint {
-  import service._
 
-  val routes =
-    (Get / "login" /> loginService) :+:
-    (Post / "login" /> loginService) :+:
-    (* / "service1" /> service1) :+:
-    (* / "service2" /> service2)
 }

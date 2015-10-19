@@ -109,6 +109,7 @@ lazy val example = project
   .settings(resolvers += Resolver.sonatypeRepo("snapshots"))
   .settings(moduleName := "borderpatrol-example")
   .settings(allSettings)
+  .settings(coverageExcludedPackages := "com\\.lookout\\.borderpatrol\\.example\\..*")
   .settings(noPublish)
   .settings(
     libraryDependencies ++= Seq(

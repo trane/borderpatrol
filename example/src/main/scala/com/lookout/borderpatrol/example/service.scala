@@ -21,35 +21,76 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
 package com.lookout.borderpatrol.example
-import argonaut._, Argonaut._
 
-import com.twitter.finagle.httpx.{Method, Response, Request}
-import com.twitter.finagle.{SimpleFilter, Service}
+import com.lookout.borderpatrol.auth._
+import com.lookout.borderpatrol.auth.keymaster._
+import com.lookout.borderpatrol.auth.keymaster.Keymaster._
+import com.lookout.borderpatrol.auth.keymaster.Tokens._
+import com.lookout.borderpatrol.{ServiceMatcher, ServiceIdentifier}
+import com.lookout.borderpatrol.sessionx._
+import com.lookout.borderpatrol.util.Combinators._
 import com.twitter.io.Buf
+import com.twitter.finagle.httpx.{Method, Request, Response, Status}
+import com.twitter.finagle.httpx.path._
+import com.twitter.finagle.httpx.service.RoutingService
+import com.twitter.finagle.{Httpx, Service}
 import com.twitter.util.Future
-import io.finch.response.{Forbidden, ResponseBuilder, Ok}
+import io.finch.response.ResponseBuilder
 
 object service {
-  import model._
 
-  import reader._
-  import com.lookout.borderpatrol.sessionx._
-  import io.finch.request._
-  import io.finch.argonaut._
-  import com.twitter.finagle.httpx.Status
+  // Config
+  val one = ServiceIdentifier("one", Path("/ent"), "enterprise", "/login")
+  val ckpoint = ServiceIdentifier("ckpoint", Path("/login"), "unused", "/login")
+  implicit val secretStore = SecretStores.InMemorySecretStore(Secrets(Secret(), Secret()))
+  val sessionStore = SessionStores.InMemoryStore
 
-  /**
-   * Handles login requests, routing them to the Token Service
-   * It then will send the user to the location they were trying to access before they were prompted to login
-   */
-  case class LoginService(tokenService: TokenService) extends Service[Request, Response] {
-    import io.finch.response._
+  // Config -> ServiceIds & paths
+  val serviceIds = Set(one, ckpoint)
+  val serviceMatcher = ServiceMatcher(serviceIds)
+  val keymasterIdentityProviderPath = "identityProvider"
+  val keymasterAccessIssuerPath = "accessIssuer"
 
+  //  Mock Keymaster identityProvider
+  val keymasterIdentityTestService = new Service[Request, Response] {
+
+    val userMap: Map[String, String] = Map(
+      ("test1@example.com" -> "password1"),
+      ("test2@example.com" -> "password2"),
+      ("test3@example.com" -> "password3")
+    )
+
+    def apply(request: Request) = {
+      val tokens = Tokens(MasterToken("masterT"), ServiceTokens())
+      (for {
+        email <- request.getParam("e").toFuture
+        pass <- request.getParam("p").toFuture
+        if userMap(email) == (pass)
+      } yield tap(Response(Status.Ok))(res => {
+          res.contentString = TokensEncoder(tokens).toString()
+          res.contentType = "application/json"})) handle {
+        case ex => Response(Status.Unauthorized)
+      }
+    }
+  }
+
+  //  Mock Keymaster AccessIssuer
+  val keymasterAccessTestService = new Service[Request, Response] {
+    def apply(request: Request) = {
+      val tokens = Tokens(MasterToken("masterT"), ServiceTokens().add("one", ServiceToken("SomeServiceOneData")))
+      tap(Response(Status.Ok))(res => {
+        res.contentString = TokensEncoder(tokens).toString()
+        res.contentType = "application/json"
+      }).toFuture
+    }
+  }
+
+  //  Mock Login Service
+  val loginGetService = new Service[Request, Response] {
     val loginForm = Buf.Utf8(
       """<html><body>
-        |<h1>Account Service Login</h1>
+        |<h1>Example Account Service Login</h1>
         |<form action="/login" method="post">
         |<label>username</label><input type="text" name="username" />
         |<label>password</label><input type="password" name="password" />
@@ -59,92 +100,58 @@ object service {
       """.stripMargin
     )
 
-    def loginPage(req: Request): Future[Response] = {
-      val rb = ResponseBuilder(Status.Ok).withContentType(Some("text/html"))
-      if (req.cookies.contains("border_session"))
-         Future.value(rb(loginForm))
-      else
-        SessionId.next.map(id => rb.withCookies(id.asCookie)(loginForm))
-    }
-
-    def login(req: Request): Future[Response] =
-      (for {
-        u <- param("username")(req)
-        p <- param("password")(req)
-        s <- sessionReader(req)
-        tr <- tokenService(Request("e" -> u, "p" -> p, "s" -> "login"))
-        if tr.status == Status.Ok
-        s2 <- Session(tr.content)
-      } yield buildAuthResponse(s, s2)) or Future.value(Unauthorized("invalid login"))
-
-    def apply(req: Request): Future[Response] =
+    def apply(req: Request): Future[Response] = {
       req.method match {
-        case Method.Get => loginPage(req)
-        case Method.Post => login(req)
-        case _ => Future.value(NotFound("login doesn't know this place"))
+        case Method.Get => {
+          val rb = ResponseBuilder(Status.Ok).withContentType(Some("text/html"))
+          rb(loginForm).toFuture
+        }
+        case _ => Future.value(Response(Status.NotFound))
       }
-
-    def buildAuthResponse(prev: Session[Request], next: Session[Buf]): Response =
-      ResponseBuilder(Status.TemporaryRedirect)
-        .withHeaders("Location" -> prev.data.uri)
-        .withCookies(next.id.asCookie)()
-
+    }
   }
 
-  /**
-   * If the request results in an Unauthorized status, then it will create a redirect and attach a cookie/session
-   * sending you to the login page
-   */
-  val sessionRequestFilter: SimpleFilter[Request, Response] = new SimpleFilter[Request, Response] {
-
-    def apply(request: Request, service: Service[Request, Response]): Future[Response] =
-      service(request) flatMap {rep => rep.status match {
-        case Status.Unauthorized => buildLoginResponse(request)
-        case _ => Future.value(rep)
-      }}
-
-    def buildLoginResponse(request: Request): Future[Response] =
-      Session(request) map { session =>
-        ResponseBuilder(Status.TemporaryRedirect)
-            .withHeaders("Location" -> "/login")
-            .withCookies(session.id.asCookie)()
-      }
-  }
-  /**
-   * Basic ACL service
-   *
-   * Generates service tokens for users who have access to that service
-   * based on a mapping between services and users
-   */
-  case class TokenService(auth: Map[User, Set[String]]) extends Service[Request, Response] {
-
-    def apply(req: Request): Future[Response] =
-      for {
-        u <- userReader(req)
-        s <- param("s")(req)
-        if auth(u)(s)
-      } yield Ok(Token.generate(u))
+  //  Mock Upstream service
+  val upstreamService = new Service[Request, Response] {
+    def apply(request: Request) =
+      tap(Response(Status.Ok))(res => {
+        res.contentString = """
+          |<html><body>
+          |<h1>Welcome to Service ENT</h1>
+          |</body></html>
+        """.stripMargin
+        res.contentType = "text/html"
+      }).toFuture
   }
 
-  case class ExternalService(name: String, allowed: Set[User]) extends Service[Request, Response] {
-    def apply(req: Request): Future[Response] =
-      for {
-        t <- authHeaderReader(req)
-      } yield (if (allowed(t.u)) Ok(s"Hello ${t.u}! Welcome to $name")
-               else Forbidden())
+  //  Clients to those mocked services
+  val keymasterClient = Httpx.newService("localhost:8081")
+  val upstreamClient = Httpx.newService("localhost:8081")
+
+  //  Login path
+  val loginPostService = new ExceptionFilter andThen
+    new ServiceFilter(serviceMatcher) andThen
+    new SessionIdFilter(sessionStore) andThen
+    new KeymasterLoginFilter(sessionStore) andThen
+    new KeymasterIdentityProvider(keymasterClient, Path(keymasterIdentityProviderPath))
+
+  //  All other requests
+  val allOtherRequests = new ExceptionFilter andThen
+    new ServiceFilter(serviceMatcher) andThen
+    new SessionIdFilter(sessionStore) andThen
+    new IdentityFilter[Tokens](sessionStore) andThen
+    new KeymasterAccessFilter(upstreamClient) andThen
+    new KeymasterAccessIssuer(keymasterClient, Path(keymasterAccessIssuerPath), sessionStore)
+
+  val routingService1 = RoutingService.byMethodAndPathObject {
+    case Method.Post -> Root / "login" => loginPostService
+    case Method.Get -> Root / "login" => loginGetService
+    case _ => allOtherRequests
   }
 
-
-  val authMap: Map[User, Set[String]] = Map(
-    (User("test@example.com", "test") -> Set("login", "service1", "service2")),
-    (User("tester@examp.ly", "password") -> Set("login", "service1")),
-    (User("testing@examp.ly", "secret") -> Set("login", "service2"))
-  )
-  val tokenService = TokenService(authMap)
-  val loginService = LoginService(tokenService)
-  val service1 = sessionRequestFilter andThen ExternalService("service1",
-    authMap.keySet.filter(u => authMap(u)("service1")))
-  val service2 = sessionRequestFilter andThen ExternalService("service2",
-    authMap.keySet.filter(u => authMap(u)("service2")))
-
+  val routingService2 = RoutingService.byMethodAndPathObject {
+    case Method.Post -> Root / "identityProvider" => keymasterIdentityTestService
+    case Method.Post -> Root / "accessIssuer" => keymasterAccessTestService
+    case _ -> Root / "ent" => upstreamService
+  }
 }

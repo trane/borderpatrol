@@ -90,9 +90,11 @@ object SessionStores {
         case _ => None.toFuture
       }
 
-    def update[A](session: Session[A])(implicit ev: SessionDataEncoder[A]): Future[Unit] =
+    def update[A](session: Session[A])(implicit ev: SessionDataEncoder[A]): Future[Unit] = {
+      delete(session.id)
       if (store.add(session.map(ev.encode))) Future.Unit
       else Future.exception[Unit](new SessionStoreError(s"update failed with $session"))
+    }
 
     def delete(key: SessionId): Future[Unit] =
       store.find(_.id == key) match {
