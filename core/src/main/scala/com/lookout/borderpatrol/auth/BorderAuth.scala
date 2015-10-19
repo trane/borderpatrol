@@ -38,7 +38,7 @@ class ServiceFilter(matchers: ServiceMatcher)
  * Ensures we have a SessionId present in this request, sending a Redirect to the service login page if it doesn't
  */
 case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStoreApi)
-  extends Filter[ServiceRequest, Response, SessionIdRequest, Response] {
+    extends Filter[ServiceRequest, Response, SessionIdRequest, Response] {
 
   /**
    *  Passes the SessionId to the next in the filter chain. If any failures decoding the SessionId occur
@@ -91,7 +91,7 @@ class IdentityFilter[A : SessionDataEncoder](store: SessionStore)(implicit secre
  * Top level filter that maps exceptions into appropriate status codes
  */
 class ExceptionFilter
-  extends Filter[Request, Response, Request, Response] {
+    extends Filter[Request, Response, Request, Response] {
 
   /**
    * Tells the service how to handle certain types of servable errors (i.e. PetstoreError)

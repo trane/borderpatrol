@@ -27,7 +27,7 @@ object Keymaster {
    * @param path Keymaster service endpoint path
    */
   case class KeymasterIdentityProvider(client: Service[Request, Response], path: Path)
-    extends IdentityProvider[Credential, Tokens] {
+      extends IdentityProvider[Credential, Tokens] {
 
     def api(cred: Credential): Request =
       Request(Method.Post,
@@ -61,7 +61,7 @@ object Keymaster {
    * @param secretStoreApi
    */
   case class KeymasterLoginFilter(store: SessionStore)(implicit secretStoreApi: SecretStoreApi)
-    extends Filter[SessionIdRequest, Response, IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
+      extends Filter[SessionIdRequest, Response, IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
 
     def createIdentifyReq(req: SessionIdRequest): Option[IdentifyRequest[Credential]] =
       for {
@@ -101,7 +101,7 @@ object Keymaster {
    * @param store Session store
    */
   case class KeymasterAccessIssuer(client: Service[Request, Response], path: Path, store: SessionStore)
-    extends AccessIssuer[Tokens, ServiceToken] {
+      extends AccessIssuer[Tokens, ServiceToken] {
     def api(req: AccessRequest[Tokens]): Request =
       tap(Request(Method.Post, Request.queryString(path.toString(),
         ("services" -> req.serviceId.name))))(r => r.headerMap.add("Auth-Token", req.identity.id.master.value))
@@ -139,7 +139,7 @@ object Keymaster {
    * @param upstreamClient
    */
   case class KeymasterAccessFilter(upstreamClient: Service[Request, Response])
-    extends Filter[AccessIdRequest[Tokens], Response, AccessRequest[Tokens], AccessResponse[ServiceToken]] {
+      extends Filter[AccessIdRequest[Tokens], Response, AccessRequest[Tokens], AccessResponse[ServiceToken]] {
     def apply(req: AccessIdRequest[Tokens],
               accessService: Service[AccessRequest[Tokens], AccessResponse[ServiceToken]]): Future[Response] =
       accessService(AccessRequest(req.id, req.req.req.serviceId, req.req.sid)).flatMap(accessResp =>
