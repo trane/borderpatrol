@@ -1,9 +1,10 @@
 package com.lookout.borderpatrol.example
 
 import com.twitter.finagle.Httpx
+import com.twitter.server.TwitterServer
 import com.twitter.util.Await
 
-object BorderPatrolApp extends App {
+object BorderPatrolApp extends TwitterServer {
   import service._
 
   val server1 = Httpx.serve(":8080", routingService1)

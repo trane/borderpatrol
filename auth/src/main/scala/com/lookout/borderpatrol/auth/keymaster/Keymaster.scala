@@ -82,10 +82,10 @@ object Keymaster {
               service: Service[IdentifyRequest[Credential], IdentifyResponse[Tokens]]): Future[Response] =
       createIdentifyReq(req).fold(Future.value(Response(Status.BadRequest)))(credReq =>
         for {
-          originReq <- getRequestFromSessionStore(req.sid)
           tokenResponse <- service(credReq)
           session <- Session(tokenResponse.identity.id)
           _ <- store.update[Tokens](session)
+          originReq <- getRequestFromSessionStore(req.sid)
           _ <- store.delete(req.sid)
         } yield tap(Response(Status.TemporaryRedirect))(res => {
           res.location = originReq.uri

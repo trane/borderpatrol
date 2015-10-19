@@ -42,12 +42,13 @@ object service {
 
   // Config
   val one = ServiceIdentifier("one", Path("/ent"), "enterprise", "/login")
+  val admin = ServiceIdentifier("admin", Path("/admin/metrics.json"), "admin", "/login")
   val ckpoint = ServiceIdentifier("ckpoint", Path("/login"), "unused", "/login")
   implicit val secretStore = SecretStores.InMemorySecretStore(Secrets(Secret(), Secret()))
   val sessionStore = SessionStores.InMemoryStore
 
   // Config -> ServiceIds & paths
-  val serviceIds = Set(one, ckpoint)
+  val serviceIds = Set(one, admin, ckpoint)
   val serviceMatcher = ServiceMatcher(serviceIds)
   val keymasterIdentityProviderPath = "identityProvider"
   val keymasterAccessIssuerPath = "accessIssuer"
@@ -78,7 +79,9 @@ object service {
   //  Mock Keymaster AccessIssuer
   val keymasterAccessTestService = new Service[Request, Response] {
     def apply(request: Request): Future[Response] = {
-      val tokens = Tokens(MasterToken("masterT"), ServiceTokens().add("one", ServiceToken("SomeServiceOneData")))
+      val serviceName = request.getParam("services")
+      val tokens = Tokens(MasterToken("masterT"), ServiceTokens().add(
+        serviceName, ServiceToken(s"SomeServiceData:${serviceName}")))
       tap(Response(Status.Ok))(res => {
         res.contentString = TokensEncoder(tokens).toString()
         res.contentType = "application/json"
@@ -124,6 +127,19 @@ object service {
       }).toFuture
   }
 
+  //  Mock admin service
+  val adminService = new Service[Request, Response] {
+    def apply(request: Request): Future[Response] =
+      tap(Response(Status.Ok))(res => {
+        res.contentString = """
+                              |<html><body>
+                              |<h1>Welcome to ADMIN service</h1>
+                              |</body></html>
+                            """.stripMargin
+        res.contentType = "text/html"
+      }).toFuture
+  }
+
   //  Clients to those mocked services
   val keymasterClient = Httpx.newService("localhost:8081")
   val upstreamClient = Httpx.newService("localhost:8081")
@@ -153,5 +169,6 @@ object service {
     case Method.Post -> Root / "identityProvider" => keymasterIdentityTestService
     case Method.Post -> Root / "accessIssuer" => keymasterAccessTestService
     case _ -> Root / "ent" => upstreamService
+    case _ -> Root / "admin" / _ => adminService
   }
 }
