@@ -132,7 +132,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
       SessionIdRequest(ServiceRequest(loginRequest, one), sessionId))
 
     // Validate
-    Await.result(output).status should be (Status.TemporaryRedirect)
+    Await.result(output).status should be (Status.Found)
     Await.result(output).location should be equals ("/dang")
     val returnedSessionId = SessionId.fromResponse(Await.result(output)).toFuture
     returnedSessionId should not be sessionId

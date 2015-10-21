@@ -87,7 +87,7 @@ object Keymaster {
           _ <- store.update[Tokens](session)
           originReq <- getRequestFromSessionStore(req.sid)
           _ <- store.delete(req.sid)
-        } yield tap(Response(Status.TemporaryRedirect))(res => {
+        } yield tap(Response(Status.Found))(res => {
           res.location = originReq.uri
           res.addCookie(session.id.asCookie)
         })
