@@ -18,7 +18,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
   import sessionx.helpers.{secretStore => store, _}
 
   // sids
-  val one = ServiceIdentifier("one", Path("/ent"), "enterprise", "/a/login")
+  val one = ServiceIdentifier("one", Path("/ent"), "enterprise", Path("/a/login"))
   val serviceMatcher = ServiceMatcher(Set(one))
   val sessionStore = SessionStores.InMemoryStore
 

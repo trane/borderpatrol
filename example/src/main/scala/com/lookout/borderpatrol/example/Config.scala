@@ -17,6 +17,7 @@ case class ServerConfig(secretStore: SecretStoreApi,
                         sessionStore: SessionStore,
                         serviceIdentifiers: Set[ServiceIdentifier])
 
+// scalastyle:off null
 class ConfigError(val message: String) extends Exception(message, null)
 
 /**
@@ -24,9 +25,9 @@ class ConfigError(val message: String) extends Exception(message, null)
  */
 object Config {
 
-  def defaultSecretStore = SecretStores.InMemorySecretStore(Secrets(Secret(), Secret()))
-  def defaultSessionStore = SessionStores.InMemoryStore
-  def defaultServiceIdsFile = "bpSids.json"
+  val defaultSecretStore = SecretStores.InMemorySecretStore(Secrets(Secret(), Secret()))
+  val defaultSessionStore = SessionStores.InMemoryStore
+  val defaultServiceIdsFile = "serviceids.json"
 
   // Flaggable for Secret Store
   implicit val secretStoreApiFlaggable = new Flaggable[SecretStoreApi] {
@@ -41,10 +42,9 @@ object Config {
 
   // Flaggable for Session Store
   implicit val sessionStoreApiFlaggable = new Flaggable[SessionStore] {
-    def parse (s: String): SessionStore = {
-      println("Inside sessionStoreApiFlaggable: " + s)
+    def parse (s: String): SessionStore =
       SessionStores.MemcachedStore(MemcachedClient.newRichClient(s))
-    }
+
     override def show(t: SessionStore) = t match {
       case InMemoryStore => "In Memory Session Store"
       case MemcachedStore(_) => "Memcached Session Store"
@@ -65,7 +65,7 @@ object Config {
       )
 
       decode[Set[ServiceIdentifier]](Source.fromFile(s).mkString) match {
-        case Xor.Right(a) => a.asInstanceOf[Set[ServiceIdentifier]]
+        case Xor.Right(a) => a
         case Xor.Left(b) => throw new ConfigError(b.getClass.getSimpleName + ": " + b.getMessage())
       }
     }
@@ -79,9 +79,7 @@ object Config {
 trait Config {self: App =>
   import Config._
 
-  println("BEfore flags")
-
-  def defaultServiceIds = serviceIdsFlaggable.parse(defaultServiceIdsFile)
+  def defaultServiceIds: Set[ServiceIdentifier] = serviceIdsFlaggable.parse(defaultServiceIdsFile)
 
   // Flag for Secret Store
   val secretStore = flag[SecretStoreApi]("secretStore.servers", defaultSecretStore,

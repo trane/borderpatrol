@@ -1,0 +1,22 @@
+[
+  {
+    "login" : {
+      "str" : "/login"
+    },
+    "subdomain" : "enterprise",
+    "path" : {
+      "str" : "/ent"
+    },
+    "name" : "one"
+  },
+  {
+    "login" : {
+      "str" : "/login"
+    },
+    "subdomain" : "admin",
+    "path" : {
+      "str" : "/admin/metrics.json"
+    },
+    "name" : "admin"
+  }
+]

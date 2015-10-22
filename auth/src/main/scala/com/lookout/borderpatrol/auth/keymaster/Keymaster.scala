@@ -60,7 +60,7 @@ object Keymaster {
    * @param store
    * @param secretStoreApi
    */
-  case class KeymasterLoginFilter(store: SessionStore)(implicit secretStoreApi: SecretStoreApi)
+  case class KeymasterPostLoginFilter(store: SessionStore)(implicit secretStoreApi: SecretStoreApi)
       extends Filter[SessionIdRequest, Response, IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
 
     def createIdentifyReq(req: SessionIdRequest): Option[IdentifyRequest[Credential]] =
@@ -90,8 +90,28 @@ object Keymaster {
         } yield tap(Response(Status.Found))(res => {
           res.location = originReq.uri
           res.addCookie(session.id.asCookie)
-        })
-      )
+        }))
+  }
+
+  /**
+   * Decodes the methods Get and Post differently
+   * - Get is directed to login form
+   * - Post processes the login credentials
+   *
+   * @param client
+   */
+  case class KeymasterMethodMuxLoginFilter(client: Service[Request, Response], path: Path)
+    extends Filter[SessionIdRequest, Response, SessionIdRequest, Response] {
+    def apply(req: SessionIdRequest,
+              service: Service[SessionIdRequest, Response]): Future[Response] =
+      req.req.req.method match {
+        case Method.Get => client(Request(Method.Get, path.toString))
+        case Method.Post => service(req)
+        case _ => tap(Response(Status.BadRequest))(res => {
+          res.contentString = s"Invalid method ${req.req.req.method} for path ${req.req.req.path}"
+          res.contentType = "text/plain"
+        }).toFuture
+      }
   }
 
   /**

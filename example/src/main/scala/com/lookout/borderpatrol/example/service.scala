@@ -78,7 +78,7 @@ object service {
   }
 
   //  Mock Login Service
-  val loginGetService = new Service[Request, Response] {
+  val mockKeymasterCheckpointService = new Service[Request, Response] {
     val loginForm = Buf.Utf8(
       """<html><body>
         |<h1>Example Account Service Login</h1>
@@ -136,18 +136,20 @@ object service {
   //***FIXME to config
   val keymasterIdentityProviderPath = Path("identityProvider")
   val keymasterAccessIssuerPath = Path("accessIssuer")
+  val keymasterCheckpointPath = Path("checkpoint")
   val keymasterClient = Httpx.newService("localhost:8081")
   val upstreamClient = Httpx.newService("localhost:8081")
 
   //  Login path
-  def loginPostService(implicit config: ServerConfig): Service[Request, Response] = {
+  def keymasterIdpService(implicit config: ServerConfig): Service[Request, Response] = {
     implicit val secretStore = config.secretStore
     val serviceMatcher = ServiceMatcher(config.serviceIdentifiers)
 
     new ExceptionFilter andThen
     new ServiceFilter(serviceMatcher) andThen
     new SessionIdFilter(config.sessionStore) andThen
-    new KeymasterLoginFilter(config.sessionStore) andThen
+    new KeymasterMethodMuxLoginFilter(keymasterClient, keymasterCheckpointPath) andThen
+    new KeymasterPostLoginFilter(config.sessionStore) andThen
     new KeymasterIdentityProvider(keymasterClient, keymasterIdentityProviderPath)
   }
 
@@ -164,28 +166,29 @@ object service {
     new KeymasterAccessIssuer(keymasterClient, keymasterAccessIssuerPath, config.sessionStore)
   }
 
-  def getRoutingService(implicit config: ServerConfig) = {
-    val idpServiceIds = config.serviceIdentifiers.filter(a => a.name startsWith "ck")
-    val idpPostPathMap = idpServiceIds.map(a => (a.path -> loginPostService)).toMap
-    val idpGetPathMap = idpServiceIds.map(a => (a.path -> loginGetService)).toMap
+  def getRoutingService(implicit config: ServerConfig): Service[Request, Response] = {
+    val keymasterIdpPathMap = config.serviceIdentifiers.map(a => (a.login -> keymasterIdpService)).toMap
 
     RoutingService.byMethodAndPathObject {
-      case Method.Post -> path if idpPostPathMap.contains(path) => idpPostPathMap(path) //loginPostService
-      case Method.Get -> path if idpGetPathMap.contains(path) => idpGetPathMap(path) //loginGetService
-      case _ => allOtherRequests //FIXME: Should we restrict this to known upstream paths only
+      case Method.Post -> path if keymasterIdpPathMap.contains(path) => keymasterIdpPathMap(path) //keymasterIdpService
+      case Method.Get -> path if keymasterIdpPathMap.contains(path) => keymasterIdpPathMap(path) //keymasterIdpService
+      case _ => allOtherRequests //FIXME: Should we restrict this to known upstream paths instead of ServiceFilter
     }
   }
 
-  def getMockRoutingService(implicit config: ServerConfig) = {
-    val protectedServiceIds = config.serviceIdentifiers.filterNot(a => a.name startsWith "ck")
-    val mockProtectedPathMap = protectedServiceIds.map(a => (a.path -> mockUpstreamService)).toMap
-    val mockMap = mockProtectedPathMap + (keymasterAccessIssuerPath -> mockKeymasterAccessIssuerService,
-      keymasterIdentityProviderPath -> mockKeymasterIdentityService)
+  def getMockRoutingService(implicit config: ServerConfig): Service[Request, Response] = {
+    val mockProtectedPathMap = config.serviceIdentifiers.map(a => (a.path -> mockUpstreamService)).toMap
+    val mockKeymasterPathMap = Map(keymasterAccessIssuerPath -> mockKeymasterAccessIssuerService,
+      keymasterIdentityProviderPath -> mockKeymasterIdentityService,
+      keymasterCheckpointPath -> mockKeymasterCheckpointService)
 
     RoutingService.byMethodAndPathObject {
-      case Method.Post -> path if mockMap.contains(path) => mockMap(path) //mockKeymasterIdentityService
-      case Method.Post -> path if mockMap.contains(path) => mockMap(path) // mockKeymasterAccessIssuerService
-      case _ -> path if mockMap.contains(path) => mockMap(path) // */ => mockUpstreamService
+      //mockKeymasterIdentityService + mockKeymasterAccessIssuerService
+      case Method.Post -> path if mockKeymasterPathMap.contains(path) => mockKeymasterPathMap(path)
+      // mockKeymasterCheckpointService
+      case Method.Get -> path if mockKeymasterPathMap.contains(path) => mockKeymasterPathMap(path)
+      // mockUpstreamService
+      case _ -> path if mockProtectedPathMap.contains(path) => mockProtectedPathMap(path)
     }
   }
 }

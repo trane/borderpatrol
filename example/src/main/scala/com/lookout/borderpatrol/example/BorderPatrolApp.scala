@@ -7,7 +7,6 @@ import com.twitter.util.Await
 
 object BorderPatrolApp extends TwitterServer with Config {
   import service._
-  import ServerConfig._
 
   premain {
     implicit val serverConfig = ServerConfig(secretStore(), sessionStore(), serviceIds())
