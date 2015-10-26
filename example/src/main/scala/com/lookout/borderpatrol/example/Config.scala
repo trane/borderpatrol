@@ -1,9 +1,11 @@
-package com.lookout.borderpatrol
+package com.lookout.borderpatrol.example
 
+import com.lookout.borderpatrol.ServiceIdentifier
 import com.lookout.borderpatrol.sessionx.SecretStores.InMemorySecretStore
 import com.lookout.borderpatrol.sessionx.SessionStores.{MemcachedStore, InMemoryStore}
 import com.lookout.borderpatrol.sessionx._
 import com.twitter.finagle.MemcachedClient
+import com.twitter.finagle.httpx.Method
 import com.twitter.finagle.httpx.path.Path
 import com.twitter.app.{Flaggable, App}
 import cats.data.Xor

@@ -43,9 +43,6 @@ val baseSettings = Seq(
     "com.twitter" %% "bijection-util" % "0.8.1",
     "io.argonaut" %% "argonaut" % "6.1",
     "org.bouncycastle" % "bcprov-jdk15on" % "1.52",
-    "io.circe" %% "circe-core" % circeVersion,
-    "io.circe" %% "circe-generic" % circeVersion,
-    "io.circe" %% "circe-jawn" % circeVersion,
     compilerPlugin("org.scalamacros" % "paradise" % "2.0.1" cross CrossVersion.full)
   ) ++ testDependencies.map(_ % "test"),
   scalacOptions ++= compilerOptions ++ (
@@ -124,7 +121,10 @@ lazy val example = project
       "com.twitter" %% "twitter-server" % twitterServerVersion,
       "com.twitter" %% "finagle-stats" % finagleVersion,
       "com.github.finagle" %% "finch-core" % finchVersion,
-      "com.github.finagle" %% "finch-argonaut" % finchVersion
+      "com.github.finagle" %% "finch-argonaut" % finchVersion,
+      "io.circe" %% "circe-core" % circeVersion,
+      "io.circe" %% "circe-generic" % circeVersion,
+      "io.circe" %% "circe-jawn" % circeVersion
     )
   )
   .disablePlugins(JmhPlugin)

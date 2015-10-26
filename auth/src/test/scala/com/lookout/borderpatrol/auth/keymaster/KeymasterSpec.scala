@@ -246,7 +246,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val caught = the [AccessIssuerError] thrownBy {
       Await.result(output)
     }
-    caught.getMessage should equal ("No access allowed to service one")
+    caught.getMessage should equal ("No access allowed to service one due to error: Status(404)")
     caught.status should be (Status.NotFound)
   }
 
@@ -409,9 +409,9 @@ class KeymasterSpec extends BorderPatrolSuite  {
     Await.result(output).status should be (Status.Ok)
   }
 
-  it should "fail and return BadRequest for non GET or POST method on this filter" in {
+  it should "succeed and invoke the non GET or POST method on keymaster service" in {
     val testService = mkTestService[SessionIdRequest, Response] { _ => fail("Should not get here") }
-    val keymasterService = mkTestService[Request, Response] { _ => fail("Should not get here") }
+    val keymasterService = mkTestService[Request, Response] { _ => Response(Status.Ok).toFuture }
 
     // Allocate and Session
     val sessionId = sessionid.next
@@ -424,7 +424,6 @@ class KeymasterSpec extends BorderPatrolSuite  {
       SessionIdRequest(ServiceRequest(request, one), sessionId))
 
     // Validate
-    Await.result(output).status should be (Status.BadRequest)
-    Await.result(output).contentString should be ("Invalid method HEAD for path /ent")
+    Await.result(output).status should be (Status.Ok)
   }
 }

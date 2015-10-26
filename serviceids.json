@@ -3,7 +3,7 @@
     "login" : {
       "str" : "/login"
     },
-    "subdomain" : "enterprise",
+    "subdomain" : "ent",
     "path" : {
       "str" : "/ent"
     },

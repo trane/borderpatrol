@@ -48,7 +48,7 @@ object Keymaster {
           )
         //  Preserve Response Status code by throwing AccessDenied exceptions
         case _ => Future.exception(IdentityProviderError(res.status,
-            s"Invalid credentials for user ${req.credential.email}"))
+          s"Invalid credentials for user ${req.credential.email}"))
       })
   }
 
@@ -100,17 +100,13 @@ object Keymaster {
    *
    * @param client
    */
-  case class KeymasterMethodMuxLoginFilter(client: Service[Request, Response], path: Path)
+  case class KeymasterMethodMuxLoginFilter(client: Service[Request, Response], loginPath: Path)
     extends Filter[SessionIdRequest, Response, SessionIdRequest, Response] {
     def apply(req: SessionIdRequest,
               service: Service[SessionIdRequest, Response]): Future[Response] =
-      req.req.req.method match {
-        case Method.Get => client(Request(Method.Get, path.toString))
-        case Method.Post => service(req)
-        case _ => tap(Response(Status.BadRequest))(res => {
-          res.contentString = s"Invalid method ${req.req.req.method} for path ${req.req.req.path}"
-          res.contentType = "text/plain"
-        }).toFuture
+      (req.req.req.method, req.req.req.path) match {
+        case (Method.Post, loginPath) => service(req)
+        case _ => client(req.req.req)
       }
   }
 
@@ -148,7 +144,7 @@ object Keymaster {
             )
           //  Preserve Response Status code by throwing AccessDenied exceptions
           case _ => Future.exception(AccessIssuerError(res.status,
-            s"No access allowed to service ${req.serviceId.name}"))
+            s"No access allowed to service ${req.serviceId.name} due to error: ${res.status}"))
         })
       )(t => Future.value(t)).map(t => KeymasterAccessRes(Access(t)))
   }
