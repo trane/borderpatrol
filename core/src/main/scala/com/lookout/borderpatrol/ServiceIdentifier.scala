@@ -11,4 +11,4 @@ import com.twitter.finagle.httpx.path.Path
  * @param subdomain A default fall-back when path is only `/`
  * @param login The location to send a user when a request to this service is Unauthorized
  */
-case class ServiceIdentifier(name: String, path: Path, subdomain: String, login: String)
+case class ServiceIdentifier(name: String, path: Path, subdomain: String, login: Path)

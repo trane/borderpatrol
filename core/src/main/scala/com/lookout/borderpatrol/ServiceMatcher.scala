@@ -75,18 +75,6 @@ case class ServiceMatcher(services: Set[ServiceIdentifier]) {
    *
    * @example
    *          Given a request of path of "/a" and a set of paths Set("/account", "/a")
-   * @param pathString path string from request
-   * @return the service name from the longest matching path
-   */
-  def path(pathString: String): Option[ServiceIdentifier] = {
-    path(Path(pathString))
-  }
-
-  /**
-   * Find the longest matching path in the request
-   *
-   * @example
-   *          Given a request of path of "/a" and a set of paths Set("/account", "/a")
    * @param path path from request
    * @return the service name from the longest matching path
    */
@@ -97,10 +85,24 @@ case class ServiceMatcher(services: Set[ServiceIdentifier]) {
     )
 
   /**
+   * Find the longest matching login path in the request
+   *
+   * @example
+   *          Given a request of path of "/a" and a set of paths Set("/account", "/a")
+   * @param path path from request
+   * @return the service name from the longest matching path
+   */
+  def login(path: Path): Option[ServiceIdentifier] =
+    foldWith(
+      services.filter(id => path.startsWith(id.login)),
+      (si1, si2) => if (si1.login.toString.size > si2.login.toString.size) si1 else si2
+    )
+
+  /**
    * Derive a ServiceIdentifier from an `httpx.Request`
    */
   def get(req: Request): Option[ServiceIdentifier] =
-    path(req.path) orElse req.host.flatMap(subdomain)
+    path(Path(req.path)) orElse login(Path(req.path))  orElse req.host.flatMap(subdomain)
 
 }
 

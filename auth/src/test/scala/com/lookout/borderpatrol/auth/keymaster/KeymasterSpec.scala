@@ -10,7 +10,7 @@ import com.lookout.borderpatrol.util.Combinators.tap
 import com.twitter.finagle.memcached.GetResult
 import com.twitter.finagle.{memcached, Service}
 import com.twitter.finagle.httpx.path.Path
-import com.twitter.finagle.httpx.{Request, Status, Response}
+import com.twitter.finagle.httpx.{Method, Request, Status, Response}
 import com.twitter.util.{Await, Future}
 
 
@@ -19,7 +19,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
   import Tokens._
 
   // sids
-  val one = ServiceIdentifier("one", Path("/ent"), "enterprise", "/a/login")
+  val one = ServiceIdentifier("one", Path("/ent"), "enterprise", Path("/a/login"))
   val serviceMatcher = ServiceMatcher(Set(one))
   val sessionStore = SessionStores.InMemoryStore
 
@@ -94,7 +94,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
   it should "propagate the failure parsing the response from Keymaster service as an IdentityProviderError exception" in {
     val testService = mkTestService[Request, Response] {
       request => tap(Response(Status.Ok))(res => {
-        res.contentString = "invalid string"
+        res.contentString = """{"key":"data"}"""
         res.contentType = "application/json"
       }).toFuture
     }
@@ -110,7 +110,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     caught.status should be (Status.InternalServerError)
   }
 
-  behavior of "KeymasterLoginFilter"
+  behavior of "KeymasterPostLoginFilter"
 
   it should "succeed and saves tokens, sends redirect with tokens returned by IDP" in {
     val testService = mkTestService[IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
@@ -128,11 +128,11 @@ class KeymasterSpec extends BorderPatrolSuite  {
     sessionStore.update[Request](Session(sessionId, origReq))
 
     // Execute
-    val output = (KeymasterLoginFilter(sessionStore) andThen testService)(
+    val output = (KeymasterPostLoginFilter(sessionStore) andThen testService)(
       SessionIdRequest(ServiceRequest(loginRequest, one), sessionId))
 
     // Validate
-    Await.result(output).status should be (Status.TemporaryRedirect)
+    Await.result(output).status should be (Status.Found)
     Await.result(output).location should be equals ("/dang")
     val returnedSessionId = SessionId.fromResponse(Await.result(output)).toFuture
     returnedSessionId should not be sessionId
@@ -149,7 +149,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val loginRequest = req("enterprise", "/login", ("username" -> "foo"))
 
     // Execute
-    val output = (KeymasterLoginFilter(sessionStore) andThen keymasterLoginFilterTestService)(
+    val output = (KeymasterPostLoginFilter(sessionStore) andThen keymasterLoginFilterTestService)(
       SessionIdRequest(ServiceRequest(loginRequest, one), sessionId))
 
     // Validate
@@ -164,7 +164,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val loginRequest = req("enterprise", "/login", ("username" -> "foo"), ("password" -> "bar"))
 
     // Execute
-    val output = (KeymasterLoginFilter(sessionStore) andThen keymasterLoginFilterTestService)(
+    val output = (KeymasterPostLoginFilter(sessionStore) andThen keymasterLoginFilterTestService)(
       SessionIdRequest(ServiceRequest(loginRequest, one), sessionId))
 
     // Validate
@@ -191,7 +191,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val loginRequest = req("enterprise", "/login", ("username" -> "foo"), ("password" -> "bar"))
 
     // Execute
-    val output = (KeymasterLoginFilter(mockSessionStore) andThen keymasterLoginFilterTestService)(
+    val output = (KeymasterPostLoginFilter(mockSessionStore) andThen keymasterLoginFilterTestService)(
       SessionIdRequest(ServiceRequest(loginRequest, one), sessionId))
 
     // Validate
@@ -246,7 +246,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val caught = the [AccessIssuerError] thrownBy {
       Await.result(output)
     }
-    caught.getMessage should equal ("No access allowed to service one")
+    caught.getMessage should equal ("No access allowed to service one due to error: Status(404)")
     caught.status should be (Status.NotFound)
   }
 
@@ -369,5 +369,61 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val caught = the [Exception] thrownBy {
       Await.result(output)
     }
+  }
+
+  behavior of "KeymasterMethodMuxLoginFilter"
+
+  it should "succeed and invoke the GET on keymaster service" in {
+    val testService = mkTestService[SessionIdRequest, Response] { _ => fail("Should not get here") }
+    val keymasterService = mkTestService[Request, Response] { _ => Response(Status.Ok).toFuture }
+
+    // Allocate and Session
+    val sessionId = sessionid.next
+
+    // Create request
+    val request = Request(Method.Get, "/ent")
+
+    // Execute
+    val output = (KeymasterMethodMuxLoginFilter(keymasterService, path) andThen testService)(
+      SessionIdRequest(ServiceRequest(request, one), sessionId))
+
+    // Validate
+    Await.result(output).status should be (Status.Ok)
+  }
+
+  it should "succeed and invoke the POST on upstream service" in {
+    val testService = mkTestService[SessionIdRequest, Response] { _ => Response(Status.Ok).toFuture }
+    val keymasterService = mkTestService[Request, Response] { _ => fail("Should not get here") }
+
+    // Allocate and Session
+    val sessionId = sessionid.next
+
+    // Create request
+    val request = Request(Method.Post, "/ent")
+
+    // Execute
+    val output = (KeymasterMethodMuxLoginFilter(keymasterService, path) andThen testService)(
+      SessionIdRequest(ServiceRequest(request, one), sessionId))
+
+    // Validate
+    Await.result(output).status should be (Status.Ok)
+  }
+
+  it should "succeed and invoke the non GET or POST method on keymaster service" in {
+    val testService = mkTestService[SessionIdRequest, Response] { _ => fail("Should not get here") }
+    val keymasterService = mkTestService[Request, Response] { _ => Response(Status.Ok).toFuture }
+
+    // Allocate and Session
+    val sessionId = sessionid.next
+
+    // Create request
+    val request = Request(Method.Head, "/ent")
+
+    // Execute
+    val output = (KeymasterMethodMuxLoginFilter(keymasterService, path) andThen testService)(
+      SessionIdRequest(ServiceRequest(request, one), sessionId))
+
+    // Validate
+    Await.result(output).status should be (Status.Ok)
   }
 }

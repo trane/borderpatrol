@@ -18,7 +18,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
   import sessionx.helpers.{secretStore => store, _}
 
   // sids
-  val one = ServiceIdentifier("one", Path("/ent"), "enterprise", "/a/login")
+  val one = ServiceIdentifier("one", Path("/ent"), "enterprise", Path("/a/login"))
   val serviceMatcher = ServiceMatcher(Set(one))
   val sessionStore = SessionStores.InMemoryStore
 
@@ -107,7 +107,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val output = (new SessionIdFilter(sessionStore) andThen sessionIdFilterTestService)(ServiceRequest(request, one))
 
     // Validate
-    Await.result(output).status should be (Status.TemporaryRedirect)
+    Await.result(output).status should be (Status.Found)
     Await.result(output).location should be equals(one.login)
     val sessionData = sessionDataFromResponse(Await.result(output))
     Await.result(sessionData).path should be equals(request.path)
@@ -211,7 +211,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val output = (new IdentityFilter[Request](sessionStore) andThen identityFilterTestService)(SessionIdRequest(ServiceRequest(request, one), sessionId))
 
     // Verify
-    Await.result(output).status should be (Status.TemporaryRedirect)
+    Await.result(output).status should be (Status.Found)
     Await.result(output).location should be equals(one.login)
     val returnedSessionId = SessionId.fromResponse(Await.result(output)).toFuture
     Await.result(returnedSessionId) should not equals(sessionId)

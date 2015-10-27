@@ -27,7 +27,7 @@ import com.lookout.borderpatrol.auth._
 import com.lookout.borderpatrol.auth.keymaster._
 import com.lookout.borderpatrol.auth.keymaster.Keymaster._
 import com.lookout.borderpatrol.auth.keymaster.Tokens._
-import com.lookout.borderpatrol.{ServiceMatcher, ServiceIdentifier}
+import com.lookout.borderpatrol.{ServiceIdentifier, ServiceMatcher}
 import com.lookout.borderpatrol.sessionx._
 import com.lookout.borderpatrol.util.Combinators._
 import com.twitter.io.Buf
@@ -38,23 +38,11 @@ import com.twitter.finagle.{Httpx, Service}
 import com.twitter.util.Future
 import io.finch.response.ResponseBuilder
 
+
 object service {
 
-  // Config
-  val one = ServiceIdentifier("one", Path("/ent"), "enterprise", "/login")
-  val admin = ServiceIdentifier("admin", Path("/admin/metrics.json"), "admin", "/login")
-  val ckpoint = ServiceIdentifier("ckpoint", Path("/login"), "unused", "/login")
-  implicit val secretStore = SecretStores.InMemorySecretStore(Secrets(Secret(), Secret()))
-  val sessionStore = SessionStores.InMemoryStore
-
-  // Config -> ServiceIds & paths
-  val serviceIds = Set(one, admin, ckpoint)
-  val serviceMatcher = ServiceMatcher(serviceIds)
-  val keymasterIdentityProviderPath = "identityProvider"
-  val keymasterAccessIssuerPath = "accessIssuer"
-
   //  Mock Keymaster identityProvider
-  val keymasterIdentityTestService = new Service[Request, Response] {
+  val mockKeymasterIdentityService = new Service[Request, Response] {
 
     val userMap: Map[String, String] = Map(
       ("test1@example.com" -> "password1"),
@@ -77,7 +65,7 @@ object service {
   }
 
   //  Mock Keymaster AccessIssuer
-  val keymasterAccessTestService = new Service[Request, Response] {
+  val mockKeymasterAccessIssuerService = new Service[Request, Response] {
     def apply(request: Request): Future[Response] = {
       val serviceName = request.getParam("services")
       val tokens = Tokens(MasterToken("masterT"), ServiceTokens().add(
@@ -90,7 +78,7 @@ object service {
   }
 
   //  Mock Login Service
-  val loginGetService = new Service[Request, Response] {
+  val mockCheckpointService = new Service[Request, Response] {
     val loginForm = Buf.Utf8(
       """<html><body>
         |<h1>Example Account Service Login</h1>
@@ -103,7 +91,7 @@ object service {
       """.stripMargin
     )
 
-    def apply(req: Request): Future[Response] = {
+    def apply(req: Request): Future[Response] =
       req.method match {
         case Method.Get => {
           val rb = ResponseBuilder(Status.Ok).withContentType(Some("text/html"))
@@ -111,64 +99,120 @@ object service {
         }
         case _ => Future.value(Response(Status.NotFound))
       }
-    }
   }
 
   //  Mock Upstream service
-  val upstreamService = new Service[Request, Response] {
+  val mockUpstreamService = new Service[Request, Response] {
     def apply(request: Request): Future[Response] =
       tap(Response(Status.Ok))(res => {
-        res.contentString = """
+        res.contentString =
+          s"""
           |<html><body>
-          |<h1>Welcome to Service ENT</h1>
+          |<h1>Welcome to Service @(${request.path})</h1>
           |</body></html>
         """.stripMargin
         res.contentType = "text/html"
       }).toFuture
   }
 
-  //  Mock admin service
-  val adminService = new Service[Request, Response] {
-    def apply(request: Request): Future[Response] =
-      tap(Response(Status.Ok))(res => {
-        res.contentString = """
-                              |<html><body>
-                              |<h1>Welcome to ADMIN service</h1>
-                              |</body></html>
-                            """.stripMargin
-        res.contentType = "text/html"
-      }).toFuture
-  }
+  //  Clients & paths to those mocked services
+  //    """
+  //  {
+  //    "loginProviders": [
+  //      {
+  //        "name": "checkpoint",
+  //        "path": "/a",
+  //        "hosts": "localhost:8080,localhost:8081",
+  //        "loginPath": "/login", # what we listen for on POST to route to the identity provider
+  //        "identityProvider": "keymaster"
+  //      },
+  //      {
+  //        "name": "umbrella",
+  //        "loginPath": "/login/sso/umbrella",
+  //        "identityProvider": "keymaster"
+  //      },
+  //      {
+  //        "name": "bookface",
+  //        "loginPath": "/login/sso/bookface",
+  //        "identityProvider": "keymaster"
+  //      }
+  //    ],
+  //    "identityProviders": [
+  //      {
+  //        "name": "keymaster",
+  //        "path": "/identityProvider",
+  //        "hosts": "localhost:8081,localhost:8082"
+  //      }
+  //    ]
+  //    "accessProviders": [
+  //      {
+  //        "name": "keymaster",
+  //        "path": "/accessIssuer",
+  //        "hosts": "localhost:8081,localhost:8082"
+  //      }
+  //    ]
+  //  }
+  //    """
+  case class IdProvider(name: String, path: Path, hosts: String)
+  case class AccessProvider(name: String, path: Path, hosts: String)
+  case class LoginProvider(name: String, path: Path, hosts: String, loginPath: Path, idProvider: IdProvider)
 
-  //  Clients to those mocked services
-  val keymasterClient = Httpx.newService("localhost:8081")
-  val upstreamClient = Httpx.newService("localhost:8081")
+  val keymasterIdProvider = IdProvider("keymaster", Path("/identityProvider"), "localhost:8081")
+  val keymasterAccessProvider = IdProvider("keymaster", Path("/accessIssuer"), "localhost:8081")
+  val checkpointLoginProvider = LoginProvider("checkpoint", Path("/a"), "localhost:8081", Path("/login"),
+    keymasterIdProvider)
 
   //  Login path
-  val loginPostService = new ExceptionFilter andThen
-    new ServiceFilter(serviceMatcher) andThen
-    new SessionIdFilter(sessionStore) andThen
-    new KeymasterLoginFilter(sessionStore) andThen
-    new KeymasterIdentityProvider(keymasterClient, Path(keymasterIdentityProviderPath))
+  def keymasterIdpService(implicit config: ServerConfig): Service[Request, Response] = {
+    implicit val secretStore = config.secretStore
+    val checkpointSeviceId = ServiceIdentifier("checkpoint", checkpointLoginProvider.path, "",
+      checkpointLoginProvider.loginPath)
+    val serviceMatcher = ServiceMatcher(config.serviceIdentifiers + checkpointSeviceId)
+    val keymasterClient = Httpx.newService(keymasterIdProvider.hosts)
+    val checkpointClient = Httpx.newService(checkpointLoginProvider.hosts)
 
-  //  All other requests
-  val allOtherRequests = new ExceptionFilter andThen
+    new ExceptionFilter andThen
     new ServiceFilter(serviceMatcher) andThen
-    new SessionIdFilter(sessionStore) andThen
-    new IdentityFilter[Tokens](sessionStore) andThen
-    new KeymasterAccessFilter(upstreamClient) andThen
-    new KeymasterAccessIssuer(keymasterClient, Path(keymasterAccessIssuerPath), sessionStore)
-
-  val routingService1 = RoutingService.byMethodAndPathObject {
-    case Method.Post -> Root / "login" => loginPostService
-    case Method.Get -> Root / "login" => loginGetService
-    case _ => allOtherRequests
+    new SessionIdFilter(config.sessionStore) andThen
+    new KeymasterMethodMuxLoginFilter(checkpointClient, checkpointLoginProvider.loginPath) andThen
+    new KeymasterPostLoginFilter(config.sessionStore) andThen
+    new KeymasterIdentityProvider(keymasterClient, keymasterIdProvider.path)
   }
 
-  val routingService2 = RoutingService.byMethodAndPathObject {
-    case Method.Post -> Root / "identityProvider" => keymasterIdentityTestService
-    case Method.Post -> Root / "accessIssuer" => keymasterAccessTestService
-    case _ -> Root / "ent" => upstreamService
-    case _ -> Root / "admin" / _ => adminService
+  //  All other requests
+  def allOtherRequests(implicit config: ServerConfig): Service[Request, Response] = {
+    implicit val secretStore = config.secretStore
+    val serviceMatcher = ServiceMatcher(config.serviceIdentifiers)
+    val upstreamClient = Httpx.newService("localhost:8081") // Comes from SeviceIdentifier in Future
+    val keymasterClient = Httpx.newService(keymasterAccessProvider.hosts)
+
+    new ExceptionFilter andThen
+    new ServiceFilter(serviceMatcher) andThen
+    new SessionIdFilter(config.sessionStore) andThen
+    new IdentityFilter[Tokens](config.sessionStore) andThen
+    new KeymasterAccessFilter(upstreamClient) andThen
+    new KeymasterAccessIssuer(keymasterClient, keymasterAccessProvider.path, config.sessionStore)
+  }
+
+  def getRoutingService(implicit config: ServerConfig): Service[Request, Response] = {
+
+    RoutingService.byMethodAndPathObject {
+      case _ -> checkpointLoginProvider.loginPath => keymasterIdpService
+      case _ -> checkpointLoginProvider.path => keymasterIdpService // FIXME: /a/recover doesn't not work
+      case _ => allOtherRequests
+    }
+  }
+
+  def getMockRoutingService(implicit config: ServerConfig): Service[Request, Response] = {
+    val mockProtectedPathMap = config.serviceIdentifiers.map(a => (a.path -> mockUpstreamService)).toMap
+    val mockKeymasterPathMap = Map(keymasterAccessProvider.path -> mockKeymasterAccessIssuerService,
+      keymasterIdProvider.path -> mockKeymasterIdentityService,
+      checkpointLoginProvider.loginPath -> mockCheckpointService,
+      checkpointLoginProvider.path -> mockUpstreamService) // FIXME: /a/recover doesn't not work
+
+    RoutingService.byMethodAndPathObject {
+      case _ -> path if mockKeymasterPathMap.contains(path) => mockKeymasterPathMap(path)
+      case _ -> path if mockProtectedPathMap.contains(path) => mockProtectedPathMap(path)
+    }
   }
 }

@@ -6,10 +6,10 @@ import com.twitter.finagle.httpx.path.Path
 
 class ServiceMatcherSpec extends BorderPatrolSuite {
 
-  val one = ServiceIdentifier("one", Path("/ent"), "enterprise", "/a/login")
-  val two = ServiceIdentifier("two", Path("/api"), "api", "/login")
-  val three = ServiceIdentifier("three", Path("/apis"), "api.subdomain", "http://example.com/login")
-  val four = ServiceIdentifier("four", Path("/apis/test"), "api.testdomain", "http://example.com/login")
+  val one = ServiceIdentifier("one", Path("/ent"), "enterprise", Path("/a/login"))
+  val two = ServiceIdentifier("two", Path("/api"), "api", Path("/login"))
+  val three = ServiceIdentifier("three", Path("/apis"), "api.subdomain", Path("/loginIt"))
+  val four = ServiceIdentifier("four", Path("/apis/test"), "api.testdomain", Path("/loginIt/here"))
   val sids = Set(one, two, three, four)
   val serviceMatcher = ServiceMatcher(sids)
 
@@ -22,14 +22,25 @@ class ServiceMatcherSpec extends BorderPatrolSuite {
   behavior of "ServiceMatchers"
 
   it should "match the longest path" in {
-    serviceMatcher.path("/") should be(None)
-    serviceMatcher.path("/e") should be(None)
-    serviceMatcher.path("/enter") should be(None)
-    serviceMatcher.path("/ent/blah").value should be(one)
-    serviceMatcher.path("/api").value should be(two)
-    serviceMatcher.path("/apis").value should be(three)
-    serviceMatcher.path("/apis/testing").value should be(three)
-    serviceMatcher.path("/apis/test").value should be(four)
+    serviceMatcher.path(Path("/")) should be(None)
+    serviceMatcher.path(Path("/e")) should be(None)
+    serviceMatcher.path(Path("/enter")) should be(None)
+    serviceMatcher.path(Path("/ent/blah")).value should be(one)
+    serviceMatcher.path(Path("/api")).value should be(two)
+    serviceMatcher.path(Path("/apis")).value should be(three)
+    serviceMatcher.path(Path("/apis/testing")).value should be(three)
+    serviceMatcher.path(Path("/apis/test")).value should be(four)
+  }
+
+  it should "match the longest login path" in {
+    serviceMatcher.login(Path("/")) should be(None)
+    serviceMatcher.login(Path("/e")) should be(None)
+    serviceMatcher.login(Path("/enter")) should be(None)
+    serviceMatcher.login(Path("/a/login/yeah")).value should be(one)
+    serviceMatcher.login(Path("/login")).value should be(two)
+    serviceMatcher.login(Path("/loginIt")).value should be(three)
+    serviceMatcher.login(Path("/loginIt/hereOr")).value should be(three)
+    serviceMatcher.login(Path("/loginIt/here")).value should be(four)
   }
 
   it should "match the longest subdomain" in {

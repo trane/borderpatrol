@@ -48,7 +48,7 @@ object Keymaster {
           )
         //  Preserve Response Status code by throwing AccessDenied exceptions
         case _ => Future.exception(IdentityProviderError(res.status,
-            s"Invalid credentials for user ${req.credential.email}"))
+          s"Invalid credentials for user ${req.credential.email}"))
       })
   }
 
@@ -60,7 +60,7 @@ object Keymaster {
    * @param store
    * @param secretStoreApi
    */
-  case class KeymasterLoginFilter(store: SessionStore)(implicit secretStoreApi: SecretStoreApi)
+  case class KeymasterPostLoginFilter(store: SessionStore)(implicit secretStoreApi: SecretStoreApi)
       extends Filter[SessionIdRequest, Response, IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
 
     def createIdentifyReq(req: SessionIdRequest): Option[IdentifyRequest[Credential]] =
@@ -87,11 +87,27 @@ object Keymaster {
           _ <- store.update[Tokens](session)
           originReq <- getRequestFromSessionStore(req.sid)
           _ <- store.delete(req.sid)
-        } yield tap(Response(Status.TemporaryRedirect))(res => {
+        } yield tap(Response(Status.Found))(res => {
           res.location = originReq.uri
           res.addCookie(session.id.asCookie)
-        })
-      )
+        }))
+  }
+
+  /**
+   * Decodes the methods Get and Post differently
+   * - Get is directed to login form
+   * - Post processes the login credentials
+   *
+   * @param client
+   */
+  case class KeymasterMethodMuxLoginFilter(client: Service[Request, Response], loginPath: Path)
+    extends Filter[SessionIdRequest, Response, SessionIdRequest, Response] {
+    def apply(req: SessionIdRequest,
+              service: Service[SessionIdRequest, Response]): Future[Response] =
+      (req.req.req.method, req.req.req.path) match {
+        case (Method.Post, loginPath) => service(req)
+        case _ => client(req.req.req)
+      }
   }
 
   /**
@@ -128,7 +144,7 @@ object Keymaster {
             )
           //  Preserve Response Status code by throwing AccessDenied exceptions
           case _ => Future.exception(AccessIssuerError(res.status,
-            s"No access allowed to service ${req.serviceId.name}"))
+            s"No access allowed to service ${req.serviceId.name} due to error: ${res.status}"))
         })
       )(t => Future.value(t)).map(t => KeymasterAccessRes(Access(t)))
   }

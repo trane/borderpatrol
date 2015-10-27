@@ -53,8 +53,8 @@ case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStor
         for {
           session <- Session(req.req)
           _ <- store.update(session)
-        } yield tap(Response(Status.TemporaryRedirect)) { res =>
-          res.location = req.serviceId.login
+        } yield tap(Response(Status.Found)) { res =>
+          res.location = req.serviceId.login.toString
           res.addCookie(session.id.asCookie)
         }
     }
@@ -80,8 +80,8 @@ class IdentityFilter[A : SessionDataEncoder](store: SessionStore)(implicit secre
       case EmptyIdentity => for {
         s <- Session(req.req.req)
         _ <- store.update(s)
-      } yield tap(Response(Status.TemporaryRedirect)) { res =>
-          res.location = req.req.serviceId.login // set to login url
+      } yield tap(Response(Status.Found)) { res =>
+          res.location = req.req.serviceId.login.toString // set to login url
           res.addCookie(s.id.asCookie) // add SessionId value as a Cookie
         }
     })

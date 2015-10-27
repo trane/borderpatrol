@@ -23,6 +23,11 @@ lazy val compilerOptions = Seq(
   "-Xlint"
 )
 
+lazy val finagleVersion = "6.28.0"
+lazy val finchVersion = "0.8.0"
+lazy val circeVersion = "0.1.1"
+lazy val twitterServerVersion = "1.14.0"
+
 val testDependencies = Seq(
   "org.scalacheck" %% "scalacheck" % "1.12.4",
   "org.scalatest" %% "scalatest" % "2.2.5"
@@ -31,14 +36,13 @@ val testDependencies = Seq(
 val baseSettings = Seq(
   resolvers += "twitter-repo" at "http://maven.twttr.com",
   libraryDependencies ++= Seq(
-    "com.twitter" %% "finagle-httpx" % "6.28.0",
-    "com.twitter" %% "finagle-memcached" % "6.28.0",
+    "com.twitter" %% "finagle-httpx" % finagleVersion,
+    "com.twitter" %% "finagle-memcached" % finagleVersion,
     "org.scala-lang" % "scala-reflect" % scalaVersion.value,
     "com.twitter" %% "bijection-core" % "0.8.1",
     "com.twitter" %% "bijection-util" % "0.8.1",
     "io.argonaut" %% "argonaut" % "6.1",
     "org.bouncycastle" % "bcprov-jdk15on" % "1.52",
-    "com.twitter" %% "finagle-stats" % "6.28.0",
     compilerPlugin("org.scalamacros" % "paradise" % "2.0.1" cross CrossVersion.full)
   ) ++ testDependencies.map(_ % "test"),
   scalacOptions ++= compilerOptions ++ (
@@ -114,9 +118,13 @@ lazy val example = project
   .settings(noPublish)
   .settings(
     libraryDependencies ++= Seq(
-      "com.twitter" %% "twitter-server" % "1.14.0",
-      "com.github.finagle" %% "finch-core" % "0.8.0",
-      "com.github.finagle" %% "finch-argonaut" % "0.8.0"
+      "com.twitter" %% "twitter-server" % twitterServerVersion,
+      "com.twitter" %% "finagle-stats" % finagleVersion,
+      "com.github.finagle" %% "finch-core" % finchVersion,
+      "com.github.finagle" %% "finch-argonaut" % finchVersion,
+      "io.circe" %% "circe-core" % circeVersion,
+      "io.circe" %% "circe-generic" % circeVersion,
+      "io.circe" %% "circe-jawn" % circeVersion
     )
   )
   .disablePlugins(JmhPlugin)
@@ -132,9 +140,9 @@ lazy val auth = project
   .settings(allSettings)
   .settings(
     libraryDependencies ++= Seq(
-      "io.circe" %% "circe-core" % "0.1.1",
-      "io.circe" %% "circe-generic" % "0.1.1",
-      "io.circe" %% "circe-jawn" % "0.1.1"
+      "io.circe" %% "circe-core" % circeVersion,
+      "io.circe" %% "circe-generic" % circeVersion,
+      "io.circe" %% "circe-jawn" % circeVersion
     )
   )
   .dependsOn(core % "test->test;compile->compile")
