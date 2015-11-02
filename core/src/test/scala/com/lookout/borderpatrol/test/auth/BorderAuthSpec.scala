@@ -3,7 +3,7 @@ package com.lookout.borderpatrol.auth
 import com.lookout.borderpatrol.sessionx.SessionStores.MemcachedStore
 import com.lookout.borderpatrol.sessionx._
 import com.lookout.borderpatrol.test._
-import com.lookout.borderpatrol.{ServiceMatcher, ServiceIdentifier}
+import com.lookout.borderpatrol.{LoginManager, Manager, ServiceMatcher, ServiceIdentifier}
 import com.lookout.borderpatrol.test.BorderPatrolSuite
 import com.twitter.finagle.Service
 import com.twitter.finagle.httpx._
@@ -17,8 +17,14 @@ import com.twitter.util.{Await, Future, Time}
 class BorderAuthSpec extends BorderPatrolSuite  {
   import sessionx.helpers.{secretStore => store, _}
 
+  //  Managers
+  val keymasterIdManager = Manager("keymaster", Path("/identityProvider"), "localhost:8081")
+  val keymasterAccessManager = Manager("keymaster", Path("/accessIssuer"), "localhost:8081")
+  val checkpointLoginManager = LoginManager("checkpoint", Path("/check"), "localhost:8081", Path("/loginConfirm"),
+    keymasterIdManager, keymasterAccessManager)
+
   // sids
-  val one = ServiceIdentifier("one", Path("/ent"), "enterprise", Path("/a/login"))
+  val one = ServiceIdentifier("one", "localhost:11", Path("/ent"), "enterprise", checkpointLoginManager)
   val serviceMatcher = ServiceMatcher(Set(one))
   val sessionStore = SessionStores.InMemoryStore
 
@@ -58,7 +64,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
 
   it should "succeed and return output of upstream Service if Request is destined to a known Service" in {
     // Execute
-    val output = (new ServiceFilter(serviceMatcher) andThen serviceFilterTestService)(req("enterprise", "/dang"))
+    val output = (new ServiceFilter(serviceMatcher) andThen serviceFilterTestService)(req("enterprise", "/ent"))
 
     // Validate
     Await.result(output).status should be (Status.Ok)
@@ -77,7 +83,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
   it should "succeed and return output of upstream Service if ServiceRequest contains SessionId" in {
     val testService = mkTestService[SessionIdRequest] {
       request => {
-        assert(request.req.req.path == "/dang")
+        assert(request.req.req.path == "/ent")
         assert(request.req.serviceId == one)
         Future.value(Response(Status.Ok))
       }
@@ -88,7 +94,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val cooki = sessionId.asCookie
 
     //  Create request
-    val request = req("enterprise", "/dang")
+    val request = req("enterprise", "/ent")
     request.addCookie(cooki)
 
     //  Execute
@@ -101,14 +107,14 @@ class BorderAuthSpec extends BorderPatrolSuite  {
   it should "return redirect to login URI, if no SessionId present in the SessionIdRequest" in {
 
     // Create request
-    val request = req("enterprise", "/dang")
+    val request = req("enterprise", "/ent")
 
     // Execute
     val output = (new SessionIdFilter(sessionStore) andThen sessionIdFilterTestService)(ServiceRequest(request, one))
 
     // Validate
     Await.result(output).status should be (Status.Found)
-    Await.result(output).location should be equals(one.login)
+    Await.result(output).location should be equals(one.loginManager.path.toString)
     val sessionData = sessionDataFromResponse(Await.result(output))
     Await.result(sessionData).path should be equals(request.path)
   }
@@ -121,7 +127,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val cooki = sessionId.asCookie
 
     // Create request
-    val request = req("enterprise", "/dang")
+    val request = req("enterprise", "/ent")
     request.addCookie(cooki)
 
     // Execute
@@ -141,7 +147,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val cooki = sessionId.asCookie
 
     // Create request
-    val request = req("enterprise", "/dang")
+    val request = req("enterprise", "/ent")
     request.addCookie(cooki)
 
     // Execute
@@ -159,7 +165,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val mockSessionStore = MemcachedStore(FailingMockClient)
 
     // Create request
-    val request = req("enterprise", "/dang")
+    val request = req("enterprise", "/ent")
 
     // Execute
     val output = (new SessionIdFilter(mockSessionStore) andThen sessionIdFilterTestService)(ServiceRequest(request, one))
@@ -185,7 +191,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val cooki = sessionId.asCookie
 
     //  Create request
-    val request = req("enterprise", "/dang")
+    val request = req("enterprise", "/ent")
     request.addCookie(cooki)
     val sessionData = 999
     sessionStore.update[Int](Session(sessionId, sessionData))
@@ -204,7 +210,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val cooki = sessionId.asCookie
 
     // Create request
-    val request = req("enterprise", "/dang")
+    val request = req("enterprise", "/ent")
     request.addCookie(cooki)
 
     // Execute
@@ -212,7 +218,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
 
     // Verify
     Await.result(output).status should be (Status.Found)
-    Await.result(output).location should be equals(one.login)
+    Await.result(output).location should be equals(one.loginManager.path.toString)
     val returnedSessionId = SessionId.fromResponse(Await.result(output)).toFuture
     Await.result(returnedSessionId) should not equals(sessionId)
     val sessionData = sessionDataFromResponse(Await.result(output))
@@ -225,7 +231,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val cooki = sessionId.asCookie
 
     // Create request
-    val request = req("enterprise", "/dang")
+    val request = req("enterprise", "/ent")
     request.addCookie(cooki)
 
     // Mock sessionStore
@@ -257,7 +263,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val mockSessionStore = MemcachedStore(FailingUpdateMockClient)
 
     // Create request
-    val request = req("enterprise", "/dang")
+    val request = req("enterprise", "/ent")
     request.addCookie(cooki)
 
     // Execute
@@ -276,7 +282,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val testService = mkTestService[Request] { req => Future.value(Response(Status.Ok)) }
 
     // Execute
-    val output = (new ExceptionFilter andThen testService)(req("enterprise", "/dang"))
+    val output = (new ExceptionFilter andThen testService)(req("enterprise", "/ent"))
 
     // Validate
     Await.result(output).status should be (Status.Ok)
@@ -288,7 +294,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     }
 
     // Execute
-    val output = (new ExceptionFilter andThen testService)(req("enterprise", "/dang"))
+    val output = (new ExceptionFilter andThen testService)(req("enterprise", "/ent"))
 
     // Validate
     Await.result(output).status should be (Status.NotAcceptable)
@@ -301,7 +307,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     }
 
     // Execute
-    val output = (new ExceptionFilter andThen testService)(req("enterprise", "/dang"))
+    val output = (new ExceptionFilter andThen testService)(req("enterprise", "/ent"))
 
     // Validate
     Await.result(output).status should be (Status.InternalServerError)
@@ -314,7 +320,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     }
 
     // Execute
-    val output = (new ExceptionFilter andThen testService)(req("enterprise", "/dang"))
+    val output = (new ExceptionFilter andThen testService)(req("enterprise", "/ent"))
 
     // Validate
     Await.result(output).status should be (Status.NotAcceptable)
@@ -327,7 +333,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     }
 
     // Execute
-    val output = (new ExceptionFilter andThen testService)(req("enterprise", "/dang"))
+    val output = (new ExceptionFilter andThen testService)(req("enterprise", "/ent"))
 
     // Validate
     Await.result(output).status should be (Status.NotAcceptable)
@@ -340,7 +346,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     }
 
     // Execute
-    val output = (new ExceptionFilter andThen testService)(req("enterprise", "/dang"))
+    val output = (new ExceptionFilter andThen testService)(req("enterprise", "/ent"))
 
     // Validate
     Await.result(output).status should be (Status.InternalServerError)

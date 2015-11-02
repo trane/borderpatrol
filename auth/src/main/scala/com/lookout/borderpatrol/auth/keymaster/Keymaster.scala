@@ -2,7 +2,8 @@ package com.lookout.borderpatrol.auth.keymaster
 
 import com.lookout.borderpatrol.util.Combinators.tap
 import com.lookout.borderpatrol.sessionx._
-import com.lookout.borderpatrol.ServiceIdentifier
+import com.lookout.borderpatrol._
+import com.lookout.borderpatrol.Binder._
 import com.lookout.borderpatrol.auth._
 import com.twitter.finagle.httpx.path.Path
 import com.twitter.finagle.{Filter, Service}
@@ -23,22 +24,25 @@ object Keymaster {
   /**
    * The identity provider for Keymaster, will connect to the remote keymaster server to authenticate and get an
    * identity (master token)
-   * @param client Keymaster service
-   * @param path Keymaster service endpoint path
+   * @param binder Binder to bind to Keymaster identity service
    */
-  case class KeymasterIdentityProvider(client: Service[Request, Response], path: Path)
+  case class KeymasterIdentityProvider(binder: ManagerBinder)
       extends IdentityProvider[Credential, Tokens] {
 
     def api(cred: Credential): Request =
-      Request(Method.Post,
-        Request.queryString(path.toString, ("e", cred.email), ("p", cred.password), ("s", cred.serviceId.name)))
+      tap(Request(Method.Post,  cred.serviceId.loginManager.identityManager.path.toString))(req => {
+        req.contentType = "application/x-www-form-urlencoded"
+        req.contentString = Request.queryString(("e", cred.email), ("p", cred.password), ("s", cred.serviceId.name))
+          .drop(1) /* Drop '?' */
+      })
 
     /**
      * Sends credentials, if authenticated successfully will return a MasterToken otherwise a Future.exception
      */
     def apply(req: IdentifyRequest[Credential]): Future[IdentifyResponse[Tokens]] =
       //  Authenticate user by the Keymaster
-      client(api(req.credential)).flatMap(res => res.status match {
+      binder(BindRequest(req.credential.serviceId.loginManager.identityManager, api(req.credential)))
+        .flatMap(res => res.status match {
         //  Parse for Tokens if Status.Ok
         case Status.Ok =>
           Tokens.derive[Tokens](res.contentString).fold[Future[IdentifyResponse[Tokens]]](
@@ -98,29 +102,32 @@ object Keymaster {
    * - Get is directed to login form
    * - Post processes the login credentials
    *
-   * @param client
+   * @param binder
    */
-  case class KeymasterMethodMuxLoginFilter(client: Service[Request, Response], loginPath: Path)
+  case class KeymasterMethodMuxLoginFilter(binder: LoginManagerBinder)
     extends Filter[SessionIdRequest, Response, SessionIdRequest, Response] {
     def apply(req: SessionIdRequest,
               service: Service[SessionIdRequest, Response]): Future[Response] =
       (req.req.req.method, req.req.req.path) match {
         case (Method.Post, loginPath) => service(req)
-        case _ => client(req.req.req)
+        case _ => binder(BindRequest(req.req.serviceId.loginManager, req.req.req))
       }
   }
 
   /**
    * The access issuer will use the MasterToken to gain access to service tokens
-   * @param client Keymaster service
-   * @param path Keymaster service endpoint path
+   * @param binder Keymaster Access Service Binder
    * @param store Session store
    */
-  case class KeymasterAccessIssuer(client: Service[Request, Response], path: Path, store: SessionStore)
+  case class KeymasterAccessIssuer(binder: ManagerBinder, store: SessionStore)
       extends AccessIssuer[Tokens, ServiceToken] {
-    def api(req: AccessRequest[Tokens]): Request =
-      tap(Request(Method.Post, Request.queryString(path.toString(),
-        ("services" -> req.serviceId.name))))(r => r.headerMap.add("Auth-Token", req.identity.id.master.value))
+    def api(accessRequest: AccessRequest[Tokens]): Request =
+      tap(Request(Method.Post, accessRequest.serviceId.loginManager.accessManager.path.toString))(req => {
+        req.contentType = "application/x-www-form-urlencoded"
+        req.contentString = Request.queryString(("services" -> accessRequest.serviceId.name))
+          .drop(1) /* Drop '?' */
+        req.headerMap.add("Auth-Token", accessRequest.identity.id.master.value)
+      })
 
     /**
      * Fetch a valid ServiceToken, will return a ServiceToken otherwise a Future.exception
@@ -129,7 +136,7 @@ object Keymaster {
       //  Check if ServiceToken is already available for Service
       req.identity.id.service(req.serviceId.name).fold[Future[ServiceToken]](
         //  Fetch ServiceToken from the Keymaster
-        client(api(req)).flatMap(res => res.status match {
+        binder(BindRequest(req.serviceId.loginManager.accessManager, api(req))).flatMap(res => res.status match {
           //  Parse for Tokens if Status.Ok
           case Status.Ok =>
             Tokens.derive[Tokens](res.contentString).fold[Future[ServiceToken]](
@@ -152,14 +159,37 @@ object Keymaster {
   /**
    * This filter acquires the access and then forwards the request to upstream service
    *
-   * @param upstreamClient
+   * @param binder Upstream Service Binder
    */
-  case class KeymasterAccessFilter(upstreamClient: Service[Request, Response])
+  case class KeymasterAccessFilter(binder: ServiceIdentifierBinder)
       extends Filter[AccessIdRequest[Tokens], Response, AccessRequest[Tokens], AccessResponse[ServiceToken]] {
     def apply(req: AccessIdRequest[Tokens],
               accessService: Service[AccessRequest[Tokens], AccessResponse[ServiceToken]]): Future[Response] =
       accessService(AccessRequest(req.id, req.req.req.serviceId, req.req.sid)).flatMap(accessResp =>
-        upstreamClient(tap(req.req.req.req) { r => r.headerMap.add("Auth-Token", accessResp.access.access.value)})
+        binder(BindRequest(req.req.req.serviceId,
+          tap(req.req.req.req) { r => r.headerMap.add("Auth-Token", accessResp.access.access.value)}))
       )
+  }
+
+  /**
+   *  Keymaster Identity provider service Chain
+   * @param store
+   */
+  def keymasterIdentityProviderChain(store: SessionStore)(
+    implicit secretStoreApi: SecretStoreApi): Service[SessionIdRequest, Response] = {
+    new KeymasterMethodMuxLoginFilter(new LoginManagerBinder) andThen
+      new KeymasterPostLoginFilter(store) andThen
+      new KeymasterIdentityProvider(new ManagerBinder)
+  }
+
+  /**
+   * Keymaster Access Issuer service Chain
+   * @param store
+   */
+  def keymasterAccessIssuerChain(store: SessionStore)(
+    implicit secretStoreApi: SecretStoreApi): Service[SessionIdRequest, Response] = {
+    new IdentityFilter[Tokens](store) andThen
+      new KeymasterAccessFilter(new ServiceIdentifierBinder) andThen
+      new KeymasterAccessIssuer(new ManagerBinder, store)
   }
 }

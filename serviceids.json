@@ -1,22 +1,48 @@
-[
-  {
-    "login" : {
-      "str" : "/login"
-    },
-    "subdomain" : "ent",
-    "path" : {
-      "str" : "/ent"
-    },
-    "name" : "one"
+{
+  "accessManagers": [
+    {
+      "hosts": "localhost:8081",
+      "path": "/accessIssuer",
+      "name": "keymaster"
+    }
+  ],
+  "sessionStore": {
+    "type": "InMemoryStore$"
   },
-  {
-    "login" : {
-      "str" : "/login"
+  "loginManagers": [
+    {
+      "name": "checkpoint",
+      "path": "/a",
+      "identityManager": "keymaster",
+      "accessManager": "keymaster",
+      "loginPath": "/signin",
+      "hosts": "localhost:8081"
+    }
+  ],
+  "secretStore": {
+    "type": "InMemorySecretStore"
+  },
+  "identityManagers": [
+    {
+      "hosts": "localhost:8081",
+      "path": "/identityManager",
+      "name": "keymaster"
+    }
+  ],
+  "serviceIdentifiers": [
+    {
+      "hosts": "localhost:8081",
+      "loginManager": "checkpoint",
+      "subdomain": "ent",
+      "path": "/ent",
+      "name": "one"
     },
-    "subdomain" : "admin",
-    "path" : {
-      "str" : "/admin/metrics.json"
-    },
-    "name" : "admin"
-  }
-]
+    {
+      "hosts": "localhost:8081",
+      "loginManager": "checkpoint",
+      "subdomain": "admin",
+      "path": "/admin/metrics.json",
+      "name": "admin"
+    }
+  ]
+}
