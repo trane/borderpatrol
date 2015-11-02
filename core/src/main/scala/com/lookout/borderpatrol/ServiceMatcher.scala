@@ -43,9 +43,7 @@ case class ServiceMatcher(services: Set[ServiceIdentifier]) {
    * @param cmp A comparable function
    * @return The maximuma of folding over the set with the cmp function
    */
-  private[this] def foldWith[A](sis: Set[A],
-                             cmp: (A, A) => A):
-      Option[A] =
+  private[this] def foldWith[A](sis: Set[A], cmp: (A, A) => A): Option[A] =
     sis.foldRight(Option.empty[A])((lhs, res) => res match {
       case Some(rhs) => Some(cmp(lhs, rhs))
       case None => Some(lhs)
@@ -78,6 +76,5 @@ case class ServiceMatcher(services: Set[ServiceIdentifier]) {
       val pathSet = Set(sid.path, sid.loginManager.path, sid.loginManager.loginPath)
       !pathSet.filter(Path(req.path).startsWith(_)).isEmpty
     })
-
 }
 

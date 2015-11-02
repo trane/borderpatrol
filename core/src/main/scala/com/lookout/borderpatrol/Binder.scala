@@ -8,7 +8,8 @@ import scala.collection.mutable
 object Binder {
 
   /**
-   * trait for the context binding
+   * The trait for the context binding. It exposes common methods to be made available from all the contexts.
+   *
    * @tparam A
    */
   trait BinderContext[A] {
@@ -17,9 +18,13 @@ object Binder {
   }
 
   /**
-   * Bind request pod
+   * Pod that contains the context (which we are trying to bind) and
+   * the actual request to be processed and to be sent to endpoint
    */
-  case class BindRequest[A](context: A, req: Request)
+  case class BindRequest[A: BinderContext](context: A, req: Request) {
+    def name: String = implicitly[BinderContext[A]].name(context)
+    def hosts: String = implicitly[BinderContext[A]].hosts(context)
+  }
 
   /**
    * It enables dynamic binding to the endpoints (e.g. login service, identity service, etc)
@@ -34,9 +39,8 @@ object Binder {
                                        mutable.Map.empty[String, Service[Request, Response]])
     extends Service[BindRequest[A], Response] {
     def apply(req: BindRequest[A]): Future[Response] = {
-      cache.getOrElse(implicitly[BinderContext[A]].name(req.context),
-        util.Combinators.tap(Httpx.newService(implicitly[BinderContext[A]].hosts(req.context)))(cli =>
-          cache(implicitly[BinderContext[A]].name(req.context)) = cli)
+      cache.getOrElse(req.name,
+        util.Combinators.tap(Httpx.newService(req.hosts))(cli => cache(req.name) = cli)
       ).apply(req.req)
     }
     def get(name: String): Option[Service[Request, Response]] = cache.get(name)
@@ -61,7 +65,7 @@ object Binder {
   /**
    * Binder objects
    */
-  case class LoginManagerBinder() extends MBinder[LoginManager]
-  case class ManagerBinder() extends MBinder[Manager]
-  case class ServiceIdentifierBinder() extends MBinder[ServiceIdentifier]
+  case object LoginManagerBinder extends MBinder[LoginManager]
+  case object ManagerBinder extends MBinder[Manager]
+  case object ServiceIdentifierBinder extends MBinder[ServiceIdentifier]
 }

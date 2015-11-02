@@ -1,7 +1,6 @@
 package com.lookout.borderpatrol.example
 
-import com.twitter.finagle.httpx.{Response, Request}
-import com.twitter.finagle.{Service, Httpx}
+import com.twitter.finagle.Httpx
 import com.twitter.server.TwitterServer
 import com.twitter.util.Await
 

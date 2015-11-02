@@ -41,15 +41,18 @@ class KeymasterSpec extends BorderPatrolSuite  {
   val tokens2 = tokens.add("one", serviceToken2)
 
   // Binders
-  def mkTestManagerBinder(f: (BindRequest[Manager]) => Future[Response]): ManagerBinder = new ManagerBinder {
+  case class TestManagerBinder() extends MBinder[Manager]
+  def mkTestManagerBinder(f: (BindRequest[Manager]) => Future[Response]): TestManagerBinder = new TestManagerBinder {
     override def apply(request: BindRequest[Manager]) = f(request)
   }
-  def mkTestLoginManagerBinder(f: (BindRequest[LoginManager]) => Future[Response]): LoginManagerBinder =
-    new LoginManagerBinder {
+  case class TestLoginManagerBinder() extends MBinder[LoginManager]
+  def mkTestLoginManagerBinder(f: (BindRequest[LoginManager]) => Future[Response]): TestLoginManagerBinder =
+    new TestLoginManagerBinder {
       override def apply(request: BindRequest[LoginManager]) = f(request)
     }
-  def mkTestSidBinder(f: (BindRequest[ServiceIdentifier]) => Future[Response]): ServiceIdentifierBinder =
-    new ServiceIdentifierBinder {
+  case class TestServiceIdentifierBinder() extends MBinder[ServiceIdentifier]
+  def mkTestSidBinder(f: (BindRequest[ServiceIdentifier]) => Future[Response]): TestServiceIdentifierBinder =
+    new TestServiceIdentifierBinder {
       override def apply(request: BindRequest[ServiceIdentifier]) = f(request)
   }
 

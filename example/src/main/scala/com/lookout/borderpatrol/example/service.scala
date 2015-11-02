@@ -23,7 +23,6 @@
  */
 package com.lookout.borderpatrol.example
 
-import com.lookout.borderpatrol.Binder._
 import com.lookout.borderpatrol.auth._
 import com.lookout.borderpatrol.auth.keymaster._
 import com.lookout.borderpatrol.auth.keymaster.Keymaster._
@@ -134,24 +133,6 @@ object MockService {
 }
 
 object service {
-
-  //  Keymaster Identity provider service Chain
-  def keymasterIdentityProviderChain1(implicit config: ServerConfig): Service[SessionIdRequest, Response] = {
-    implicit val secretStore = config.secretStore
-
-    new KeymasterMethodMuxLoginFilter(new LoginManagerBinder) andThen
-      new KeymasterPostLoginFilter(config.sessionStore) andThen
-      new KeymasterIdentityProvider(new ManagerBinder)
-  }
-
-  //  Keymaster Access Issuer service Chain
-  def keymasterAccessIssuerChain1(implicit config: ServerConfig): Service[SessionIdRequest, Response] = {
-    implicit val secretStore = config.secretStore
-
-    new IdentityFilter[Tokens](config.sessionStore) andThen
-      new KeymasterAccessFilter(new ServiceIdentifierBinder) andThen
-      new KeymasterAccessIssuer(new ManagerBinder, config.sessionStore)
-  }
 
   /**
    * Glue that DEMUXes the chain into appropriate identityProvider or accessIssuer

@@ -26,7 +26,7 @@ object Keymaster {
    * identity (master token)
    * @param binder Binder to bind to Keymaster identity service
    */
-  case class KeymasterIdentityProvider(binder: ManagerBinder)
+  case class KeymasterIdentityProvider(binder: MBinder[Manager])
       extends IdentityProvider[Credential, Tokens] {
 
     def api(cred: Credential): Request =
@@ -104,7 +104,7 @@ object Keymaster {
    *
    * @param binder
    */
-  case class KeymasterMethodMuxLoginFilter(binder: LoginManagerBinder)
+  case class KeymasterMethodMuxLoginFilter(binder: MBinder[LoginManager])
     extends Filter[SessionIdRequest, Response, SessionIdRequest, Response] {
     def apply(req: SessionIdRequest,
               service: Service[SessionIdRequest, Response]): Future[Response] =
@@ -119,7 +119,7 @@ object Keymaster {
    * @param binder Keymaster Access Service Binder
    * @param store Session store
    */
-  case class KeymasterAccessIssuer(binder: ManagerBinder, store: SessionStore)
+  case class KeymasterAccessIssuer(binder: MBinder[Manager], store: SessionStore)
       extends AccessIssuer[Tokens, ServiceToken] {
     def api(accessRequest: AccessRequest[Tokens]): Request =
       tap(Request(Method.Post, accessRequest.serviceId.loginManager.accessManager.path.toString))(req => {
@@ -161,7 +161,7 @@ object Keymaster {
    *
    * @param binder Upstream Service Binder
    */
-  case class KeymasterAccessFilter(binder: ServiceIdentifierBinder)
+  case class KeymasterAccessFilter(binder: MBinder[ServiceIdentifier])
       extends Filter[AccessIdRequest[Tokens], Response, AccessRequest[Tokens], AccessResponse[ServiceToken]] {
     def apply(req: AccessIdRequest[Tokens],
               accessService: Service[AccessRequest[Tokens], AccessResponse[ServiceToken]]): Future[Response] =
@@ -177,9 +177,9 @@ object Keymaster {
    */
   def keymasterIdentityProviderChain(store: SessionStore)(
     implicit secretStoreApi: SecretStoreApi): Service[SessionIdRequest, Response] = {
-    new KeymasterMethodMuxLoginFilter(new LoginManagerBinder) andThen
+    new KeymasterMethodMuxLoginFilter(LoginManagerBinder) andThen
       new KeymasterPostLoginFilter(store) andThen
-      new KeymasterIdentityProvider(new ManagerBinder)
+      new KeymasterIdentityProvider(ManagerBinder)
   }
 
   /**
@@ -189,7 +189,7 @@ object Keymaster {
   def keymasterAccessIssuerChain(store: SessionStore)(
     implicit secretStoreApi: SecretStoreApi): Service[SessionIdRequest, Response] = {
     new IdentityFilter[Tokens](store) andThen
-      new KeymasterAccessFilter(new ServiceIdentifierBinder) andThen
-      new KeymasterAccessIssuer(new ManagerBinder, store)
+      new KeymasterAccessFilter(ServiceIdentifierBinder) andThen
+      new KeymasterAccessIssuer(ManagerBinder, store)
   }
 }
