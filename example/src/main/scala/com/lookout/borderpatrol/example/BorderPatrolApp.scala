@@ -12,7 +12,6 @@ object BorderPatrolApp extends TwitterServer with Config {
 
   premain {
     implicit val serverConfig = readServerConfig(configFile())
-    implicit val loginManagerMap: Map[String, Service[Request, Response]] = Map.empty[String, Service[Request, Response]]
 
     val server1 = Httpx.serve(":8080", MainServiceChain)
     val server2 = Httpx.serve(":8081", getMockRoutingService)

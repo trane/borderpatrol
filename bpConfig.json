@@ -41,7 +41,7 @@
       "hosts": "localhost:8081",
       "loginManager": "checkpoint",
       "subdomain": "admin",
-      "path": "/admin/metrics.json",
+      "path": "/admin",
       "name": "admin"
     }
   ]

@@ -49,7 +49,7 @@ case class ServerConfig(secretStore: SecretStoreApi,
  */
 object Config {
 
-  val defaultConfigFile = "serviceids.json"
+  val defaultConfigFile = "bpConfig.json"
   val defaultSecretStore = SecretStores.InMemorySecretStore(Secrets(Secret(), Secret()))
   val defaultSessionStore = SessionStores.InMemoryStore
   val defaultServiceIdsFile = "bpConfig.json"
