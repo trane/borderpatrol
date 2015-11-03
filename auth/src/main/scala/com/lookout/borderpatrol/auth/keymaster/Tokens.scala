@@ -4,6 +4,7 @@ import com.lookout.borderpatrol.sessionx.{SessionDataError, SessionDataEncoder}
 import com.twitter.io.Buf
 import io.circe._
 import io.circe.generic.auto._
+import io.circe.syntax._
 import scala.util.{Try, Success, Failure}
 
 
@@ -67,36 +68,42 @@ object Tokens {
     jawn.decode[A](input)
 
   /**
+   * MasterToken Encoder/Decoder
    * {"auth_service": "a"} -> MasterToken("a")
    * {} -> result error
    */
-  implicit val MasterTokenDecoder: Decoder[MasterToken] = Decoder.instance[MasterToken]( c =>
-    for {
-      value <- (c.downField("auth_service")).as[String]
-    } yield MasterToken(value)
-  )
+  implicit val MasterTokenDecoder: Decoder[MasterToken] = Decoder[String].map(MasterToken(_))
+  implicit val MasterTokenEncoder: Encoder[MasterToken] = Encoder[String].contramap(_.value)
 
-  implicit val MasterTokenEncoder: Encoder[MasterToken] = Encoder.instance[MasterToken](t =>
-    Json.obj(("auth_service", Json.string(t.value)))
-  )
+  /**
+   * Service Token Encoder/Decoder
+   * {"service_name": "service_token"} -> ServiceToken("service_token")
+   */
+  implicit val ServiceTokenDecoder: Decoder[ServiceToken] = Decoder[String].map(ServiceToken(_))
+  implicit val ServiceTokenEncoder: Encoder[ServiceToken] = Encoder[String].contramap(_.value)
 
   /**
    * {"service_tokens": {"a": "a", "b": "b"}} -> ServiceTokens(Map((a->ServiceToken(a)), (b->ServiceToken(b)))
    * {} -> ServiceTokens(Map())
    */
-  implicit val ServiceTokensDecoder: Decoder[ServiceTokens] = Decoder.instance[ServiceTokens](c =>
-    for {
-      services <- c.downField("service_tokens").as[Option[Map[String, String]]]
-    } yield services.fold(ServiceTokens())(m => ServiceTokens(m.mapValues(ServiceToken(_))))
-  )
-
   implicit val ServiceTokensEncoder: Encoder[ServiceTokens] = Encoder.instance[ServiceTokens](st =>
-    Json.obj(("service_tokens", Json.fromFields(st.services.map(t => (t._1, Json.string(t._2.value))).toSeq)))
-  )
+    Json.fromFields(st.services.map(t => (t._1, Json.string(t._2.value))).toSeq))
 
-  implicit val TokensDecoder: Decoder[Tokens] = deriveFor[Tokens].decoder
+  /**
+   * Tokens Encoder/Decoder
+   */
+  implicit val TokensDecoder: Decoder[Tokens] = Decoder.instance {c =>
+    for {
+      master <- c.downField("auth_service").as[MasterToken]
+      services <- c.downField("service_tokens").as[Option[Map[String, String]]]
+    } yield Tokens(master, services.fold(ServiceTokens())(m => ServiceTokens(m.mapValues(ServiceToken(_)))))
+  }
 
-  implicit val TokensEncoder: Encoder[Tokens] = deriveFor[Tokens].encoder
+  implicit val TokensEncoder: Encoder[Tokens] = Encoder.instance {t =>
+    Json.fromFields(Seq(
+      ("auth_service", t.master.asJson),
+      ("service_tokens", t.services.asJson)))
+  }
 
   implicit val SessionDataTokenEncoder: SessionDataEncoder[Tokens] = new SessionDataEncoder[Tokens] {
     def encode(tokens: Tokens): Buf =

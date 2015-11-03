@@ -15,6 +15,9 @@ trait Signer {
   lazy val hmac: Mac = tap(Mac.getInstance(algo))(mac => mac.init(key))
 
   def sign(bytes: IndexedSeq[Byte]): Signature =
-    hmac.doFinal(bytes.toArray).toIndexedSeq
+    /* java.crypto.Mac is NOT threadsafe, hence use synchronized block */
+    this.synchronized {
+      hmac.doFinal(bytes.toArray).toIndexedSeq
+    }
 }
 

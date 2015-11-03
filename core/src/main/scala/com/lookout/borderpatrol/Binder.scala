@@ -36,12 +36,12 @@ object Binder {
    * @tparam A
    */
   abstract class MBinder[A: BinderContext](cache: mutable.Map[String, Service[Request, Response]] =
-                                       mutable.Map.empty[String, Service[Request, Response]])
-    extends Service[BindRequest[A], Response] {
+                                           mutable.Map.empty[String, Service[Request, Response]])
+      extends Service[BindRequest[A], Response] {
     def apply(req: BindRequest[A]): Future[Response] = {
-      cache.getOrElse(req.name,
+      this.synchronized(cache.getOrElse(req.name,
         util.Combinators.tap(Httpx.newService(req.hosts))(cli => cache(req.name) = cli)
-      ).apply(req.req)
+      )).apply(req.req)
     }
     def get(name: String): Option[Service[Request, Response]] = cache.get(name)
   }

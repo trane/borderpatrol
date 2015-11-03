@@ -22,13 +22,6 @@ class TokensSpec extends BorderPatrolSuite  {
     serviceTokens.find("service2") should be equals (serviceToken2)
   }
 
-  it should "uphold encoding/decoding ServiceTokens" in {
-    def encodeDecode(tokens: ServiceTokens) : ServiceTokens = {
-      ServiceTokensDecoder.decodeJson(ServiceTokensEncoder(tokens)).fold[ServiceTokens](e => ServiceTokens(), t => t)
-    }
-    encodeDecode(serviceTokens) should be (serviceTokens)
-  }
-
   behavior of "Tokens"
 
   it should "be able to find the ServiceToken by service name" in {
