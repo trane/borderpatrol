@@ -20,13 +20,13 @@ class KeymasterSpec extends BorderPatrolSuite  {
   import Tokens._
 
   //  Managers
-  val keymasterIdManager = Manager("keymaster", Path("/identityProvider"), "localhost:8081")
-  val keymasterAccessManager = Manager("keymaster", Path("/accessIssuer"), "localhost:8081")
-  val checkpointLoginManager = LoginManager("checkpoint", Path("/check"), "localhost:8081", Path("/loginConfirm"),
+  val keymasterIdManager = Manager("keymaster", Path("/identityProvider"), "localhost:5678")
+  val keymasterAccessManager = Manager("keymaster", Path("/accessIssuer"), "localhost:5678")
+  val checkpointLoginManager = LoginManager("checkpoint", Path("/check"), "localhost:5678", Path("/loginConfirm"),
     keymasterIdManager, keymasterAccessManager)
 
   // sids
-  val one = ServiceIdentifier("one", "localhost:8081", Path("/ent"), "enterprise", checkpointLoginManager)
+  val one = ServiceIdentifier("one", "localhost:5678", Path("/ent"), "enterprise", checkpointLoginManager)
   val serviceMatcher = ServiceMatcher(Set(one))
   val sessionStore = SessionStores.InMemoryStore
 
@@ -453,7 +453,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
 
   it should "succeed and invoke the GET on loginManager" in {
     val server = com.twitter.finagle.Httpx.serve(
-      "localhost:8081", mkTestService[Request, Response]{request =>
+      "localhost:5678", mkTestService[Request, Response]{request =>
         if (request.path.contains(checkpointLoginManager.path.toString)) Response(Status.Ok).toFuture
         else Response(Status.BadRequest).toFuture
       })
@@ -483,7 +483,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
 
   it should "succeed and invoke the GET on identityManager" in {
     val server = com.twitter.finagle.Httpx.serve(
-      "localhost:8081", mkTestService[Request, Response]{request =>
+      "localhost:5678", mkTestService[Request, Response]{request =>
         if (request.path.contains(keymasterIdManager.path.toString))
           tap(Response(Status.Ok))(res => {
             res.contentString = TokensEncoder(tokens).toString()
@@ -519,7 +519,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
 
   it should "succeed and invoke the GET on accessManager" in {
     val server = com.twitter.finagle.Httpx.serve(
-      "localhost:8081", mkTestService[Request, Response]{request =>
+      "localhost:5678", mkTestService[Request, Response]{request =>
         if (request.path.contains(keymasterAccessManager.path.toString))
           tap(Response(Status.Ok))(res => {
             res.contentString = TokensEncoder(tokens2).toString()
