@@ -43,10 +43,8 @@ case class ServiceMatcher(services: Set[ServiceIdentifier]) {
    * @param cmp A comparable function
    * @return The maximuma of folding over the set with the cmp function
    */
-  private[this] def foldWith(sis: Set[ServiceIdentifier],
-                             cmp: (ServiceIdentifier, ServiceIdentifier) => ServiceIdentifier):
-      Option[ServiceIdentifier] =
-    sis.foldRight(Option.empty[ServiceIdentifier])((lhs, res) => res match {
+  private[this] def foldWith[A](sis: Set[A], cmp: (A, A) => A): Option[A] =
+    sis.foldRight(Option.empty[A])((lhs, res) => res match {
       case Some(rhs) => Some(cmp(lhs, rhs))
       case None => Some(lhs)
     })
@@ -65,44 +63,18 @@ case class ServiceMatcher(services: Set[ServiceIdentifier]) {
    * @return the service name from the longest matching subdomain
    */
   def subdomain(host: String): Option[ServiceIdentifier] =
-    foldWith(
+    foldWith[ServiceIdentifier](
       services.filter(si => host.startsWith(si.subdomain + domainTerm)),
       (si1, si2) => if (si1.subdomain.size > si2.subdomain.size) si1 else si2
-    )
-
-  /**
-   * Find the longest matching path in the request
-   *
-   * @example
-   *          Given a request of path of "/a" and a set of paths Set("/account", "/a")
-   * @param path path from request
-   * @return the service name from the longest matching path
-   */
-  def path(path: Path): Option[ServiceIdentifier] =
-    foldWith(
-      services.filter(id => path.startsWith(id.path)),
-      (si1, si2) => if (si1.path.toString.size > si2.path.toString.size) si1 else si2
-    )
-
-  /**
-   * Find the longest matching login path in the request
-   *
-   * @example
-   *          Given a request of path of "/a" and a set of paths Set("/account", "/a")
-   * @param path path from request
-   * @return the service name from the longest matching path
-   */
-  def login(path: Path): Option[ServiceIdentifier] =
-    foldWith(
-      services.filter(id => path.startsWith(id.login)),
-      (si1, si2) => if (si1.login.toString.size > si2.login.toString.size) si1 else si2
     )
 
   /**
    * Derive a ServiceIdentifier from an `httpx.Request`
    */
   def get(req: Request): Option[ServiceIdentifier] =
-    path(Path(req.path)) orElse login(Path(req.path))  orElse req.host.flatMap(subdomain)
-
+    req.host.flatMap(subdomain).filter(sid => {
+      val pathSet = Set(sid.path, sid.loginManager.path, sid.loginManager.loginPath)
+      !pathSet.filter(Path(req.path).startsWith(_)).isEmpty
+    })
 }
 

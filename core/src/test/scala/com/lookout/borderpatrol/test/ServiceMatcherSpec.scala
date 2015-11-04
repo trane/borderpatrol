@@ -1,15 +1,24 @@
 package com.lookout.borderpatrol.test
 
-import com.lookout.borderpatrol.{ServiceIdentifier,ServiceMatcher}
+import com.lookout.borderpatrol.{LoginManager, Manager, ServiceIdentifier, ServiceMatcher}
 import com.twitter.finagle.httpx.{RequestBuilder, Request}
 import com.twitter.finagle.httpx.path.Path
 
 class ServiceMatcherSpec extends BorderPatrolSuite {
 
-  val one = ServiceIdentifier("one", Path("/ent"), "enterprise", Path("/a/login"))
-  val two = ServiceIdentifier("two", Path("/api"), "api", Path("/login"))
-  val three = ServiceIdentifier("three", Path("/apis"), "api.subdomain", Path("/loginIt"))
-  val four = ServiceIdentifier("four", Path("/apis/test"), "api.testdomain", Path("/loginIt/here"))
+  val keymasterIdManager = Manager("keymaster", Path("/identityProvider"), "localhost:8081")
+  val keymasterAccessManager = Manager("keymaster", Path("/accessIssuer"), "localhost:8081")
+  val checkpointLoginManager = LoginManager("checkpoint", Path("/check"), "localhost:8081", Path("/loginConfirm"),
+    keymasterIdManager, keymasterAccessManager)
+  val basicIdManager = Manager("basic", Path("/signin"), "localhost:8081")
+  val basicAccessManager = Manager("basic", Path("/accessin"), "localhost:8081")
+  val umbrellaLoginManager = LoginManager("umbrella", Path("/umb"), "localhost:8081", Path("/loginIt"),
+    keymasterIdManager, keymasterAccessManager)
+
+  val one = ServiceIdentifier("one", "localhost:11", Path("/ent"), "enterprise", checkpointLoginManager)
+  val two = ServiceIdentifier("two", "localhost:11", Path("/api"), "api", umbrellaLoginManager)
+  val three = ServiceIdentifier("three", "localhost:11", Path("/apis"), "api.subdomain", checkpointLoginManager)
+  val four = ServiceIdentifier("four", "localhost:11", Path("/apis/test"), "api.testdomain", umbrellaLoginManager)
   val sids = Set(one, two, three, four)
   val serviceMatcher = ServiceMatcher(sids)
 
@@ -21,28 +30,6 @@ class ServiceMatcherSpec extends BorderPatrolSuite {
 
   behavior of "ServiceMatchers"
 
-  it should "match the longest path" in {
-    serviceMatcher.path(Path("/")) should be(None)
-    serviceMatcher.path(Path("/e")) should be(None)
-    serviceMatcher.path(Path("/enter")) should be(None)
-    serviceMatcher.path(Path("/ent/blah")).value should be(one)
-    serviceMatcher.path(Path("/api")).value should be(two)
-    serviceMatcher.path(Path("/apis")).value should be(three)
-    serviceMatcher.path(Path("/apis/testing")).value should be(three)
-    serviceMatcher.path(Path("/apis/test")).value should be(four)
-  }
-
-  it should "match the longest login path" in {
-    serviceMatcher.login(Path("/")) should be(None)
-    serviceMatcher.login(Path("/e")) should be(None)
-    serviceMatcher.login(Path("/enter")) should be(None)
-    serviceMatcher.login(Path("/a/login/yeah")).value should be(one)
-    serviceMatcher.login(Path("/login")).value should be(two)
-    serviceMatcher.login(Path("/loginIt")).value should be(three)
-    serviceMatcher.login(Path("/loginIt/hereOr")).value should be(three)
-    serviceMatcher.login(Path("/loginIt/here")).value should be(four)
-  }
-
   it should "match the longest subdomain" in {
     serviceMatcher.subdomain("www.example.com") should be(None)
     serviceMatcher.subdomain("enterprise.api.example.com").value should be(one)
@@ -52,12 +39,25 @@ class ServiceMatcherSpec extends BorderPatrolSuite {
     serviceMatcher.subdomain("api.subdomain.example.com").value should be(three)
   }
 
+  it should "match the longest get" in {
+    serviceMatcher.get(req("enterprise", "/")) should be(None)
+    serviceMatcher.get(req("enterprise", "/ent")).value should be(one)
+    serviceMatcher.get(req("enterprise", "/check")).value should be(one)
+    serviceMatcher.get(req("enterprise", "/loginConfirm")).value should be(one)
+    serviceMatcher.get(req("api", "/check")) should be(None)
+    serviceMatcher.get(req("api", "/loginConfirm")) should be(None)
+    serviceMatcher.get(req("api.testdomain", "/apis/test")).value should be(four)
+    serviceMatcher.get(req("api.testdomain", "/umb")).value should be(four)
+    serviceMatcher.get(req("api.testdomain", "/loginIt")).value should be(four)
+    serviceMatcher.get(req("api.testdomain", "/login")) should be(None)
+  }
+
   it should "match the given ServiceIdentifier with itself" in {
-    val permutations = (for {
+    val permutations = for {
       winner <- List(one, two, three, four)
       loser <- List(one, two, three, four)
       if winner != loser
-    } yield getWinner(winner, loser) == winner)
+    } yield getWinner(winner, loser) == winner
     permutations.foreach(p => p should be(true))
   }
 
@@ -65,16 +65,7 @@ class ServiceMatcherSpec extends BorderPatrolSuite {
     serviceMatcher.get(req("www", "/applesauce")) should be(None)
   }
 
-  it should "match path before subdomain" in {
-    serviceMatcher.get(req("enterprise", "/apis")).value should be(three)
-    serviceMatcher.get(req("api", "/ent")).value should be(one)
-    serviceMatcher.get(req("enterprise", "/api")).value should be(two)
+  it should "return None when subdomain matches, but path does not" in {
+    serviceMatcher.get(req("enterprise", "/apis")) should be(None)
   }
-
-  it should "match subdomain if path doesn't exist" in {
-    serviceMatcher.get(req("enterprise", "/path")).value should be(one)
-    serviceMatcher.get(req("api", "/rest")).value should be(two)
-    serviceMatcher.get(req("api.subdomain", "/taxes")).value should be(three)
-  }
-
 }

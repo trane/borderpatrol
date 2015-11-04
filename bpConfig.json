@@ -1,0 +1,48 @@
+{
+  "accessManagers": [
+    {
+      "hosts": "localhost:8081",
+      "path": "/accessIssuer",
+      "name": "keymaster"
+    }
+  ],
+  "sessionStore": {
+    "type": "InMemoryStore$"
+  },
+  "loginManagers": [
+    {
+      "name": "checkpoint",
+      "path": "/a",
+      "identityManager": "keymaster",
+      "accessManager": "keymaster",
+      "loginPath": "/signin",
+      "hosts": "localhost:8081"
+    }
+  ],
+  "secretStore": {
+    "type": "InMemorySecretStore"
+  },
+  "identityManagers": [
+    {
+      "hosts": "localhost:8081",
+      "path": "/identityManager",
+      "name": "keymaster"
+    }
+  ],
+  "serviceIdentifiers": [
+    {
+      "hosts": "localhost:8081",
+      "loginManager": "checkpoint",
+      "subdomain": "ent",
+      "path": "/ent",
+      "name": "one"
+    },
+    {
+      "hosts": "localhost:8081",
+      "loginManager": "checkpoint",
+      "subdomain": "admin",
+      "path": "/admin",
+      "name": "admin"
+    }
+  ]
+}
