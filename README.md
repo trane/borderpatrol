@@ -59,6 +59,35 @@ installed (prefer v0.13.8+). Run `sbt`, and then use any of the following comman
  * `scalastyle`: run the style-checker on the code
  * `validate`: run tests, style-checker, and doc generation
 
+Configuration
+-------------
+
+ * `secretStore`: Secret Store used to store Secrets (TBD)
+ * `sessionStore`: Session Store (TBD)
+ * `accessManagers`: A list of ACCESS `Manager`s. Access endpoints authorize access to protected endpoints.
+ * `identityManagers`: A list of IDENTITY `Manager`s. Identity managers perform authentication and provisioning
+ * `Manager`: A
+     * `hosts`: A list of upstream URLs (Format: `[<http[s]>://<host>:[port]]+`)
+     * `path`: A path serviced by the upstream manager (i.e. Keymaster IDP endpoint or Keymaster AccesIssuer endpoint)
+     * `name`: A unique name that identifies this Manager
+ * `loginManagers`: A list of LOGIN `Manager`s
+ * `loginManager`: It defines a
+     * `hosts`: A list of upstream URLs (Format: `[<http[s]>://<host>:[port]]+`)
+     * `path`: A path serviced by  the upstream host (i.e. login provider host). It typically services the
+ un-authenticated web services
+     * `name`:  unique name that identifies this Login Manager
+     * `identityManager`: Identity manager name used by this Login Manager
+     * `accessManager`: Access Issuer used by this Login Manager
+     * `loginPath`: The path at which login form posts the login response
+ * `serviceIdentifiers`: A list of protected service endpoints
+ * `serviceIdentifier`: A protected service endpoint. The combination of subdomain and path uniqully identifies
+ service.
+     * `hosts`: A list of upstream URLs (Format: `[<http[s]>://<host>:[port]]+`)
+     * `name`: A unique name that identifies this Service Identifier
+     * `loginManager`: Login Manager used by this Service Identifier
+     * `path`: A path serviced by the protected endpoint
+     * `subdomain`: A subdomain of the protected endpoint
+
 Running the example
 -------------------
 

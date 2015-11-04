@@ -24,7 +24,7 @@ object Keymaster {
   /**
    * The identity provider for Keymaster, will connect to the remote keymaster server to authenticate and get an
    * identity (master token)
-   * @param binder Binder to bind to Keymaster identity service
+   * @param binder Binder that binds to Keymaster identity service passed in the IdentityManager
    */
   case class KeymasterIdentityProvider(binder: MBinder[Manager])
       extends IdentityProvider[Credential, Tokens] {
@@ -102,7 +102,7 @@ object Keymaster {
    * - Get is directed to login form
    * - Post processes the login credentials
    *
-   * @param binder
+   * @param binder It binds to upstream login provider using the information passed in LoginManager
    */
   case class KeymasterMethodMuxLoginFilter(binder: MBinder[LoginManager])
     extends Filter[SessionIdRequest, Response, SessionIdRequest, Response] {
@@ -116,7 +116,7 @@ object Keymaster {
 
   /**
    * The access issuer will use the MasterToken to gain access to service tokens
-   * @param binder Keymaster Access Service Binder
+   * @param binder It binds to the Keymaster Access Issuer using info in AccessManager
    * @param store Session store
    */
   case class KeymasterAccessIssuer(binder: MBinder[Manager], store: SessionStore)
@@ -159,7 +159,7 @@ object Keymaster {
   /**
    * This filter acquires the access and then forwards the request to upstream service
    *
-   * @param binder Upstream Service Binder
+   * @param binder It binds to the upstream service endpoint using the info passed in ServiceIdentifier
    */
   case class KeymasterAccessFilter(binder: MBinder[ServiceIdentifier])
       extends Filter[AccessIdRequest[Tokens], Response, AccessRequest[Tokens], AccessResponse[ServiceToken]] {

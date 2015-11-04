@@ -5,6 +5,9 @@ import com.twitter.finagle.httpx.{Response, Request}
 import com.twitter.util.Future
 import scala.collection.mutable
 
+/**
+ * Binder object defines methods and shells used to bind to upstream endpoints
+ */
 object Binder {
 
   /**

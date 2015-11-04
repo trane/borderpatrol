@@ -12,12 +12,13 @@ import com.lookout.borderpatrol.util.Combinators.tap
 trait Signer {
   val algo: String
   val key: Key
-  lazy val hmac: Mac = tap(Mac.getInstance(algo))(mac => mac.init(key))
 
+  /**
+   * Sign the input bytes using configured algorithm
+   * @param bytes
+   * @return Signature
+   */
   def sign(bytes: IndexedSeq[Byte]): Signature =
-    /* java.crypto.Mac is NOT threadsafe, hence use synchronized block */
-    this.synchronized {
-      hmac.doFinal(bytes.toArray).toIndexedSeq
-    }
+    tap(Mac.getInstance(algo))(mac => mac.init(key)).doFinal(bytes.toArray).toIndexedSeq
 }
 
