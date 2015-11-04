@@ -1,5 +1,7 @@
 package com.lookout.borderpatrol.auth
 
+import java.net.URL
+
 import com.lookout.borderpatrol.sessionx.SessionStores.MemcachedStore
 import com.lookout.borderpatrol.sessionx._
 import com.lookout.borderpatrol.test._
@@ -17,14 +19,16 @@ import com.twitter.util.{Await, Future, Time}
 class BorderAuthSpec extends BorderPatrolSuite  {
   import sessionx.helpers.{secretStore => store, _}
 
+  val urls = Set(new URL("http://localhost:8081"))
+
   //  Managers
-  val keymasterIdManager = Manager("keymaster", Path("/identityProvider"), "localhost:8081")
-  val keymasterAccessManager = Manager("keymaster", Path("/accessIssuer"), "localhost:8081")
-  val checkpointLoginManager = LoginManager("checkpoint", Path("/check"), "localhost:8081", Path("/loginConfirm"),
+  val keymasterIdManager = Manager("keymaster", Path("/identityProvider"), urls)
+  val keymasterAccessManager = Manager("keymaster", Path("/accessIssuer"), urls)
+  val checkpointLoginManager = LoginManager("checkpoint", Path("/check"), urls, Path("/loginConfirm"),
     keymasterIdManager, keymasterAccessManager)
 
   // sids
-  val one = ServiceIdentifier("one", "localhost:11", Path("/ent"), "enterprise", checkpointLoginManager)
+  val one = ServiceIdentifier("one", urls, Path("/ent"), "enterprise", checkpointLoginManager)
   val serviceMatcher = ServiceMatcher(Set(one))
   val sessionStore = SessionStores.InMemoryStore
 

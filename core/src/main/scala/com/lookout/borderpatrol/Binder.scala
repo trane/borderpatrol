@@ -1,8 +1,11 @@
 package com.lookout.borderpatrol
 
+import java.net.URL
+
+import com.twitter.finagle.util.InetSocketAddressUtil
 import com.twitter.finagle.{Httpx, Service}
-import com.twitter.finagle.httpx.{Response, Request}
-import com.twitter.util.Future
+import com.twitter.finagle.httpx.{Status, Response, Request}
+import com.twitter.util.{Await, Future}
 import scala.collection.mutable
 
 /**
@@ -17,7 +20,7 @@ object Binder {
    */
   trait BinderContext[A] {
     def name(manager: A): String
-    def hosts(manager: A): String
+    def hosts(manager: A): Set[URL]
   }
 
   /**
@@ -26,7 +29,7 @@ object Binder {
    */
   case class BindRequest[A: BinderContext](context: A, req: Request) {
     def name: String = implicitly[BinderContext[A]].name(context)
-    def hosts: String = implicitly[BinderContext[A]].hosts(context)
+    def hosts: Set[URL] = implicitly[BinderContext[A]].hosts(context)
   }
 
   /**
@@ -39,12 +42,20 @@ object Binder {
    * @tparam A
    */
   abstract class MBinder[A: BinderContext](cache: mutable.Map[String, Service[Request, Response]] =
-                                           mutable.Map.empty[String, Service[Request, Response]])
+                                       mutable.Map.empty[String, Service[Request, Response]])
       extends Service[BindRequest[A], Response] {
     def apply(req: BindRequest[A]): Future[Response] = {
-      this.synchronized(cache.getOrElse(req.name,
-        util.Combinators.tap(Httpx.newService(req.hosts))(cli => cache(req.name) = cli)
-      )).apply(req.req)
+      this.synchronized(cache.getOrElse(req.name, {
+        // If its https, use TLS
+        val https = !req.hosts.filter(u => u.getProtocol == "https").isEmpty
+        val hostname = req.hosts.map(u => u.getHost()).mkString
+        // Find CSV of host & ports
+        val hostAndPorts = req.hosts.map(u => u.getAuthority()).mkString(",")
+        util.Combinators.tap(
+          if (https) Httpx.client.withTls(hostname).newService(hostAndPorts)
+          else Httpx.newService(hostAndPorts)
+        )(cli => cache(req.name) = cli)
+      })).apply(req.req)
     }
     def get(name: String): Option[Service[Request, Response]] = cache.get(name)
   }
@@ -54,15 +65,15 @@ object Binder {
    */
   implicit object LoginManagerBinderContext extends BinderContext[LoginManager] {
     def name(lm: LoginManager): String = lm.name
-    def hosts(lm: LoginManager): String = lm.hosts
+    def hosts(lm: LoginManager): Set[URL] = lm.hosts
   }
   implicit object ManagerBinderContext extends BinderContext[Manager] {
     def name(m: Manager): String = m.name
-    def hosts(m: Manager): String = m.hosts
+    def hosts(m: Manager): Set[URL] = m.hosts
   }
   implicit object ServiceIdentifierBinderContext extends BinderContext[ServiceIdentifier] {
     def name(sid: ServiceIdentifier): String = sid.name
-    def hosts(sid: ServiceIdentifier): String = sid.hosts
+    def hosts(sid: ServiceIdentifier): Set[URL] = sid.hosts
   }
 
   /**

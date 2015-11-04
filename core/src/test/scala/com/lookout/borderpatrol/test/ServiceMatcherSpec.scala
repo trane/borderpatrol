@@ -1,24 +1,27 @@
 package com.lookout.borderpatrol.test
 
+import java.net.URL
+
 import com.lookout.borderpatrol.{LoginManager, Manager, ServiceIdentifier, ServiceMatcher}
 import com.twitter.finagle.httpx.{RequestBuilder, Request}
 import com.twitter.finagle.httpx.path.Path
 
 class ServiceMatcherSpec extends BorderPatrolSuite {
 
-  val keymasterIdManager = Manager("keymaster", Path("/identityProvider"), "localhost:8081")
-  val keymasterAccessManager = Manager("keymaster", Path("/accessIssuer"), "localhost:8081")
-  val checkpointLoginManager = LoginManager("checkpoint", Path("/check"), "localhost:8081", Path("/loginConfirm"),
+  val urls = Set(new URL("http://localhost:8081"))
+  val keymasterIdManager = Manager("keymaster", Path("/identityProvider"), urls)
+  val keymasterAccessManager = Manager("keymaster", Path("/accessIssuer"), urls)
+  val checkpointLoginManager = LoginManager("checkpoint", Path("/check"), urls, Path("/loginConfirm"),
     keymasterIdManager, keymasterAccessManager)
-  val basicIdManager = Manager("basic", Path("/signin"), "localhost:8081")
-  val basicAccessManager = Manager("basic", Path("/accessin"), "localhost:8081")
-  val umbrellaLoginManager = LoginManager("umbrella", Path("/umb"), "localhost:8081", Path("/loginIt"),
+  val basicIdManager = Manager("basic", Path("/signin"), urls)
+  val basicAccessManager = Manager("basic", Path("/accessin"), urls)
+  val umbrellaLoginManager = LoginManager("umbrella", Path("/umb"), urls, Path("/loginIt"),
     keymasterIdManager, keymasterAccessManager)
 
-  val one = ServiceIdentifier("one", "localhost:11", Path("/ent"), "enterprise", checkpointLoginManager)
-  val two = ServiceIdentifier("two", "localhost:11", Path("/api"), "api", umbrellaLoginManager)
-  val three = ServiceIdentifier("three", "localhost:11", Path("/apis"), "api.subdomain", checkpointLoginManager)
-  val four = ServiceIdentifier("four", "localhost:11", Path("/apis/test"), "api.testdomain", umbrellaLoginManager)
+  val one = ServiceIdentifier("one", urls, Path("/ent"), "enterprise", checkpointLoginManager)
+  val two = ServiceIdentifier("two", urls, Path("/api"), "api", umbrellaLoginManager)
+  val three = ServiceIdentifier("three", urls, Path("/apis"), "api.subdomain", checkpointLoginManager)
+  val four = ServiceIdentifier("four", urls, Path("/apis/test"), "api.testdomain", umbrellaLoginManager)
   val sids = Set(one, two, three, four)
   val serviceMatcher = ServiceMatcher(sids)
 

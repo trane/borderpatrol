@@ -62,8 +62,8 @@ installed (prefer v0.13.8+). Run `sbt`, and then use any of the following comman
 Configuration
 -------------
 
- * `secretStore`: Secret Store used to store Secrets (TBD)
- * `sessionStore`: Session Store (TBD)
+ * `secretStore`: Secret Store. It can be configured using `type` as `InMemoryStore`.
+ * `sessionStore`: Session Store. It can be configured using `type` as `InMemorySecretStore` or `Memcached`.
  * `accessManagers`: A list of ACCESS `Manager`s. Access endpoints authorize access to protected endpoints.
  * `identityManagers`: A list of IDENTITY `Manager`s. Identity managers perform authentication and provisioning
  * `Manager`: A

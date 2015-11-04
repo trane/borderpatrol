@@ -1,5 +1,7 @@
 package com.lookout.borderpatrol.test
 
+import java.net.URL
+
 import com.lookout.borderpatrol._
 import com.lookout.borderpatrol.Binder._
 import com.twitter.finagle.Service
@@ -8,7 +10,8 @@ import com.twitter.finagle.httpx.path.Path
 import com.twitter.util.{Await, Future}
 
 class BinderSpec extends BorderPatrolSuite {
-  val keymasterIdManager = Manager("keymaster", Path("/identityProvider"), "localhost:8081")
+  val urls = Set(new URL("http://localhost:8081"))
+  val keymasterIdManager = Manager("keymaster", Path("/identityProvider"), urls)
 
   // Request helper
   def req(path: String): Request =
