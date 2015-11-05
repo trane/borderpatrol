@@ -14,8 +14,8 @@ import scala.collection.mutable
 object Binder {
 
   /**
-   * The trait for the context binding. It exposes common methods to be made available from all the contexts.
-   *
+   * The trait for the context binding. It exposes common methods
+   * to be made available from all the contexts.
    * @tparam A
    */
   trait BinderContext[A] {
@@ -44,19 +44,22 @@ object Binder {
   abstract class MBinder[A: BinderContext](cache: mutable.Map[String, Service[Request, Response]] =
                                        mutable.Map.empty[String, Service[Request, Response]])
       extends Service[BindRequest[A], Response] {
-    def apply(req: BindRequest[A]): Future[Response] = {
+    def apply(req: BindRequest[A]): Future[Response] =
       this.synchronized(cache.getOrElse(req.name, {
+
         // If its https, use TLS
         val https = !req.hosts.filter(u => u.getProtocol == "https").isEmpty
         val hostname = req.hosts.map(u => u.getHost()).mkString
+
         // Find CSV of host & ports
         val hostAndPorts = req.hosts.map(u => u.getAuthority()).mkString(",")
         util.Combinators.tap(
           if (https) Httpx.client.withTls(hostname).newService(hostAndPorts)
           else Httpx.newService(hostAndPorts)
         )(cli => cache(req.name) = cli)
+
       })).apply(req.req)
-    }
+
     def get(name: String): Option[Service[Request, Response]] = cache.get(name)
   }
 
