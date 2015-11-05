@@ -1,7 +1,7 @@
 {
   "accessManagers": [
     {
-      "hosts": "localhost:8081",
+      "hosts": ["http://localhost:8081"],
       "path": "/accessIssuer",
       "name": "keymaster"
     }
@@ -16,7 +16,7 @@
       "identityManager": "keymaster",
       "accessManager": "keymaster",
       "loginPath": "/signin",
-      "hosts": "localhost:8081"
+      "hosts": ["http://localhost:8081"]
     }
   ],
   "secretStore": {
@@ -24,21 +24,21 @@
   },
   "identityManagers": [
     {
-      "hosts": "localhost:8081",
+      "hosts": ["http://localhost:8081"],
       "path": "/identityManager",
       "name": "keymaster"
     }
   ],
   "serviceIdentifiers": [
     {
-      "hosts": "localhost:8081",
+      "hosts": ["http://localhost:8081"],
       "loginManager": "checkpoint",
       "subdomain": "ent",
       "path": "/ent",
       "name": "one"
     },
     {
-      "hosts": "localhost:8081",
+      "hosts": ["http://localhost:8081"],
       "loginManager": "checkpoint",
       "subdomain": "admin",
       "path": "/admin",

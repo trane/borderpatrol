@@ -1,5 +1,7 @@
 package com.lookout.borderpatrol.auth.keymaster
 
+import java.net.URL
+
 import com.lookout.borderpatrol.Binder._
 import com.lookout.borderpatrol.auth.keymaster.Keymaster._
 import com.lookout.borderpatrol.auth._
@@ -19,14 +21,16 @@ class KeymasterSpec extends BorderPatrolSuite  {
   import sessionx.helpers.{secretStore => store, _}
   import Tokens._
 
+  val urls = Set(new URL("http://localhost:5678"))
+
   //  Managers
-  val keymasterIdManager = Manager("keymaster", Path("/identityProvider"), "localhost:5678")
-  val keymasterAccessManager = Manager("keymaster", Path("/accessIssuer"), "localhost:5678")
-  val checkpointLoginManager = LoginManager("checkpoint", Path("/check"), "localhost:5678", Path("/loginConfirm"),
+  val keymasterIdManager = Manager("keymaster", Path("/identityProvider"), urls)
+  val keymasterAccessManager = Manager("keymaster", Path("/accessIssuer"), urls)
+  val checkpointLoginManager = LoginManager("checkpoint", Path("/check"), urls, Path("/loginConfirm"),
     keymasterIdManager, keymasterAccessManager)
 
   // sids
-  val one = ServiceIdentifier("one", "localhost:5678", Path("/ent"), "enterprise", checkpointLoginManager)
+  val one = ServiceIdentifier("one", urls, Path("/ent"), "enterprise", checkpointLoginManager)
   val serviceMatcher = ServiceMatcher(Set(one))
   val sessionStore = SessionStores.InMemoryStore
 

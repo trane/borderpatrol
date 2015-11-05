@@ -1,5 +1,7 @@
 package com.lookout.borderpatrol.example
 
+import java.net.URL
+
 import com.lookout.borderpatrol.{Manager, LoginManager, ServiceIdentifier}
 import com.lookout.borderpatrol.sessionx.SecretStores.InMemorySecretStore
 import com.lookout.borderpatrol.sessionx.SessionStores.MemcachedStore
@@ -60,6 +62,10 @@ object Config {
   implicit val encodePath: Encoder[Path] = Encoder[String].contramap(_.toString)
   implicit val decodePath: Decoder[Path] = Decoder[String].map(Path(_))
 
+  // Encoder/Decoder for URL
+  implicit val encodeUrl: Encoder[URL] = Encoder[String].contramap(_.toString)
+  implicit val decodeUrl: Decoder[URL] = Decoder[String].map(new URL(_))
+
   // Encoder/Decoder for SessionStore
   implicit val encodeSessionStore: Encoder[SessionStore] = Encoder.instance {
     case x: InMemoryStore.type => Json.obj(("type", Json.string(x.getClass.getSimpleName)))
@@ -108,17 +114,14 @@ object Config {
       for {
         name <- c.downField("name").as[String]
         path <- c.downField("path").as[Path]
-        hosts <- c.downField("hosts").as[String]
+        hosts <- c.downField("hosts").as[Set[URL]]
         loginPath <- c.downField("loginPath").as[Path]
         ipName <- c.downField("identityManager").as[String]
-        im <- Xor.fromOption(
-          ims.get(ipName),
-          DecodingFailure(s"No IdentityManager $ipName found", c.history)
-        )
+        im <- Xor.fromOption(ims.get(ipName),
+          DecodingFailure(s"No IdentityManager $ipName found: ", c.history))
         apName <- c.downField("accessManager").as[String]
-        am <- Xor.fromOption(
-          ams.get(apName),
-          DecodingFailure(s"No AccessManager $apName found", c.history)
+        am <- Xor.fromOption(ams.get(apName),
+          DecodingFailure(s"No AccessManager $apName found: ", c.history)
         )
       } yield LoginManager(name, path, hosts, loginPath, im, am)
     }
@@ -136,13 +139,12 @@ object Config {
     Decoder.instance { c =>
       for {
         name <- c.downField("name").as[String]
-        hosts <- c.downField("hosts").as[String]
+        hosts <- c.downField("hosts").as[Set[URL]]
         path <- c.downField("path").as[Path]
         subdomain <- c.downField("subdomain").as[String]
         lmName <- c.downField("loginManager").as[String]
-        lm <- Xor.fromOption(
-          lms.get(lmName),
-          DecodingFailure(s"No LoginManager $lmName found", c.history)
+        lm <- Xor.fromOption(lms.get(lmName),
+          DecodingFailure(s"No LoginManager $lmName found: ", c.history)
         )
       } yield ServiceIdentifier(name, hosts, path, subdomain, lm)
     }
@@ -164,28 +166,86 @@ object Config {
   }
 
   /**
+   * Validate Hosts (i.e. Set of URLs) configuration
+   * @param field
+   * @param name
+   * @param hosts
+   */
+  def validateHostsConfig(field: String, name: String, hosts: Set[URL]): Unit = {
+    // Make sure urls in Manager have matching protocol
+    if (hosts.map(_.getProtocol()).size != 1)
+      throw new InvalidConfigError(s"hosts configuration for ${name} in ${field}: has differing protocols")
+    // Make sure hosts in Manager have either http or https protocol
+    if (!hosts.map(_.getProtocol()).mkString.matches("http[s]*"))
+      throw new InvalidConfigError(s"hosts configuration for ${name} in ${field}: has unsupported protocol")
+    // Make sure https hosts have a matching hostname
+    if (!hosts.filter(u => u.getProtocol == "https").isEmpty &&
+      hosts.map(u => u.getHost()).size != 1)
+      throw new InvalidConfigError(
+        s"hosts configuration for ${name} in ${field}: https urls have mismatching hostnames")
+  }
+
+  /**
+   * Validate Manager configuration
+   * @param field
+   * @param managers
+   */
+  def validateManagerConfig(field: String, managers: Set[Manager]): Unit = {
+    // Find if managers have duplicate entries
+    if (managers.size > managers.map(m => m.name).size)
+      throw new DuplicateConfigError("name", field)
+
+    // Make sure hosts in Manager have http or https protocol
+    managers.map(m => validateHostsConfig(field, m.name, m.hosts))
+  }
+
+  /**
+   * Validate Login Manager configurartion
+   * @param field
+   * @param loginManagers
+   */
+  def validateLoginManagerConfig(field: String, loginManagers: Set[LoginManager]): Unit = {
+    // Find if loginManagers have duplicate entries
+    if (loginManagers.size > loginManagers.map(lm => lm.name).size)
+      throw new DuplicateConfigError("name", field)
+
+    // Make sure hosts in LoginManager have http or https protocol
+    loginManagers.map(lm => validateHostsConfig(field, lm.name, lm.hosts))
+  }
+
+  /**
+   * Validate serviceIdentifier configuration
+   * @param field
+   * @param sids
+   */
+  def validateServiceIdentifierConfig(field: String, sids: Set[ServiceIdentifier]): Unit = {
+    // Find if ServiceIdentifiers have duplicate entries
+    if (sids.size > sids.map(sid => (sid.path, sid.subdomain)).size)
+    throw new DuplicateConfigError("path and subdomain", "serviceIdentifiers")
+
+    // Make sure hosts in Serviceidentifier have http or https protocol
+    sids.map(sid => validateHostsConfig(field, sid.name, sid.hosts))
+  }
+
+  /**
    * Validates the BorderPatrol Configuration
    * - for duplicates
    *
    * @param serverConfig
    */
   def validate(serverConfig: ServerConfig): Unit = {
-    // Find if IdentityManagers have duplicate entries
-    if (serverConfig.identityManagers.size > serverConfig.identityManagers.map(im => im.name).size)
-      throw new DuplicateConfigError("name", "identityManagers")
 
-    // Find if Managers have duplicate entries
-    if (serverConfig.accessManagers.size > serverConfig.accessManagers.map(am => am.name).size)
-      throw new DuplicateConfigError("name", "accessManagers")
+    //  Validate identityManagers config
+    validateManagerConfig("identityManagers", serverConfig.identityManagers)
 
-    // Find if LoginManagers have duplicate entries
-    if (serverConfig.loginManagers.size > serverConfig.loginManagers.map(lm => lm.name).size)
-      throw new DuplicateConfigError("name", "loginManagers")
+    //  Validate accessManagers config
+    validateManagerConfig("accessManagers", serverConfig.accessManagers)
 
-    // Find if ServiceIdentifiers have duplicate entries
-    if (serverConfig.serviceIdentifiers.size >
-      serverConfig.serviceIdentifiers.map(sid => (sid.path, sid.subdomain)).size)
-      throw new DuplicateConfigError("path and subdomain", "serviceIdentifiers")
+    //  Validate loginManagers config
+    validateLoginManagerConfig("loginManagers", serverConfig.loginManagers)
+
+    //  Validate serviceIdentifiers config
+    validateServiceIdentifierConfig("serviceIdentifiers", serverConfig.serviceIdentifiers)
   }
 
   /**
