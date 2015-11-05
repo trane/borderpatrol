@@ -14,6 +14,7 @@ class SessionIdSpec extends BorderPatrolSuite {
 
     id.expired should not be true
     expiredId.expired shouldBe true
+    SessionId.isTagged(id) shouldBe false
   }
 
   it should "convert to and from a string, and cookie" in {
@@ -46,4 +47,9 @@ class SessionIdSpec extends BorderPatrolSuite {
     SessionId.from[String]("hello world!").failure.exception should be(a [SessionIdError])
   }
 
+  it should "create a tagged sessionId" in {
+    val id = sessionid.nextTagged
+
+    SessionId.isTagged(id) shouldBe true
+  }
 }

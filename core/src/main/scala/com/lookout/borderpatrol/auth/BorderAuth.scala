@@ -3,6 +3,7 @@ package com.lookout.borderpatrol.auth
 import com.lookout.borderpatrol.util.Combinators.tap
 import com.lookout.borderpatrol.{ServiceIdentifier, ServiceMatcher}
 import com.lookout.borderpatrol.sessionx._
+import com.twitter.finagle.httpx.path.Path
 import com.twitter.finagle.httpx.{Method, Status, Request, Response}
 import com.twitter.finagle.{Service, Filter}
 import com.twitter.util.Future
@@ -41,8 +42,8 @@ case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStor
     extends Filter[ServiceRequest, Response, SessionIdRequest, Response] {
 
   /**
-   *  Passes the SessionId to the next in the filter chain. If any failures decoding the SessionId occur
-   *  (expired, not there, etc), we will terminate early and send a redirect
+   * Passes the SessionId to the next in the filter chain. If any failures decoding the SessionId occur
+   * (expired, not there, etc), we will terminate early and send a redirect
    * @param req
    * @param service
    */
@@ -51,13 +52,32 @@ case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStor
       case Success(sid) => service(SessionIdRequest(req, sid))
       case Failure(e) =>
         for {
-          session <- Session(req.req)
+          session <- Session(req.req, false)
           _ <- store.update(session)
         } yield tap(Response(Status.Found)) { res =>
           res.location = req.serviceId.loginManager.path.toString
           res.addCookie(session.id.asCookie)
         }
     }
+}
+
+/**
+ * Determine if the session is tagged (i.e. authenticated) or not and force changes to request path
+ * E.g.
+ * - If SessionId is tagged (i.e. al, and the path is NOT a service path, then redirect it to service identifier path
+ * - If SessionId is NOT tagged and path is a service path, then redirect to login page
+ */
+class BorderFilter extends Filter[SessionIdRequest, Response, SessionIdRequest, Response] {
+
+  def apply(req: SessionIdRequest, service: Service[SessionIdRequest, Response]): Future[Response] =
+    if (SessionId.isTagged(req.sid))
+      if (!req.req.serviceId.isServicePath(Path(req.req.req.path)))
+        tap(Response(Status.Found))(res => res.location = req.req.serviceId.path.toString).toFuture
+      else service(req)
+    else
+      if (req.req.serviceId.isServicePath(Path(req.req.req.path)))
+        tap(Response(Status.Found))(res => res.location = req.req.serviceId.loginManager.path.toString).toFuture
+      else service(req)
 }
 
 /**
@@ -78,7 +98,7 @@ class IdentityFilter[A : SessionDataEncoder](store: SessionStore)(implicit secre
     identity(req.sid).flatMap(i => i match {
       case id: Id[A] => service(AccessIdRequest(req, id))
       case EmptyIdentity => for {
-        s <- Session(req.req.req)
+        s <- Session(req.req.req, false)
         _ <- store.update(s)
       } yield tap(Response(Status.Found)) { res =>
           res.location = req.req.serviceId.loginManager.path.toString // set to login url

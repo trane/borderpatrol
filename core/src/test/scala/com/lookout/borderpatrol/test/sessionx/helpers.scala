@@ -25,8 +25,11 @@ object helpers {
      def next: SessionId =
        Await.result(SessionId.next)
 
+     def nextTagged: SessionId =
+       Await.result(SessionId.nextTagged)
+
      def expired: SessionId =
-       SessionId(Time.fromMilliseconds(0), Entropy(16), secrets.current)
+       SessionId(Time.fromMilliseconds(0), Entropy(16), secrets.current, SessionId.nullTagId)
 
      def invalid: SessionId =
        next.copy(entropy = Entropy(16))

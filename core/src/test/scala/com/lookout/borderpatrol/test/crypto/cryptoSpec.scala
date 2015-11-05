@@ -107,9 +107,9 @@ class cryptoSpec extends BorderPatrolSuite {
   import com.lookout.borderpatrol.test.sessionx.helpers._
 
   val store = EncryptedSessionStore.MemcachedStore(new memcached.MockClient())
-  val strSession = Session("hello").results
-  val intSession = Session(1).results
-  val reqSession = Session(httpx.Request("/api")).results
+  val strSession = Session("hello", false).results
+  val intSession = Session(1, false).results
+  val reqSession = Session(httpx.Request("/api"), false).results
 
   Await.all(
     store.update[Int](intSession),

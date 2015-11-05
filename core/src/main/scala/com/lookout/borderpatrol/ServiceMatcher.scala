@@ -72,9 +72,6 @@ case class ServiceMatcher(services: Set[ServiceIdentifier]) {
    * Derive a ServiceIdentifier from an `httpx.Request`
    */
   def get(req: Request): Option[ServiceIdentifier] =
-    req.host.flatMap(subdomain).filter(sid => {
-      val pathSet = Set(sid.path, sid.loginManager.path, sid.loginManager.loginPath)
-      !pathSet.filter(Path(req.path).startsWith(_)).isEmpty
-    })
+    req.host.flatMap(subdomain).filter(sid => sid.isMatchingPath(Path(req.path)))
 }
 
