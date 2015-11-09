@@ -70,4 +70,15 @@ class EncoderSpec extends BorderPatrolSuite {
 
     invalid[httpx.Request](Buf.U32BE(1)).failure.exception should be(a[SessionDataError])
   }
+
+  behavior of "SecretsEncoder"
+
+  it should "Encode then decode Secrets and they should be the same" in {
+    val a1 = Secret()
+    val b1 = Secret()
+    val c = SecretsEncoder.EncodeJson.encode(Secrets(a1,b1))
+    SecretsEncoder.EncodeJson.decode(c).success.value.current should be(a1)
+    SecretsEncoder.EncodeJson.decode(c).success.value.previous should be(b1)
+  }
+
 }
