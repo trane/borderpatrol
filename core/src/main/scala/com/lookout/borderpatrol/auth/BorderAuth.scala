@@ -52,7 +52,7 @@ case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStor
       case Success(sid) => service(SessionIdRequest(req, sid))
       case Failure(e) =>
         for {
-          session <- Session(req.req, false)
+          session <- Session(req.req)
           _ <- store.update(session)
         } yield tap(Response(Status.Found)) { res =>
           res.location = req.serviceId.loginManager.path.toString
@@ -98,7 +98,7 @@ class IdentityFilter[A : SessionDataEncoder](store: SessionStore)(implicit secre
     identity(req.sid).flatMap(i => i match {
       case id: Id[A] => service(AccessIdRequest(req, id))
       case EmptyIdentity => for {
-        s <- Session(req.req.req, false)
+        s <- Session(req.req.req)
         _ <- store.update(s)
       } yield tap(Response(Status.Found)) { res =>
           res.location = req.req.serviceId.loginManager.path.toString // set to login url

@@ -17,6 +17,7 @@ import scala.util.{Success, Failure, Try}
  *  expires: [[com.twitter.util.Time Time]] => `Long` => `Array[Byte]`
  *  entropy: `Array[Byte]`
  *  secret: [[Secret]] => [[SecretId]]
+ *  tagId: => [[TagId]]
  *  signature: `Array[Byte]`
  *
  * @param expires the time at which this id is expired
@@ -32,6 +33,11 @@ object SessionId {
 
   val entropySize: Size = 16
   val lifetime = Duration(1, TimeUnit.DAYS)
+
+  /**
+   * TagId is a byte that differentiates the set of SessionId from others.
+   * Currently we are using a single bit for differentiation. Declare the constants here.
+   */
   val nullTagId: TagId = 0.toByte
   val taggedId: TagId = 1.toByte
 
@@ -51,7 +57,7 @@ object SessionId {
     Injection.long2BigEndian(t.inMilliseconds)
 
   private[sessionx] def payload(t: Time, e: Entropy, i: SecretId, tagId: TagId): Payload =
-    timeBytes(t) ++ e :+ i :+ tagId
+    timeBytes(t) ++ e :+ i :+ tagId /* Append the IndexSeq and Bytes to form payload */
 
   private[sessionx] def payload(id: SessionId): Payload =
     payload(id.expires, id.entropy, id.secret.id, id.tagId)

@@ -87,7 +87,7 @@ object Keymaster {
       createIdentifyReq(req).fold(Future.value(Response(Status.BadRequest)))(credReq =>
         for {
           tokenResponse <- service(credReq)
-          session <- Session(tokenResponse.identity.id, true)
+          session <- Session.applyTagged(tokenResponse.identity.id)
           _ <- store.update[Tokens](session)
           originReq <- getRequestFromSessionStore(req.sid)
           _ <- store.delete(req.sid)

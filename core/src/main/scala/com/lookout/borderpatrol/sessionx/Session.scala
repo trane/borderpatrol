@@ -65,7 +65,7 @@ object Session {
     }
 
   /**
-   * Primary mechanism for generating new [[Session]], returning a `Future` of the `Session[A]`
+   * Mechanism for generating new [[Session]], returning a `Future` of the `Session[A]`
    *
    * {{{
    *   val data = 1
@@ -78,10 +78,19 @@ object Session {
    * @param data value you want to store
    * @param store the secret store to fetch current secret
    * @tparam A
-   * @return
+   * @return Session
    */
-  def apply[A](data: A, tagged: Boolean)(implicit store: SecretStoreApi): Future[Session[A]] =
-    if (tagged) SessionId.nextTagged map (Session(_, data))
-    else SessionId.next map (Session(_, data))
+  def apply[A](data: A)(implicit store: SecretStoreApi): Future[Session[A]] =
+    SessionId.next map (Session(_, data))
+
+  /**
+   * Generate a new Session with tagged SessionId
+   * @param data value you want to store
+   * @param store the secret store to fetch current secret
+   * @tparam A
+   * @return Session
+   */
+  def applyTagged[A](data: A)(implicit store: SecretStoreApi): Future[Session[A]] =
+    SessionId.nextTagged map (Session(_, data))
 }
 
