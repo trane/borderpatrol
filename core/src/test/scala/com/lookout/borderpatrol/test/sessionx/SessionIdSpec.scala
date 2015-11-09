@@ -9,7 +9,7 @@ class SessionIdSpec extends BorderPatrolSuite {
   behavior of "SessionId"
 
   it should "create a sessionId with expiry" in {
-    val id = sessionid.next
+    val id = sessionid.next()
     val expiredId = sessionid.expired
 
     id.expired should not be true
@@ -18,14 +18,14 @@ class SessionIdSpec extends BorderPatrolSuite {
   }
 
   it should "convert to and from a string, and cookie" in {
-    val id = sessionid.next
+    val id = sessionid.next()
 
     SessionId.from[String](SessionId.as[String](id)).success.value should be(id)
     SessionId.from[Cookie](SessionId.as[Cookie](id)).success.value should be(id)
   }
 
   it should "create the same signature using the same secret" in {
-    val id = sessionid.next
+    val id = sessionid.next()
     val newSecret = Secret()
 
     id.signWith(newSecret) should be(SessionId.signWith(id, newSecret))
@@ -33,7 +33,7 @@ class SessionIdSpec extends BorderPatrolSuite {
   }
 
   it should "not be derivable from string value if signed with secret not in the store" in {
-    val idWithoutValidSecret = sessionid.next.copy(secret = secrets.invalid)
+    val idWithoutValidSecret = sessionid.next().copy(secret = secrets.invalid)
 
     SessionId.from[String](idWithoutValidSecret.asBase64).failure.exception should be(a [SessionIdError])
   }
@@ -48,8 +48,10 @@ class SessionIdSpec extends BorderPatrolSuite {
   }
 
   it should "create a tagged sessionId" in {
-    val id = sessionid.nextTagged
+    val id = sessionid.next(SessionId.authenticatedTagId)
 
+    println(SessionId.authenticatedTagId)
+    println(id.tagId)
     SessionId.isTagged(id) shouldBe true
   }
 }

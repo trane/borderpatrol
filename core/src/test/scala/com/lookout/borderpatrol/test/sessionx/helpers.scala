@@ -22,21 +22,18 @@ object helpers {
     */
    object sessionid {
 
-     def next: SessionId =
-       Await.result(SessionId.next)
-
-     def nextTagged: SessionId =
-       Await.result(SessionId.nextTagged)
+     def next(tagId: TagId = SessionId.nullTagId): SessionId =
+       Await.result(SessionId.next(tagId))
 
      def expired: SessionId =
        SessionId(Time.fromMilliseconds(0), Entropy(16), secrets.current, SessionId.nullTagId)
 
      def invalid: SessionId =
-       next.copy(entropy = Entropy(16))
+       next().copy(entropy = Entropy(16))
    }
 
    object sessions {
      def create[A](a: A): Session[A] =
-       Session(sessionid.next, a)
+       Session(sessionid.next(), a)
    }
  }

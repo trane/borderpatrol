@@ -80,17 +80,7 @@ object Session {
    * @tparam A
    * @return Session
    */
-  def apply[A](data: A)(implicit store: SecretStoreApi): Future[Session[A]] =
-    SessionId.next map (Session(_, data))
-
-  /**
-   * Generate a new Session with tagged SessionId
-   * @param data value you want to store
-   * @param store the secret store to fetch current secret
-   * @tparam A
-   * @return Session
-   */
-  def applyTagged[A](data: A)(implicit store: SecretStoreApi): Future[Session[A]] =
-    SessionId.nextTagged map (Session(_, data))
+  def apply[A](data: A, tagId: TagId = SessionId.nullTagId)(implicit store: SecretStoreApi): Future[Session[A]] =
+    SessionId.next(tagId) map (Session(_, data))
 }
 

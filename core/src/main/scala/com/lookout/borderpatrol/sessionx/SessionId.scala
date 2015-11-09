@@ -38,8 +38,8 @@ object SessionId {
    * TagId is a byte that differentiates the set of SessionId from others.
    * Currently we are using a single bit for differentiation. Declare the constants here.
    */
-  val nullTagId: TagId = 0.toByte
-  val taggedId: TagId = 1.toByte
+  val nullTagId: TagId = 0.toByte /* Not tagged */
+  val authenticatedTagId: TagId = 1.toByte /* is session authenticated */
 
   private[this] def currentExpiry: Time =
     Time.now + lifetime
@@ -77,16 +77,8 @@ object SessionId {
    * @param store where to fetch the current [[Secret]] to sign this id
    * @return
    */
-  def next(implicit store: SecretStoreApi): Future[SessionId] =
-    (SessionId(currentExpiry, genEntropy, store.current, nullTagId)).toFuture
-
-  /**
-   * Create a tagged version of SessionId
-   * @param store where to fetch the current [[Secret]] to sign this id
-   * @return
-   */
-  def nextTagged(implicit store: SecretStoreApi): Future[SessionId] =
-    (SessionId(currentExpiry, genEntropy, store.current, taggedId)).toFuture
+  def next(tagId: TagId = nullTagId)(implicit store: SecretStoreApi): Future[SessionId] =
+    (SessionId(currentExpiry, genEntropy, store.current, tagId)).toFuture
 
   /**
    * Creates [[com.lookout.borderpatrol.sessionx.SessionId SessionId]] instances based on existing values
@@ -131,7 +123,8 @@ object SessionId {
    * @param id
    * @return
    */
-  def isTagged(id: SessionId): Boolean = id.tagId == taggedId
+  def isTagged(id: SessionId): Boolean = id.tagId != nullTagId
+  def isAuthenticated(id: SessionId): Boolean = id.tagId == authenticatedTagId
 
   object SessionIdInjections {
 

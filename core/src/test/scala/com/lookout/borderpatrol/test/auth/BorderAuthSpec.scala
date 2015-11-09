@@ -94,7 +94,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     }
 
     //  Allocate and Session
-    val sessionId = sessionid.next
+    val sessionId = sessionid.next()
     val cooki = sessionId.asCookie
 
     //  Create request
@@ -127,7 +127,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val testService = mkTestService[SessionIdRequest] { request => Future.value(Response(Status.NotFound))}
 
     // Allocate and Session
-    val sessionId = sessionid.next
+    val sessionId = sessionid.next()
     val cooki = sessionId.asCookie
 
     // Create request
@@ -147,7 +147,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     }
 
     // Allocate and Session
-    val sessionId = sessionid.next
+    val sessionId = sessionid.next()
     val cooki = sessionId.asCookie
 
     // Create request
@@ -191,7 +191,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     }
 
     //  Allocate and Session
-    val sessionId = sessionid.next
+    val sessionId = sessionid.next()
     val cooki = sessionId.asCookie
 
     //  Create request
@@ -210,7 +210,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
   it should "return a redirect to login UTI, if it fails Session lookup using SessionId" in {
 
     // Allocate and Session
-    val sessionId = sessionid.next
+    val sessionId = sessionid.next()
     val cooki = sessionId.asCookie
 
     // Create request
@@ -231,7 +231,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
 
   it should "propagate the exception thrown by SessionStore.get operation" in {
     // Allocate and Session
-    val sessionId = sessionid.next
+    val sessionId = sessionid.next()
     val cooki = sessionId.asCookie
 
     // Create request
@@ -260,7 +260,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     }
 
     // Allocate and Session
-    val sessionId = sessionid.next
+    val sessionId = sessionid.next()
     val cooki = sessionId.asCookie
 
     // Mock sessionStore
@@ -363,7 +363,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val testService = mkTestService[SessionIdRequest] { _ => Future.value(Response(Status.Ok)) }
 
     //  Allocate and Session
-    val sessionId = sessionid.next
+    val sessionId = sessionid.next()
 
     //  Create request
     val request = req("enterprise", "/check")
@@ -379,7 +379,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val testService = mkTestService[SessionIdRequest] { _ => Future.value(Response(Status.Ok)) }
 
     //  Allocate and Session
-    val sessionId = sessionid.next
+    val sessionId = sessionid.next()
 
     //  Create request
     val request = req("enterprise", "/loginConfirm")
@@ -395,7 +395,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val testService = mkTestService[SessionIdRequest] { _ => Future.value(Response(Status.Ok)) }
 
     //  Allocate and Session
-    val sessionId = sessionid.nextTagged
+    val sessionId = sessionid.next(SessionId.authenticatedTagId)
 
     //  Create request
     val request = req("enterprise", "/ent")
@@ -411,7 +411,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val testService = mkTestService[SessionIdRequest] { _ => fail("should not get here") }
 
     //  Allocate and Session
-    val sessionId = sessionid.next
+    val sessionId = sessionid.next()
 
     //  Create request
     val request = req("enterprise", "/ent")
@@ -427,7 +427,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val testService = mkTestService[SessionIdRequest] { _ => fail("should not get here") }
 
     //  Allocate and Session
-    val sessionId = sessionid.nextTagged
+    val sessionId = sessionid.next(SessionId.authenticatedTagId)
 
     //  Create request
     val request = req("enterprise", "/loginConfirm")
@@ -443,7 +443,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val testService = mkTestService[SessionIdRequest] { _ => fail("should not get here") }
 
     //  Allocate and Session
-    val sessionId = sessionid.nextTagged
+    val sessionId = sessionid.next(SessionId.authenticatedTagId)
 
     //  Create request
     val request = req("enterprise", "/check")

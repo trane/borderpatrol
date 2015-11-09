@@ -64,13 +64,13 @@ case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStor
 /**
  * Determine if the session is tagged (i.e. authenticated) or not and force changes to request path
  * E.g.
- * - If SessionId is tagged (i.e. al, and the path is NOT a service path, then redirect it to service identifier path
- * - If SessionId is NOT tagged and path is a service path, then redirect to login page
+ * - If SessionId is authenticated and the path is NOT a service path, then redirect it to service identifier path
+ * - If SessionId is NOT authenticated and path is a service path, then redirect to login page
  */
 class BorderFilter extends Filter[SessionIdRequest, Response, SessionIdRequest, Response] {
 
   def apply(req: SessionIdRequest, service: Service[SessionIdRequest, Response]): Future[Response] =
-    if (SessionId.isTagged(req.sid))
+    if (SessionId.isAuthenticated(req.sid))
       if (!req.req.serviceId.isServicePath(Path(req.req.req.path)))
         tap(Response(Status.Found))(res => res.location = req.req.serviceId.path.toString).toFuture
       else service(req)
