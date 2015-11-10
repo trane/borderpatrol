@@ -54,8 +54,8 @@ case class CryptKey(keyBytes: Array[Byte],
  * Alternatively, you could create a new SessionId every time Session data is stored
  */
 object CryptKey {
-  def apply(id: SessionId): CryptKey =
-    CryptKey(id.entropy.toArray, id.secret.entropy.toArray)
+  def apply(sessionId: SessionId): CryptKey =
+    CryptKey(sessionId.entropy.toArray, sessionId.secret.entropy.toArray)
 
   def apply(session: Session[_]): CryptKey =
     apply(session.id)

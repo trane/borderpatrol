@@ -30,14 +30,14 @@ object Secret {
   import Generator.EntropyGenerator
 
   private[sessionx] val entropySize = 16
-  private[sessionx] val idSize = 1
+  private[sessionx] val idSize = 2
   private[sessionx] val lifetime = Duration(1, TimeUnit.DAYS)
 
   private[borderpatrol] def currentExpiry: Time =
     Time.now + lifetime
 
   private[sessionx] def id: SecretId =
-    EntropyGenerator(idSize).head
+    EntropyGenerator(idSize)
 
   private[sessionx] def entropy: Entropy =
     EntropyGenerator(entropySize)

@@ -49,9 +49,6 @@ class SessionIdSpec extends BorderPatrolSuite {
 
   it should "create a tagged sessionId" in {
     val id = sessionid.next(SessionId.authenticatedTagId)
-
-    println(SessionId.authenticatedTagId)
-    println(id.tagId)
     SessionId.isTagged(id) shouldBe true
   }
 }

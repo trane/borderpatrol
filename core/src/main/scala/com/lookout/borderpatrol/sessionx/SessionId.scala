@@ -35,7 +35,7 @@ object SessionId {
   val lifetime = Duration(1, TimeUnit.DAYS)
 
   /**
-   * TagId is a byte that differentiates the set of SessionId from others.
+   * Tag is a byte that differentiates the set of SessionId from others.
    * Currently we are using a single bit for differentiation. Declare the constants here.
    */
   val nullTagId: TagId = 0.toByte /* Not tagged */
@@ -47,8 +47,8 @@ object SessionId {
   private[sessionx] def expired(t: Time): Boolean =
     t < Time.now || t > currentExpiry
 
-  private[sessionx] def expired(id: SessionId): Boolean =
-    expired(id.expires)
+  private[sessionx] def expired(sessionId: SessionId): Boolean =
+    expired(sessionId.expires)
 
   private[sessionx] def genEntropy: Entropy =
     EntropyGenerator(entropySize)
@@ -57,19 +57,19 @@ object SessionId {
     Injection.long2BigEndian(t.inMilliseconds)
 
   private[sessionx] def payload(t: Time, e: Entropy, i: SecretId, tagId: TagId): Payload =
-    timeBytes(t) ++ e :+ i :+ tagId /* Append the IndexSeq and Bytes to form payload */
+    timeBytes(t) ++ e ++ i :+ tagId /* Append the IndexSeq and Bytes to form payload */
 
-  private[sessionx] def payload(id: SessionId): Payload =
-    payload(id.expires, id.entropy, id.secret.id, id.tagId)
+  private[sessionx] def payload(sessionId: SessionId): Payload =
+    payload(sessionId.expires, sessionId.entropy, sessionId.secret.id, sessionId.tagId)
 
-  private[sessionx] def signWith(id: SessionId, s: Secret): Signature =
-    s.sign(payload(id))
+  private[sessionx] def signWith(sessionId: SessionId, s: Secret): Signature =
+    s.sign(payload(sessionId))
 
-  private[sessionx] def toIndexedSeq(id: SessionId): IndexedSeq[Byte] =
-    payload(id) ++ id.signature
+  private[sessionx] def toIndexedSeq(sessionId: SessionId): IndexedSeq[Byte] =
+    payload(sessionId) ++ sessionId.signature
 
-  private[sessionx] def toArray(id: SessionId): Array[Byte] =
-    toIndexedSeq(id).toArray
+  private[sessionx] def toArray(sessionId: SessionId): Array[Byte] =
+    toIndexedSeq(sessionId).toArray
 
   /**
    * Generate a new id wrapped in a [[com.twitter.util.Future Future]] since entropy is blocking on the JVM
@@ -132,7 +132,7 @@ object SessionId {
 
     val timeBytesSize: Size = 8 // long -> bytes
     val signatureSize: Size = 32 // sha256 -> bytes
-    val secretIdSize: Size = 1 // secret id byte
+    val secretIdSize: Size = 2 // secret id byte
     val tagIdSize: Size = 1 // tag id byte
     val payloadSize: Size = timeBytesSize + SessionId.entropySize + secretIdSize + tagIdSize
     val expectedSize: Size = payloadSize + signatureSize
@@ -155,10 +155,10 @@ object SessionId {
       l <- bytes2Long(bytes)
     } yield long2Time(l)
 
-    implicit def byte2Secret(byte: Byte)(implicit store: SecretStoreApi): Try[Secret] =
-      store.find(_.id == byte) match {
+    implicit def bytes2Secret(bytes: IndexedSeq[Byte])(implicit store: SecretStoreApi): Try[Secret] =
+      store.find(_.id == bytes) match {
         case Some(s) => Success(s)
-        case None => Failure(new SessionIdError(s"No secret with id=$byte"))
+        case None => Failure(new SessionIdError(s"No secret with id=$bytes"))
       }
 
     implicit def bytes2Tuple(bytes: IndexedSeq[Byte]): Try[BytesTuple] = bytes match {
@@ -167,7 +167,7 @@ object SessionId {
         val (tb, tail1) = pl.splitAt(timeBytesSize)
         val (ent, tail2) = tail1.splitAt(SessionId.entropySize)
         val (secretIdList, tagList) = tail2.splitAt(secretIdSize)
-        Success((pl, tb, ent, secretIdList.head, tagList.head, sig))
+        Success((pl, tb, ent, secretIdList, tagList.head, sig))
       }
       case _ => Failure(new SessionIdError("Not a session string"))
     }
@@ -175,7 +175,7 @@ object SessionId {
     implicit def seq2SessionId(bytes: IndexedSeq[Byte])(implicit store: SecretStoreApi): Try[SessionId] = for {
       (pyld, tbs, ent, secretId, tagId, sig) <- bytes2Tuple(bytes)
       time <- bytes2Time(tbs)
-      secret <- byte2Secret(secretId)
+      secret <- bytes2Secret(secretId)
       _ <- validate(time, sig, secret.sign(pyld))
     } yield new SessionId(time, ent, secret, tagId, sig)
 

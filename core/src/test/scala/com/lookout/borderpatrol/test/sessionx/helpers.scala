@@ -1,6 +1,7 @@
 package com.lookout.borderpatrol.test.sessionx
 
 import com.lookout.borderpatrol.sessionx.SecretStores.InMemorySecretStore
+import com.twitter.bijection.Injection
 import com.twitter.util.{Await, Time}
 
 object helpers {
@@ -10,9 +11,9 @@ object helpers {
     * Common usage of secrets across tests
     */
    object secrets {
-     val current = Secret(1.toByte, Secret.currentExpiry, Entropy(16))
-     val previous = Secret(2.toByte, Time.fromMilliseconds(0), Entropy(16))
-     val invalid = Secret(3.toByte, Time.now, Entropy(16)) // not in store
+     val current = Secret(Injection.short2BigEndian(1), Secret.currentExpiry, Entropy(16))
+     val previous = Secret(Injection.short2BigEndian(2), Time.fromMilliseconds(0), Entropy(16))
+     val invalid = Secret(Injection.short2BigEndian(3), Time.now, Entropy(16)) // not in store
      val secrets = Secrets(current, previous)
    }
    implicit val secretStore = InMemorySecretStore(secrets.secrets)

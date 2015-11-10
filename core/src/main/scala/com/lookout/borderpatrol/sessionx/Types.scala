@@ -6,9 +6,8 @@ trait Types {
   type Size = Int
   type TimeBytes = IndexedSeq[Byte]
   type Entropy = IndexedSeq[Byte]
-  type SecretId = Byte
+  type SecretId = IndexedSeq[Byte]
   type TagId = Byte
   type Payload = IndexedSeq[Byte]
   type Signature = IndexedSeq[Byte]
-
 }
