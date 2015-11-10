@@ -31,11 +31,10 @@ class SecretStoresSpec extends BorderPatrolSuite {
 
   val secretsJsonString = SecretsEncoder.EncodeJson.encode(helpers.secrets.secrets).nospaces
   it should "always return a secret" in {
-    val consulConnection = helpers.MockConsulClient
-    consulConnection.set(ConsulSecretsKey, secretsJsonString)
-    val c = new ConsulSecretStore(consulConnection, 10, helpers.secrets.secrets)
-    c.current should not be null
-    c.previous should not be null
+    val cc = new ConsulConnection(mockService(helpers.secrets.secrets),"localhost","8500")
+    val s = new ConsulSecretStore(cc,10,Secrets(previous, previous))//initialize the cache with expired secrets
+    s.current should not be null
+    s.previous should not be null
   }
 
   it should "always return a secret when there is a problem with secrets" in {
@@ -46,20 +45,19 @@ class SecretStoresSpec extends BorderPatrolSuite {
     c.previous shouldBe previous
   }
 
-  it should "rotate and return the current secret after finding a new current secret" in {
-    val newConsulConnection = helpers.MockConsulClient
-    newConsulConnection.set(ConsulSecretsKey, secretsJsonString)
-    val c = new ConsulSecretStore(newConsulConnection, 10, Secrets(previous, previous))
+  it should "Rotate expired secrets out of the cache" in {
+    val cc = new ConsulConnection(mockService(helpers.secrets.secrets),"localhost","8500")
+    val s = new ConsulSecretStore(cc,10,Secrets(previous, previous))//initialize the cache with expired secrets
     Thread.sleep(1000) //allows the polling function to start appending
-    c.find(_.id == current.id)
-    c.current shouldBe current
+    s.current shouldBe current
+    s.previous shouldBe previous
   }
 
-  it should "rotate when the secret is expired" in {
-    val newConsulConnection = helpers.MockConsulClient
-    newConsulConnection.set(ConsulSecretsKey, secretsJsonString)
-    val c = new ConsulSecretStore(newConsulConnection, 10, Secrets(previous, previous))
+  it should "rotate and return the current secret after finding a new current secret" in {
+    val cc = new ConsulConnection(mockService(helpers.secrets.secrets),"localhost","8500")
+    val s = new ConsulSecretStore(cc, 10, Secrets(previous, previous))
     Thread.sleep(1000) //allows the polling function to start appending
-    c.current shouldBe current
+    s.find(_.id == current.id)
+    s.current shouldBe current
   }
 }
