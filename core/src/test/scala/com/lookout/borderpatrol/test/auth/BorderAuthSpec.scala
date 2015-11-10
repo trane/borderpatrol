@@ -94,7 +94,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     }
 
     //  Allocate and Session
-    val sessionId = sessionid.next
+    val sessionId = sessionid.untagged
     val cooki = sessionId.asCookie
 
     //  Create request
@@ -127,7 +127,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val testService = mkTestService[SessionIdRequest] { request => Future.value(Response(Status.NotFound))}
 
     // Allocate and Session
-    val sessionId = sessionid.next
+    val sessionId = sessionid.untagged
     val cooki = sessionId.asCookie
 
     // Create request
@@ -147,7 +147,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     }
 
     // Allocate and Session
-    val sessionId = sessionid.next
+    val sessionId = sessionid.untagged
     val cooki = sessionId.asCookie
 
     // Create request
@@ -191,7 +191,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     }
 
     //  Allocate and Session
-    val sessionId = sessionid.next
+    val sessionId = sessionid.untagged
     val cooki = sessionId.asCookie
 
     //  Create request
@@ -210,7 +210,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
   it should "return a redirect to login UTI, if it fails Session lookup using SessionId" in {
 
     // Allocate and Session
-    val sessionId = sessionid.next
+    val sessionId = sessionid.untagged
     val cooki = sessionId.asCookie
 
     // Create request
@@ -231,7 +231,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
 
   it should "propagate the exception thrown by SessionStore.get operation" in {
     // Allocate and Session
-    val sessionId = sessionid.next
+    val sessionId = sessionid.untagged
     val cooki = sessionId.asCookie
 
     // Create request
@@ -260,7 +260,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     }
 
     // Allocate and Session
-    val sessionId = sessionid.next
+    val sessionId = sessionid.untagged
     val cooki = sessionId.asCookie
 
     // Mock sessionStore
@@ -355,5 +355,103 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     // Validate
     Await.result(output).status should be (Status.InternalServerError)
     Await.result(output).contentString should be ("some weird exception")
+  }
+
+  behavior of "BorderFilter"
+
+  it should "succeeds reaching test service if sessionId is untagged and trying to reach loginManager" in {
+    val testService = mkTestService[SessionIdRequest] { _ => Future.value(Response(Status.Ok)) }
+
+    //  Allocate and Session
+    val sessionId = sessionid.untagged
+
+    //  Create request
+    val request = req("enterprise", "/check")
+
+    //  Execute
+    val output = (new BorderFilter andThen testService)(SessionIdRequest(ServiceRequest(request, one), sessionId))
+
+    //  Verify
+    Await.result(output).status should be (Status.Ok)
+  }
+
+  it should "succeeds reaching test service if sessionId is untagged and trying to reach loginPath" in {
+    val testService = mkTestService[SessionIdRequest] { _ => Future.value(Response(Status.Ok)) }
+
+    //  Allocate and Session
+    val sessionId = sessionid.untagged
+
+    //  Create request
+    val request = req("enterprise", "/loginConfirm")
+
+    //  Execute
+    val output = (new BorderFilter andThen testService)(SessionIdRequest(ServiceRequest(request, one), sessionId))
+
+    //  Verify
+    Await.result(output).status should be (Status.Ok)
+  }
+
+  it should "succeeds reaching test service if sessionId is tagged and trying to reach protected service" in {
+    val testService = mkTestService[SessionIdRequest] { _ => Future.value(Response(Status.Ok)) }
+
+    //  Allocate and Session
+    val sessionId = sessionid.authenticated
+
+    //  Create request
+    val request = req("enterprise", "/ent")
+
+    //  Execute
+    val output = (new BorderFilter andThen testService)(SessionIdRequest(ServiceRequest(request, one), sessionId))
+
+    //  Verify
+    Await.result(output).status should be (Status.Ok)
+  }
+
+  it should "send a redirect if sessionId is untagged and trying to reach protected service" in {
+    val testService = mkTestService[SessionIdRequest] { _ => fail("should not get here") }
+
+    //  Allocate and Session
+    val sessionId = sessionid.untagged
+
+    //  Create request
+    val request = req("enterprise", "/ent")
+
+    //  Execute
+    val output = (new BorderFilter andThen testService)(SessionIdRequest(ServiceRequest(request, one), sessionId))
+
+    //  Verify
+    Await.result(output).status should be (Status.Found)
+  }
+
+  it should "send a redirect if sessionId is tagged and trying to reach loginPath" in {
+    val testService = mkTestService[SessionIdRequest] { _ => fail("should not get here") }
+
+    //  Allocate and Session
+    val sessionId = sessionid.authenticated
+
+    //  Create request
+    val request = req("enterprise", "/loginConfirm")
+
+    //  Execute
+    val output = (new BorderFilter andThen testService)(SessionIdRequest(ServiceRequest(request, one), sessionId))
+
+    //  Verify
+    Await.result(output).status should be (Status.Found)
+  }
+
+  it should "send a redirect if sessionId is tagged and trying to reach LoginManager" in {
+    val testService = mkTestService[SessionIdRequest] { _ => fail("should not get here") }
+
+    //  Allocate and Session
+    val sessionId = sessionid.authenticated
+
+    //  Create request
+    val request = req("enterprise", "/check")
+
+    //  Execute
+    val output = (new BorderFilter andThen testService)(SessionIdRequest(ServiceRequest(request, one), sessionId))
+
+    //  Verify
+    Await.result(output).status should be (Status.Found)
   }
 }

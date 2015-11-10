@@ -92,7 +92,7 @@ class cryptoSpec extends BorderPatrolSuite {
     def dec[A : Decryptable](id: SessionId, bytes: Array[Byte]): Try[Session[A]] =
       implicitly[Decryptable[A]].decrypt(id, bytes)
 
-    val id = SessionId.next.results
+    val id = SessionId.untagged.results
     dec[String](id, enc[String](Session(id, "hello"))).success.value should be(Session(id, "hello"))
   }
 
@@ -123,7 +123,7 @@ class cryptoSpec extends BorderPatrolSuite {
   }
 
   it should s"return a None when not present in $store" in {
-    store.get[Int](sessionid.next).results shouldBe None
+    store.get[Int](sessionid.untagged).results shouldBe None
   }
 
   it should s"store request sessions $store" in {

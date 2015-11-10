@@ -8,7 +8,7 @@ class SessionSpec extends BorderPatrolSuite {
   behavior of "Session"
 
   it should "expire" in {
-    Session(sessionid.next, 1).expired should be(false)
+    Session(sessionid.untagged, 1).expired should be(false)
     Session(sessionid.expired, 1).expired should be(true)
   }
 
@@ -18,7 +18,7 @@ class SessionSpec extends BorderPatrolSuite {
   }
 
   it should "be the same object in memory when equal" in {
-    val id = sessionid.next
+    val id = sessionid.untagged
     val data = "session"
     Session(id, data) shouldBe Session(id, data)
     Session(id, "session1") should not be Session(id, "session2")

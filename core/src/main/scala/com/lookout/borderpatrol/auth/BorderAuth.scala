@@ -3,6 +3,7 @@ package com.lookout.borderpatrol.auth
 import com.lookout.borderpatrol.util.Combinators.tap
 import com.lookout.borderpatrol.{ServiceIdentifier, ServiceMatcher}
 import com.lookout.borderpatrol.sessionx._
+import com.twitter.finagle.httpx.path.Path
 import com.twitter.finagle.httpx.{Method, Status, Request, Response}
 import com.twitter.finagle.{Service, Filter}
 import com.twitter.util.Future
@@ -12,7 +13,7 @@ import scala.util.{Failure, Success}
  * PODs
  */
 case class ServiceRequest(req: Request, serviceId: ServiceIdentifier)
-case class SessionIdRequest(req: ServiceRequest, sid: SessionId)
+case class SessionIdRequest(req: ServiceRequest, sessionId: SessionId)
 case class AccessIdRequest[A](req: SessionIdRequest, id: Id[A])
 
 /**
@@ -41,8 +42,8 @@ case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStor
     extends Filter[ServiceRequest, Response, SessionIdRequest, Response] {
 
   /**
-   *  Passes the SessionId to the next in the filter chain. If any failures decoding the SessionId occur
-   *  (expired, not there, etc), we will terminate early and send a redirect
+   * Passes the SessionId to the next in the filter chain. If any failures decoding the SessionId occur
+   * (expired, not there, etc), we will terminate early and send a redirect
    * @param req
    * @param service
    */
@@ -61,6 +62,34 @@ case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStor
 }
 
 /**
+ * Determine if the session is tagged (i.e. authenticated) or not and force changes to request path
+ * E.g.
+ * - If SessionId is authenticated and the path is NOT a service path, then redirect it to service identifier path
+ * - If SessionId is NOT authenticated and path is a service path, then redirect to login page
+ */
+class BorderFilter extends Filter[SessionIdRequest, Response, SessionIdRequest, Response] {
+
+  def servicePath(req: SessionIdRequest): Boolean =
+    req.req.serviceId.isServicePath(Path(req.req.req.path))
+
+  def redirectTo(path: Path): Response =
+    tap(Response(Status.Found))(res => res.location = path.toString)
+
+  def redirectToService(req: SessionIdRequest): Future[Response] =
+    redirectTo(req.req.serviceId.path).toFuture
+
+  def redirectToLogin(req: SessionIdRequest): Future[Response] =
+    redirectTo(req.req.serviceId.loginManager.path).toFuture
+
+  def apply(req: SessionIdRequest, service: Service[SessionIdRequest, Response]): Future[Response] =
+    req.sessionId.tag match {
+      case AuthenticatedTag if !servicePath(req) => redirectToService(req)
+      case Untagged if servicePath(req) => redirectToLogin(req)
+      case _ => service(req)
+    }
+}
+
+/**
  * Determines the identity of the requester, if no identity it responds with a redirect to the login page for that
  * service
  */
@@ -75,7 +104,7 @@ class IdentityFilter[A : SessionDataEncoder](store: SessionStore)(implicit secre
     }
 
   def apply(req: SessionIdRequest, service: Service[AccessIdRequest[A], Response]): Future[Response] =
-    identity(req.sid).flatMap(i => i match {
+    identity(req.sessionId).flatMap(i => i match {
       case id: Id[A] => service(AccessIdRequest(req, id))
       case EmptyIdentity => for {
         s <- Session(req.req.req)
