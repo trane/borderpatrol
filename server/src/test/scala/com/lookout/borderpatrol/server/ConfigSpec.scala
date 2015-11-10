@@ -1,8 +1,9 @@
-package com.lookout.borderpatrol.example
+package com.lookout.borderpatrol.server
 
-import java.net.{URI, URL}
+import java.net.URL
 
 import com.lookout.borderpatrol.sessionx._
+import com.lookout.borderpatrol.test.BorderPatrolSuite
 import com.lookout.borderpatrol.{LoginManager, Manager, ServiceMatcher, ServiceIdentifier}
 import com.twitter.finagle.MemcachedClient
 import com.twitter.finagle.httpx.path.Path
@@ -15,7 +16,7 @@ import io.circe.syntax._
 import scala.reflect.io.File
 
 
-class ConfigSpec extends FlatSpec with Matchers with TryValues with OptionValues {
+class ConfigSpec extends BorderPatrolSuite {
   import Config._
 
   val urls = Set(new URL("http://localhost:8081"))
@@ -79,6 +80,21 @@ class ConfigSpec extends FlatSpec with Matchers with TryValues with OptionValues
     verifyServerConfig(encodeDecode(serverConfig1), serverConfig1)
   }
 
+  it should "find managers and loginManagers by name" in {
+    serverConfig.findLoginManager("checkpoint") should be(checkpointLoginManager)
+    serverConfig.findIdentityManager("keymaster") should be(keymasterIdManager)
+    serverConfig.findAccessManager("keymaster") should be(keymasterAccessManager)
+    the[InvalidConfigError] thrownBy {
+      serverConfig.findLoginManager("foo") should be(checkpointLoginManager)
+    }
+    the[InvalidConfigError] thrownBy {
+      serverConfig.findIdentityManager("foo") should be(keymasterIdManager)
+    }
+    the[InvalidConfigError] thrownBy {
+      serverConfig.findAccessManager("foo") should be(keymasterAccessManager)
+    }
+  }
+
   it should "succeed to build a valid ServerConfig from a file with valid contents" in {
     val validContents = serverConfig.asJson.toString()
     val tempValidFile = File.makeTemp("ServerConfigValid", ".tmp")
@@ -92,7 +108,6 @@ class ConfigSpec extends FlatSpec with Matchers with TryValues with OptionValues
     val invalidContents = """[{"name":"one","path": {"str" :"customer1"},"subdomain":"customer1","login":"/login"}]"""
     val tempInvalidFile = File.makeTemp("ServerConfigSpecInvalid", ".tmp")
     tempInvalidFile.writeAll(invalidContents)
-    val uri = new URI("http://foo.com")
     val caught = the [ConfigError] thrownBy {
       readServerConfig(tempInvalidFile.toCanonical.toString)
     }

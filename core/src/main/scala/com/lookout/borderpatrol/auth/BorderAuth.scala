@@ -22,7 +22,7 @@ case class AccessIdRequest[A](req: SessionIdRequest, id: Id[A])
  *
  * @param matchers
  */
-class ServiceFilter(matchers: ServiceMatcher)
+case class ServiceFilter(matchers: ServiceMatcher)
     extends Filter[Request, Response, ServiceRequest, Response] {
 
   def apply(req: Request, service: Service[ServiceRequest, Response]): Future[Response] =
@@ -62,15 +62,41 @@ case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStor
 }
 
 /**
- * Determine if the session is tagged (i.e. authenticated) or not and force changes to request path
+ * This is a border service that glues the main chain with identityProvider or accessIssuer chains
  * E.g.
- * - If SessionId is authenticated and the path is NOT a service path, then redirect it to service identifier path
- * - If SessionId is NOT authenticated and path is a service path, then redirect to login page
+ * - If SessionId is authenticated
+ *   - if path is NOT a service path, then redirect it to service identifier path
+ *   - if path is a service path, then send feed it into accessIssuer chain
+ * - If SessionId is NOT authenticated
+ *   - if path is NOT a LoginManager path, then redirect it to LoginManager path
+ *   - if path is a LoginManager path, then feed it into identityProvider chain
+ *
+ * @param accessIssuerMap
+ * @param identityProviderMap
  */
-class BorderFilter extends Filter[SessionIdRequest, Response, SessionIdRequest, Response] {
+case class BorderService(identityProviderMap: Map[String, Service[SessionIdRequest, Response]],
+                         accessIssuerMap: Map[String, Service[SessionIdRequest, Response]])
+    extends Service[SessionIdRequest, Response] {
 
   def servicePath(req: SessionIdRequest): Boolean =
     req.req.serviceId.isServicePath(Path(req.req.req.path))
+
+  def loginManagerPath(req: SessionIdRequest): Boolean =
+    req.req.serviceId.isLoginManagerPath(Path(req.req.req.path))
+
+  def sendToIdentityProvider(req: SessionIdRequest): Future[Response] =
+    identityProviderMap.get(req.req.serviceId.loginManager.identityManager.name) match {
+      case Some(ip) => ip(req)
+      case None => throw IdentityProviderError(Status.NotFound, "Failed to find IdentityProvider Service Chain for " +
+        req.req.serviceId.loginManager.identityManager.name)
+    }
+
+  def sendToAccessIssuer(req: SessionIdRequest): Future[Response] =
+    accessIssuerMap.get(req.req.serviceId.loginManager.accessManager.name) match {
+      case Some(ip) => ip(req)
+      case None => throw AccessIssuerError(Status.NotFound, "Failed to find AccessIssuer Service Chain for " +
+        req.req.serviceId.loginManager.accessManager.name)
+    }
 
   def redirectTo(path: Path): Response =
     tap(Response(Status.Found))(res => res.location = path.toString)
@@ -81,11 +107,12 @@ class BorderFilter extends Filter[SessionIdRequest, Response, SessionIdRequest, 
   def redirectToLogin(req: SessionIdRequest): Future[Response] =
     redirectTo(req.req.serviceId.loginManager.path).toFuture
 
-  def apply(req: SessionIdRequest, service: Service[SessionIdRequest, Response]): Future[Response] =
+  def apply(req: SessionIdRequest): Future[Response] =
     req.sessionId.tag match {
       case AuthenticatedTag if !servicePath(req) => redirectToService(req)
-      case Untagged if servicePath(req) => redirectToLogin(req)
-      case _ => service(req)
+      case AuthenticatedTag if servicePath(req) => sendToAccessIssuer(req)
+      case Untagged if !loginManagerPath(req) => redirectToLogin(req)
+      case Untagged if loginManagerPath(req) => sendToIdentityProvider(req)
     }
 }
 
@@ -93,7 +120,7 @@ class BorderFilter extends Filter[SessionIdRequest, Response, SessionIdRequest, 
  * Determines the identity of the requester, if no identity it responds with a redirect to the login page for that
  * service
  */
-class IdentityFilter[A : SessionDataEncoder](store: SessionStore)(implicit secretStore: SecretStoreApi)
+case class IdentityFilter[A : SessionDataEncoder](store: SessionStore)(implicit secretStore: SecretStoreApi)
     extends Filter[SessionIdRequest, Response, AccessIdRequest[A], Response] {
 
   def identity(sid: SessionId): Future[Identity[A]] =
@@ -119,7 +146,7 @@ class IdentityFilter[A : SessionDataEncoder](store: SessionStore)(implicit secre
 /**
  * Top level filter that maps exceptions into appropriate status codes
  */
-class ExceptionFilter
+case class ExceptionFilter()
     extends Filter[Request, Response, Request, Response] {
 
   /**

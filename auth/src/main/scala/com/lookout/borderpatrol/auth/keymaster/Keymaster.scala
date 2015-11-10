@@ -105,7 +105,7 @@ object Keymaster {
    * @param binder It binds to upstream login provider using the information passed in LoginManager
    */
   case class KeymasterMethodMuxLoginFilter(binder: MBinder[LoginManager])
-    extends Filter[SessionIdRequest, Response, SessionIdRequest, Response] {
+      extends Filter[SessionIdRequest, Response, SessionIdRequest, Response] {
     def apply(req: SessionIdRequest,
               service: Service[SessionIdRequest, Response]): Future[Response] =
       (req.req.req.method, req.req.req.path) match {
@@ -177,9 +177,9 @@ object Keymaster {
    */
   def keymasterIdentityProviderChain(store: SessionStore)(
     implicit secretStoreApi: SecretStoreApi): Service[SessionIdRequest, Response] = {
-    new KeymasterMethodMuxLoginFilter(LoginManagerBinder) andThen
-      new KeymasterPostLoginFilter(store) andThen
-      new KeymasterIdentityProvider(ManagerBinder)
+    KeymasterMethodMuxLoginFilter(LoginManagerBinder) andThen
+      KeymasterPostLoginFilter(store) andThen
+      KeymasterIdentityProvider(ManagerBinder)
   }
 
   /**
@@ -188,8 +188,8 @@ object Keymaster {
    */
   def keymasterAccessIssuerChain(store: SessionStore)(
     implicit secretStoreApi: SecretStoreApi): Service[SessionIdRequest, Response] = {
-    new IdentityFilter[Tokens](store) andThen
-      new KeymasterAccessFilter(ServiceIdentifierBinder) andThen
-      new KeymasterAccessIssuer(ManagerBinder, store)
+    IdentityFilter[Tokens](store) andThen
+      KeymasterAccessFilter(ServiceIdentifierBinder) andThen
+      KeymasterAccessIssuer(ManagerBinder, store)
   }
 }
