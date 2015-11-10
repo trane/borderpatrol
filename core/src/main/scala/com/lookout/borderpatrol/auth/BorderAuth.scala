@@ -69,15 +69,24 @@ case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStor
  */
 class BorderFilter extends Filter[SessionIdRequest, Response, SessionIdRequest, Response] {
 
+  def servicePath(req: SessionIdRequest): Boolean =
+    req.req.serviceId.isServicePath(Path(req.req.req.path))
+
+  def redirectTo(path: Path): Response =
+    tap(Response(Status.Found))(res => res.location = path.toString)
+
+  def redirectToService(req: SessionIdRequest): Future[Response] =
+    redirectTo(req.req.serviceId.path).toFuture
+
+  def redirectToLogin(req: SessionIdRequest): Future[Response] =
+    redirectTo(req.req.serviceId.loginManager.path).toFuture
+
   def apply(req: SessionIdRequest, service: Service[SessionIdRequest, Response]): Future[Response] =
-    if (Tag.authenticated(req.sessionId.tag))
-      if (!req.req.serviceId.isServicePath(Path(req.req.req.path)))
-        tap(Response(Status.Found))(res => res.location = req.req.serviceId.path.toString).toFuture
-      else service(req)
-    else
-      if (req.req.serviceId.isServicePath(Path(req.req.req.path)))
-        tap(Response(Status.Found))(res => res.location = req.req.serviceId.loginManager.path.toString).toFuture
-      else service(req)
+    req.sessionId.tag match {
+      case AuthenticatedTag if !servicePath(req) => redirectToService(req)
+      case Untagged if servicePath(req) => redirectToLogin(req)
+      case _ => service(req)
+    }
 }
 
 /**

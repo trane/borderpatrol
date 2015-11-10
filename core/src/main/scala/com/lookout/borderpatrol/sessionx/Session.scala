@@ -80,8 +80,10 @@ object Session {
    * @tparam A
    * @return Session
    */
-  def apply[A](data: A, tag: Tag = Untagged)(implicit store: SecretStoreApi): Future[Session[A]] =
-    if (Tag.authenticated(tag)) SessionId.authenticated map (Session(_, data))
-    else SessionId.untagged map (Session(_, data))
+  def apply[A](data: A, tag: Tag = Untagged)(implicit store: SecretStoreApi): Future[Session[A]] = tag match {
+    case AuthenticatedTag => SessionId.authenticated map (Session(_, data))
+    case Untagged => SessionId.untagged map (Session (_, data) )
+    case _ => new SessionError("Invalid SessionId Tag found").toFutureException
+  }
 }
 

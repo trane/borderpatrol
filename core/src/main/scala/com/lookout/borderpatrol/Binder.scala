@@ -42,7 +42,7 @@ object Binder {
    * @tparam A
    */
   abstract class MBinder[A: BinderContext](cache: mutable.Map[String, Service[Request, Response]] =
-                                       mutable.Map.empty[String, Service[Request, Response]])
+                                           mutable.Map.empty[String, Service[Request, Response]])
       extends Service[BindRequest[A], Response] {
     def apply(req: BindRequest[A]): Future[Response] =
       this.synchronized(cache.getOrElse(req.name, {

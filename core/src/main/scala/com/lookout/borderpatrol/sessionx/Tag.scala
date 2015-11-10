@@ -20,7 +20,6 @@ object Tag {
     case _ => Untagged
   }
 
-
   // here is a partial function that acts like a finagle filter
   val authenticated: PartialFunction[Tag, Boolean] = {
     case AuthenticatedTag => true
