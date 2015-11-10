@@ -13,7 +13,7 @@ import scala.util.{Failure, Success}
  * PODs
  */
 case class ServiceRequest(req: Request, serviceId: ServiceIdentifier)
-case class SessionIdRequest(req: ServiceRequest, sid: SessionId)
+case class SessionIdRequest(req: ServiceRequest, sessionId: SessionId)
 case class AccessIdRequest[A](req: SessionIdRequest, id: Id[A])
 
 /**
@@ -70,7 +70,7 @@ case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStor
 class BorderFilter extends Filter[SessionIdRequest, Response, SessionIdRequest, Response] {
 
   def apply(req: SessionIdRequest, service: Service[SessionIdRequest, Response]): Future[Response] =
-    if (SessionId.isAuthenticated(req.sid))
+    if (Tag.authenticated(req.sessionId.tag))
       if (!req.req.serviceId.isServicePath(Path(req.req.req.path)))
         tap(Response(Status.Found))(res => res.location = req.req.serviceId.path.toString).toFuture
       else service(req)
@@ -95,7 +95,7 @@ class IdentityFilter[A : SessionDataEncoder](store: SessionStore)(implicit secre
     }
 
   def apply(req: SessionIdRequest, service: Service[AccessIdRequest[A], Response]): Future[Response] =
-    identity(req.sid).flatMap(i => i match {
+    identity(req.sessionId).flatMap(i => i match {
       case id: Id[A] => service(AccessIdRequest(req, id))
       case EmptyIdentity => for {
         s <- Session(req.req.req)

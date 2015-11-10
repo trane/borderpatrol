@@ -10,8 +10,8 @@ import com.twitter.util.Future
 class CsrfSpec extends BorderPatrolSuite {
   import com.lookout.borderpatrol.test.sessionx.helpers._
 
-  val csrf1 = sessionid.next().asBase64
-  val csrf2 = sessionid.next().asBase64
+  val csrf1 = sessionid.untagged.asBase64
+  val csrf2 = sessionid.untagged.asBase64
 
   val (header, param, cookiename, verified) = ("header", "param", "cookieName", "verified")
   val verify = Verify(InHeader(header), Param(param), CookieName(cookiename), VerifiedHeader(verified))

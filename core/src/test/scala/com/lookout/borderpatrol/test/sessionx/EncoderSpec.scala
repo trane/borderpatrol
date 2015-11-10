@@ -41,9 +41,9 @@ class EncoderSpec extends BorderPatrolSuite {
 
   it should "uphold encoding/decoding identity" in {
     def identity[A](id: SessionId)(implicit ev: SessionIdEncoder[A]): SessionId =
-      ev.decode(ev.encode(id)) getOrElse sessionid.next()
+      ev.decode(ev.encode(id)) getOrElse sessionid.untagged
 
-    val id = sessionid.next()
+    val id = sessionid.untagged
     identity[String](id) should be(id)
   }
 

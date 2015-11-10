@@ -80,7 +80,8 @@ object Session {
    * @tparam A
    * @return Session
    */
-  def apply[A](data: A, tagId: TagId = SessionId.nullTagId)(implicit store: SecretStoreApi): Future[Session[A]] =
-    SessionId.next(tagId) map (Session(_, data))
+  def apply[A](data: A, tag: Tag = Untagged)(implicit store: SecretStoreApi): Future[Session[A]] =
+    if (Tag.authenticated(tag)) SessionId.authenticated map (Session(_, data))
+    else SessionId.untagged map (Session(_, data))
 }
 

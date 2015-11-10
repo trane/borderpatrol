@@ -87,10 +87,10 @@ object Keymaster {
       createIdentifyReq(req).fold(Future.value(Response(Status.BadRequest)))(credReq =>
         for {
           tokenResponse <- service(credReq)
-          session <- Session(tokenResponse.identity.id, SessionId.authenticatedTagId)
+          session <- Session(tokenResponse.identity.id, AuthenticatedTag)
           _ <- store.update[Tokens](session)
-          originReq <- getRequestFromSessionStore(req.sid)
-          _ <- store.delete(req.sid)
+          originReq <- getRequestFromSessionStore(req.sessionId)
+          _ <- store.delete(req.sessionId)
         } yield tap(Response(Status.Found))(res => {
           res.location = originReq.uri
           res.addCookie(session.id.asCookie)
@@ -165,7 +165,7 @@ object Keymaster {
       extends Filter[AccessIdRequest[Tokens], Response, AccessRequest[Tokens], AccessResponse[ServiceToken]] {
     def apply(req: AccessIdRequest[Tokens],
               accessService: Service[AccessRequest[Tokens], AccessResponse[ServiceToken]]): Future[Response] =
-      accessService(AccessRequest(req.id, req.req.req.serviceId, req.req.sid)).flatMap(accessResp =>
+      accessService(AccessRequest(req.id, req.req.req.serviceId, req.req.sessionId)).flatMap(accessResp =>
         binder(BindRequest(req.req.req.serviceId,
           tap(req.req.req.req) { r => r.headerMap.add("Auth-Token", accessResp.access.access.value)}))
       )

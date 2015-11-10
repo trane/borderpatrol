@@ -143,7 +143,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     }
 
     // Allocate and Session
-    val sessionId = sessionid.next()
+    val sessionId = sessionid.untagged
 
     // Login POST request
     val loginRequest = req("enterprise", "/login", ("username" -> "foo"), ("password" -> "bar"))
@@ -168,7 +168,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
 
   it should "return BadRequest Status if credentials are not present in the request" in {
     // Allocate and Session
-    val sessionId = sessionid.next()
+    val sessionId = sessionid.untagged
 
     // Login POST request
     val loginRequest = req("enterprise", "/login", ("username" -> "foo"))
@@ -183,7 +183,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
 
   it should "return OriginalRequestNotFound if it fails find the original request from sessionStore" in {
     // Allocate and Session
-    val sessionId = sessionid.next()
+    val sessionId = sessionid.untagged
 
     // Login POST request
     val loginRequest = req("enterprise", "/login", ("username" -> "foo"), ("password" -> "bar"))
@@ -210,7 +210,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val mockSessionStore = MemcachedStore(FailingMockClient)
 
     // Allocate and Session
-    val sessionId = sessionid.next()
+    val sessionId = sessionid.untagged
 
     // Login POST request
     val loginRequest = req("enterprise", "/login", ("username" -> "foo"), ("password" -> "bar"))
@@ -232,7 +232,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val testAccessManagerBinder = mkTestManagerBinder {
       request => { assert(false); Response(Status.Ok).toFuture }
     }
-    val sessionId = sessionid.next()
+    val sessionId = sessionid.untagged
 
     // Execute
     val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore)(KeymasterAccessReq(Id(tokens2), one, sessionId))
@@ -249,7 +249,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
         res.contentType = "application/json"
       }).toFuture
     }}
-    val sessionId = sessionid.next()
+    val sessionId = sessionid.untagged
     sessionStore.update[Tokens](Session(sessionId, tokens))
 
     // Execute
@@ -263,7 +263,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
 
   it should "propagate the error Status code returned by the Keymaster service, as the AccessIssuerError exception" in {
     val testAccessManagerBinder = mkTestManagerBinder { request => Response(Status.NotFound).toFuture }
-    val sessionId = sessionid.next()
+    val sessionId = sessionid.untagged
 
     // Execute
     val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore)(KeymasterAccessReq(Id(tokens), one, sessionId))
@@ -283,7 +283,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
         res.contentType = "application/json"
       }).toFuture
     }
-    val sessionId = sessionid.next()
+    val sessionId = sessionid.untagged
 
     // Execute
     val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore)(KeymasterAccessReq(Id(tokens), one, sessionId))
@@ -302,7 +302,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
         res.contentType = "application/json"
       }).toFuture
     }
-    val sessionId = sessionid.next()
+    val sessionId = sessionid.untagged
 
     // Execute
     val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore)(KeymasterAccessReq(Id(tokens), one, sessionId))
@@ -330,7 +330,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     }
 
     // Allocate and Session
-    val sessionId = sessionid.next()
+    val sessionId = sessionid.untagged
 
     // Create request
     val request = req("enterprise", "/dang")
@@ -356,7 +356,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     }
 
     // Allocate and Session
-    val sessionId = sessionid.next()
+    val sessionId = sessionid.untagged
 
     // Create request
     val request = req("enterprise", "/dang")
@@ -382,7 +382,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     }
 
     // Allocate and Session
-    val sessionId = sessionid.next()
+    val sessionId = sessionid.untagged
 
     // Create request
     val request = req("enterprise", "/dang")
@@ -404,7 +404,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val testLoginManagerBinder = mkTestLoginManagerBinder { _ => Response(Status.Ok).toFuture }
 
     // Allocate and Session
-    val sessionId = sessionid.next()
+    val sessionId = sessionid.untagged
 
     // Create request
     val request = Request(Method.Get, "/ent")
@@ -422,7 +422,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val testLoginManagerBinder = mkTestLoginManagerBinder { _ => fail("Should not get here") }
 
     // Allocate and Session
-    val sessionId = sessionid.next()
+    val sessionId = sessionid.untagged
 
     // Create request
     val request = Request(Method.Post, "/ent")
@@ -440,7 +440,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val testLoginManagerBinder = mkTestLoginManagerBinder { _ => Response(Status.Ok).toFuture }
 
     // Allocate and Session
-    val sessionId = sessionid.next()
+    val sessionId = sessionid.untagged
 
     // Create request
     val request = Request(Method.Head, "/ent")
@@ -464,7 +464,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
 
     try {
       // Allocate and Session
-      val sessionId = sessionid.next()
+      val sessionId = sessionid.untagged
 
       // Login manager request
       val loginRequest = req("enterprise", checkpointLoginManager.path.toString,
@@ -498,7 +498,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
 
     try {
       // Allocate and Session
-      val sessionId = sessionid.next()
+      val sessionId = sessionid.untagged
 
       // Login manager request
       val loginRequest = Request(Method.Post, Request.queryString(checkpointLoginManager.loginPath.toString,
@@ -535,7 +535,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
 
     try {
       // Allocate and Session
-      val sessionId = sessionid.next()
+      val sessionId = sessionid.untagged
 
       // Original request
       val origReq = req("enterprise", "/ent")

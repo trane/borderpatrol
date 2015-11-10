@@ -32,7 +32,7 @@ class SessionStoreSpec extends BorderPatrolSuite {
     }
 
     it should s"return a None when not present in $store" in {
-      store.get[Int](sessionid.next()).results shouldBe None
+      store.get[Int](sessionid.untagged).results shouldBe None
     }
 
     it should s"store request sessions $store" in {

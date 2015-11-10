@@ -23,18 +23,21 @@ object helpers {
     */
    object sessionid {
 
-     def next(tagId: TagId = SessionId.nullTagId): SessionId =
-       Await.result(SessionId.next(tagId))
+     def untagged: SessionId =
+       Await.result(SessionId.untagged)
+
+     def authenticated: SessionId =
+       Await.result(SessionId.authenticated)
 
      def expired: SessionId =
-       SessionId(Time.fromMilliseconds(0), Entropy(16), secrets.current, SessionId.nullTagId)
+       SessionId(Time.fromMilliseconds(0), Entropy(16), secrets.current, Untagged)
 
      def invalid: SessionId =
-       next().copy(entropy = Entropy(16))
+       untagged.copy(entropy = Entropy(16))
    }
 
    object sessions {
      def create[A](a: A): Session[A] =
-       Session(sessionid.next(), a)
+       Session(sessionid.untagged, a)
    }
  }
