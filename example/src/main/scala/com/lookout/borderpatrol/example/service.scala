@@ -23,11 +23,9 @@
  */
 package com.lookout.borderpatrol.example
 
-import com.lookout.borderpatrol.auth._
 import com.lookout.borderpatrol.auth.keymaster._
-import com.lookout.borderpatrol.auth.keymaster.Keymaster._
 import com.lookout.borderpatrol.auth.keymaster.Tokens._
-import com.lookout.borderpatrol.{ServiceMatcher, Manager}
+import com.lookout.borderpatrol.server.ServerConfig
 import com.lookout.borderpatrol.sessionx._
 import com.lookout.borderpatrol.util.Combinators._
 import com.twitter.io.Buf
@@ -134,62 +132,4 @@ object MockService {
 
 object service {
 
-  /**
-   * Glue that DEMUXes the chain into appropriate identityProvider or accessIssuer
-   *
-   * @param accessIssuerMap
-   * @param identityProviderMap
-   */
-  case class MainGlueService(identityProviderMap: Map[String, Service[SessionIdRequest, Response]],
-                             accessIssuerMap: Map[String, Service[SessionIdRequest, Response]])
-  extends Service[SessionIdRequest, Response] {
-
-    def getIdentityProviderService(identityManager: Manager): Service[SessionIdRequest, Response] =
-      identityProviderMap.get(identityManager.name) match {
-        case Some(s) => s
-        case None => throw InvalidConfigError("Failed to find IdentityProvider Service Chain for " +
-          identityManager.name)
-      }
-
-    def getAccessIssuerService(accessManager: Manager): Service[SessionIdRequest, Response] =
-      accessIssuerMap.get(accessManager.name) match {
-        case Some(s) => s
-        case None => throw InvalidConfigError("Failed to find AccessIssuer Service Chain for " +
-          accessManager.name)
-      }
-
-    def apply(req: SessionIdRequest): Future[Response] = {
-      val p = Path(req.req.req.path)
-      /* Upstream service path */
-      if (p.startsWith(req.req.serviceId.path))
-        getAccessIssuerService(req.req.serviceId.loginManager.accessManager)(req)
-      /* LoginPath that processes the login response */
-      else if (p.startsWith(req.req.serviceId.loginManager.loginPath))
-        getIdentityProviderService(req.req.serviceId.loginManager.identityManager)(req)
-      /* Path that handles the LoginManager specific routes */
-      else if (p.startsWith(req.req.serviceId.loginManager.path))
-        getIdentityProviderService(req.req.serviceId.loginManager.identityManager)(req)
-      else tap(Response(Status.NotFound))(r => {
-        r.contentString = s"${req.req.req.path}: No IdentityProvider or AccessIssuer found. " +
-          s"Returning (${Status.NotFound.code})"
-        r.contentType = "text/plain"
-      }).toFuture
-    }
-  }
-
-  /**
-   * The sole entry point for all service chains
-   */
-  def MainServiceChain(implicit config: ServerConfig): Service[Request, Response] = {
-    implicit val secretStore = config.secretStore
-    val serviceMatcher = ServiceMatcher(config.serviceIdentifiers)
-    val identityProviderMap = Map("keymaster" -> keymasterIdentityProviderChain(config.sessionStore))
-    val accessIssuerMap = Map("keymaster" -> keymasterAccessIssuerChain(config.sessionStore))
-
-    new ExceptionFilter andThen /* Convert exceptions to responses */
-      new ServiceFilter(serviceMatcher) andThen /* Validate that its our service */
-      new SessionIdFilter(config.sessionStore) andThen /* Get or allocate Session/SessionId */
-      new BorderFilter andThen /* Check if SessionId and path are consistent */
-      new MainGlueService(identityProviderMap, accessIssuerMap) /* Glue that connects to identity & access service */
-  }
 }

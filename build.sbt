@@ -94,11 +94,12 @@ lazy val root = project.in(file("."))
       """
         |import com.lookout.borderpatrol._
         |import com.lookout.borderpatrol.sessionx._
+        |import com.lookout.borderpatrol.server._
         |import com.lookout.borderpatrol.auth._
       """.stripMargin
     )
-  .aggregate(core, example, security, auth, test)
-  .dependsOn(core, auth)
+  .aggregate(core, example, security, auth, server, test)
+  .dependsOn(core, auth, server)
 
 lazy val core = project
   .settings(moduleName := "borderpatrol-core")
@@ -121,14 +122,11 @@ lazy val example = project
       "com.twitter" %% "twitter-server" % twitterServerVersion,
       "com.twitter" %% "finagle-stats" % finagleVersion,
       "com.github.finagle" %% "finch-core" % finchVersion,
-      "com.github.finagle" %% "finch-argonaut" % finchVersion,
-      "io.circe" %% "circe-core" % circeVersion,
-      "io.circe" %% "circe-generic" % circeVersion,
-      "io.circe" %% "circe-jawn" % circeVersion
+      "com.github.finagle" %% "finch-argonaut" % finchVersion
     )
   )
   .disablePlugins(JmhPlugin)
-  .dependsOn(core, auth, test % "test")
+  .dependsOn(core, auth, server, security, test % "test")
 
 lazy val security = project
   .settings(moduleName := "borderpatrol-security")
@@ -147,3 +145,14 @@ lazy val auth = project
   )
   .dependsOn(core % "test->test;compile->compile")
 
+lazy val server = project
+  .settings(moduleName := "borderpatrol-server")
+  .settings(allSettings)
+  .settings(
+    libraryDependencies ++= Seq(
+      "io.circe" %% "circe-core" % circeVersion,
+      "io.circe" %% "circe-generic" % circeVersion,
+      "io.circe" %% "circe-jawn" % circeVersion
+    )
+  )
+  .dependsOn(core % "test->test;compile->compile", auth)

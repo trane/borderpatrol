@@ -1,11 +1,12 @@
 package com.lookout.borderpatrol.example
 
+import com.lookout.borderpatrol.server._
 import com.twitter.finagle.Httpx
 import com.twitter.server.TwitterServer
 import com.twitter.util.Await
 
 object BorderPatrolApp extends TwitterServer with Config {
-  import service._
+  import services._
   import MockService._
   import Config._
 
