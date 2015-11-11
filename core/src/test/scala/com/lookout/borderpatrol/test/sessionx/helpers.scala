@@ -1,8 +1,14 @@
 package com.lookout.borderpatrol.test.sessionx
 
 import com.lookout.borderpatrol.sessionx.SecretStores.InMemorySecretStore
+import com.twitter.finagle.httpx.Method.{Put, Get}
+import com.twitter.finagle.httpx.{Response, Request}
+import com.twitter.util._
+import com.twitter.finagle.httpx
+import scala.util.{Success, Try}
 import com.twitter.bijection.Injection
 import com.twitter.util.{Await, Time}
+
 
 object helpers {
   import com.lookout.borderpatrol.sessionx._
@@ -40,4 +46,36 @@ object helpers {
      def create[A](a: A): Session[A] =
        Session(sessionid.untagged, a)
    }
- }
+
+  object MockConsulClient extends ConsulConnection(null,"test","8500") {
+    val mockRemote = collection.mutable.HashMap.empty[String, String]
+
+    override def value(key: String): Future[Try[String]] =
+      Future.value(Success(mockRemote(key)))
+
+    override def set(k: String, v: String): Future[httpx.Response] = {
+      mockRemote += (k -> v)
+      Future.value(httpx.Response(httpx.Status.Ok))
+    }
+
+  }
+  import com.twitter.finagle.Service
+  def mockConsulResponse(sec: Secrets): String = {
+    val mockJson = SecretsEncoder.EncodeJson.encode(sec).nospaces
+    val encodedJson = Base64StringEncoder.encode(mockJson.getBytes)
+      s"""[{"CreateIndex":8,
+    "ModifyIndex":104,"LockIndex":0,"Key":"secretStore/secrets","Flags":0,"Value":"$encodedJson"}]"""
+  }
+
+  def mockService(secrets: Secrets): Service[httpx.Request,httpx.Response] = {
+    new Service[httpx.Request,httpx.Response] {
+      val res = Response(httpx.Status.Ok)
+      def apply(req: Request): Future[Response] = {
+        (req.method,req.path) match {
+          case (Get,_) => {res.setContentString(mockConsulResponse(secrets));Future.value(res)}
+          case (Put,_) => {val n = new Promise[Response];n.setValue(res); n}
+        }
+      }
+    }
+  }
+}

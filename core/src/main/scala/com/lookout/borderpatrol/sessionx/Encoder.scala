@@ -7,6 +7,7 @@ import com.twitter.finagle.httpx.Cookie
 import com.twitter.io.Buf
 import com.twitter.finagle.httpx
 import scala.util.{Success, Failure, Try}
+import argonaut._, Argonaut._
 
 /**
  * Typeclasses for Encoding data within sessions
@@ -18,6 +19,8 @@ trait Encoder[A, B] {
 trait SessionDataEncoder[A] extends Encoder[A, Buf]
 trait SessionIdEncoder[A] extends Encoder[SessionId, A]
 trait SecretEncoder[A] extends Encoder[Secret, A]
+trait SecretsEncoder[A] extends Encoder[Secrets,A]
+
 
 /**
  * This type uses the [[com.lookout.borderpatrol.sessionx.SessionDataEncoder SessionDataEncoder]] to encode
@@ -199,7 +202,36 @@ object SecretEncoder {
         e => Failure(SecretDecodeError(e._1)),
         s => Success(s)
       )
+
   }
 
+}
+
+object SecretsEncoder {
+
+  implicit object EncodeJson extends SecretsEncoder[Json] {
+
+    import SecretEncoder.EncodeJson._
+
+    //this is neccesary for it to compile otherwise it complains
+    //about not knowing about the implicit object
+
+    implicit val SecretsCodecJson: argonaut.CodecJson[Secrets] =
+      casecodec2(Secrets.apply, Secrets.unapply)("current", "previous")
+
+    def encode(s: Secrets): Json =
+      s.asJson
+
+    def decode(json: Json): Try[Secrets] = {
+      json.as[Secrets].toDisjunction.fold[Try[Secrets]](
+        e => Failure( SecretsDecodeError(e._1)),
+        s => Success(s)
+        )
+    }
+
+  }
 
 }
+
+
+
