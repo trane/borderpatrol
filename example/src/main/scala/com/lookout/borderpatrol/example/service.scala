@@ -160,15 +160,15 @@ object service {
 
     def apply(req: SessionIdRequest): Future[Response] = {
       val p = Path(req.req.req.path)
+      /* Upstream service path */
+      if (p.startsWith(req.req.serviceId.path))
+        getAccessIssuerService(req.req.serviceId.loginManager.accessManager)(req)
       /* LoginPath that processes the login response */
-      if (p.startsWith(req.req.serviceId.loginManager.loginPath))
+      else if (p.startsWith(req.req.serviceId.loginManager.loginPath))
         getIdentityProviderService(req.req.serviceId.loginManager.identityManager)(req)
       /* Path that handles the LoginManager specific routes */
       else if (p.startsWith(req.req.serviceId.loginManager.path))
         getIdentityProviderService(req.req.serviceId.loginManager.identityManager)(req)
-      /* Upstream service path */
-      else if (p.startsWith(req.req.serviceId.path))
-        getAccessIssuerService(req.req.serviceId.loginManager.accessManager)(req)
       else tap(Response(Status.NotFound))(r => {
         r.contentString = s"${req.req.req.path}: No IdentityProvider or AccessIssuer found. " +
           s"Returning (${Status.NotFound.code})"
@@ -186,9 +186,10 @@ object service {
     val identityProviderMap = Map("keymaster" -> keymasterIdentityProviderChain(config.sessionStore))
     val accessIssuerMap = Map("keymaster" -> keymasterAccessIssuerChain(config.sessionStore))
 
-    new ExceptionFilter andThen
-      new ServiceFilter(serviceMatcher) andThen
-      new SessionIdFilter(config.sessionStore) andThen
-      new MainGlueService(identityProviderMap, accessIssuerMap)
+    new ExceptionFilter andThen /* Convert exceptions to responses */
+      new ServiceFilter(serviceMatcher) andThen /* Validate that its our service */
+      new SessionIdFilter(config.sessionStore) andThen /* Get or allocate Session/SessionId */
+      new BorderFilter andThen /* Check if SessionId and path are consistent */
+      new MainGlueService(identityProviderMap, accessIssuerMap) /* Glue that connects to identity & access service */
   }
 }

@@ -12,7 +12,14 @@ import com.twitter.finagle.httpx.path.Path
  * @param hosts The list of URLs to upstream service
  * @param path The external url path prefix that routes to the internal service
  * @param subdomain A default fall-back when path is only `/`
- * @param loginManager The location to send a user when a request to this service is Unauthorized
+ * @param loginManager The location to send a user when a request to this service is Unauthenticated
  */
 case class ServiceIdentifier(name: String, hosts: Set[URL], path: Path, subdomain: String,
-                             loginManager: LoginManager)
+                             loginManager: LoginManager) {
+  def isMatchingPath(p: Path): Boolean =
+    isServicePath(p) || isLoginManagerPath(p)
+  def isServicePath(p: Path): Boolean =
+    p.startsWith(path)
+  def isLoginManagerPath(p: Path): Boolean =
+    !Set(loginManager.path, loginManager.loginPath).filter(p.startsWith(_)).isEmpty
+}

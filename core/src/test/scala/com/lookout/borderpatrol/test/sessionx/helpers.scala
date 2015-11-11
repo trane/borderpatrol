@@ -5,8 +5,10 @@ import com.twitter.finagle.httpx.Method.{Put, Get}
 import com.twitter.finagle.httpx.{Response, Request}
 import com.twitter.util._
 import com.twitter.finagle.httpx
-
 import scala.util.{Success, Try}
+import com.twitter.bijection.Injection
+import com.twitter.util.{Await, Time}
+
 
 object helpers {
   import com.lookout.borderpatrol.sessionx._
@@ -15,9 +17,9 @@ object helpers {
     * Common usage of secrets across tests
     */
    object secrets {
-     val current = Secret(1.toByte, Secret.currentExpiry, Entropy(16))
-     val previous = Secret(2.toByte, Time.fromMilliseconds(0), Entropy(16))
-     val invalid = Secret(3.toByte, Time.now, Entropy(16)) // not in store
+     val current = Secret(Injection.short2BigEndian(1), Secret.currentExpiry, Entropy(16))
+     val previous = Secret(Injection.short2BigEndian(2), Time.fromMilliseconds(0), Entropy(16))
+     val invalid = Secret(Injection.short2BigEndian(3), Time.now, Entropy(16)) // not in store
      val secrets = Secrets(current, previous)
    }
    implicit val secretStore = InMemorySecretStore(secrets.secrets)
@@ -27,19 +29,22 @@ object helpers {
     */
    object sessionid {
 
-     def next: SessionId =
-       Await.result(SessionId.next)
+     def untagged: SessionId =
+       Await.result(SessionId.untagged)
+
+     def authenticated: SessionId =
+       Await.result(SessionId.authenticated)
 
      def expired: SessionId =
-       SessionId(Time.fromMilliseconds(0), Entropy(16), secrets.current)
+       SessionId(Time.fromMilliseconds(0), Entropy(16), secrets.current, Untagged)
 
      def invalid: SessionId =
-       next.copy(entropy = Entropy(16))
+       untagged.copy(entropy = Entropy(16))
    }
 
    object sessions {
      def create[A](a: A): Session[A] =
-       Session(sessionid.next, a)
+       Session(sessionid.untagged, a)
    }
 
   object MockConsulClient extends ConsulConnection(null,"test","8500") {

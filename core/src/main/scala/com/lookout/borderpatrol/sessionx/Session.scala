@@ -65,7 +65,7 @@ object Session {
     }
 
   /**
-   * Primary mechanism for generating new [[Session]], returning a `Future` of the `Session[A]`
+   * Mechanism for generating new [[Session]], returning a `Future` of the `Session[A]`
    *
    * {{{
    *   val data = 1
@@ -78,10 +78,12 @@ object Session {
    * @param data value you want to store
    * @param store the secret store to fetch current secret
    * @tparam A
-   * @return
+   * @return Session
    */
-  def apply[A](data: A)(implicit store: SecretStoreApi): Future[Session[A]] =
-    SessionId.next map (Session(_, data))
-
+  def apply[A](data: A, tag: Tag = Untagged)(implicit store: SecretStoreApi): Future[Session[A]] = tag match {
+    case AuthenticatedTag => SessionId.authenticated map (Session(_, data))
+    case Untagged => SessionId.untagged map (Session (_, data) )
+    case _ => new SessionError("Invalid SessionId Tag found").toFutureException
+  }
 }
 

@@ -12,6 +12,8 @@ import com.lookout.borderpatrol.util.Combinators.tap
 trait Signer {
   val algo: String
   val key: Key
+  def hmac: Mac =
+    tap(Mac.getInstance(algo))(mac => mac.init(key))
 
   /**
    * Sign the input bytes using configured algorithm
@@ -19,6 +21,6 @@ trait Signer {
    * @return Signature
    */
   def sign(bytes: IndexedSeq[Byte]): Signature =
-    tap(Mac.getInstance(algo))(mac => mac.init(key)).doFinal(bytes.toArray).toIndexedSeq
+    hmac.doFinal(bytes.toArray).toIndexedSeq
 }
 
