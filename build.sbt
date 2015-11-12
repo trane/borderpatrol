@@ -136,6 +136,7 @@ lazy val example = project
       "com.github.finagle" %% "finch-argonaut" % finchVersion
     )
   )
+  .settings(assemblyJarName in assembly := "borderpatrol-example-all.jar")
   .disablePlugins(JmhPlugin)
   .dependsOn(core, auth, server, security, test % "test")
 
