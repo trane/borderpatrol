@@ -74,7 +74,18 @@ lazy val noPublish = Seq(
   publishLocal := {}
 )
 
-lazy val allSettings = baseSettings ++ buildSettings ++ publishSettings
+lazy val assembleSettings =
+  assemblyMergeStrategy in assembly := {
+    case PathList("com", "twitter", "common", xs @ _*) => MergeStrategy.first
+    case PathList("org", "objectweb", xs @ _*) => MergeStrategy.first
+    case PathList("org", "slf4j", xs @ _*) => MergeStrategy.last
+    case PathList("META-INF", "MANIFEST.MF") => MergeStrategy.discard
+    case x =>
+      val oldStrategy = (assemblyMergeStrategy in assembly).value
+      oldStrategy(x)
+  }
+
+lazy val allSettings = baseSettings ++ buildSettings ++ publishSettings ++ assembleSettings
 
 lazy val docSettings = site.settings ++ ghpages.settings ++ unidocSettings ++ Seq(
   site.addMappingsToSiteDir(mappings in (ScalaUnidoc, packageDoc), "docs"),
