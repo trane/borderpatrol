@@ -1,6 +1,8 @@
 package com.lookout.borderpatrol.sessionx
 
 
+import java.net.URL
+
 import com.twitter.util._
 import com.twitter.finagle.Httpx
 
@@ -94,6 +96,19 @@ object SecretStores {
   }
 
   object ConsulSecretStore {
+    /**
+     * Create a ConsulSecretStore to use.
+     *
+     * @param consulUrl the host name and port of the server
+     */
+    def apply(consulUrl: URL): ConsulSecretStore = {
+      val client = Httpx.newService(consulUrl.getAuthority)
+      val poll = 10 /* seconds */
+      val consulConnection = new ConsulConnection(client, consulUrl.getHost, consulUrl.getPort.toString)
+      val secretsDefault = Secrets(Secret(Time.fromMilliseconds(0)), Secret())
+      new ConsulSecretStore(consulConnection, poll, secretsDefault)
+    }
+
     /**
      * Create a ConsulSecretStore to use.
      *

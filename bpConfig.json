@@ -7,7 +7,7 @@
     }
   ],
   "sessionStore": {
-    "type": "InMemoryStore$"
+    "type": "InMemoryStore"
   },
   "loginManagers": [
     {

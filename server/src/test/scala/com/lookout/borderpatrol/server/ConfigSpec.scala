@@ -40,9 +40,10 @@ class ConfigSpec extends BorderPatrolSuite {
   val defaultSecretStore = SecretStores.InMemorySecretStore(Secrets(Secret(), Secret()))
   val defaultSessionStore = SessionStores.InMemoryStore
   val memcachedSessionStore = SessionStores.MemcachedStore(MemcachedClient.newRichClient("localhost:1234"))
+  val consulSecretStore = SecretStores.ConsulSecretStore(new URL("http://localhost:1234"))
   val serverConfig = ServerConfig(defaultSecretStore, defaultSessionStore, sids,
     Set(checkpointLoginManager, umbrellaLoginManager), Set(keymasterIdManager), Set(keymasterAccessManager))
-  val serverConfig1 = ServerConfig(defaultSecretStore, memcachedSessionStore, sids,
+  val serverConfig1 = ServerConfig(consulSecretStore, memcachedSessionStore, sids,
     Set(checkpointLoginManager, umbrellaLoginManager), Set(keymasterIdManager), Set(keymasterAccessManager))
 
   def verifyServerConfig(a: ServerConfig, b: ServerConfig): Unit = {
@@ -75,7 +76,6 @@ class ConfigSpec extends BorderPatrolSuite {
         case Xor.Left(b) => ServerConfig(defaultSecretStore, defaultSessionStore, Set(), Set(), Set(), Set())
       }
     }
-    val foo = encodeDecode(serverConfig)
     verifyServerConfig(encodeDecode(serverConfig), serverConfig)
     verifyServerConfig(encodeDecode(serverConfig1), serverConfig1)
   }

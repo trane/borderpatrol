@@ -1,9 +1,11 @@
 import sbtunidoc.Plugin.UnidocKeys._
 import scoverage.ScoverageSbtPlugin.ScoverageKeys.coverageExcludedPackages
 
+lazy val Version = "0.1.0-SNAPSHOT"
+
 lazy val buildSettings = Seq(
   organization := "com.lookout",
-  version := "0.1.0-SNAPSHOT",
+  version := Version,
   scalaVersion := "2.11.7",
   crossScalaVersions := Seq("2.10.5", "2.11.7")
 )
@@ -136,7 +138,7 @@ lazy val example = project
       "com.github.finagle" %% "finch-argonaut" % finchVersion
     )
   )
-  .settings(assemblyJarName in assembly := "borderpatrol-example-all.jar")
+  .settings(assemblyJarName in assembly := s"borderpatrol-example-all-${Version}.jar")
   .disablePlugins(JmhPlugin)
   .dependsOn(core, auth, server, security, test % "test")
 
