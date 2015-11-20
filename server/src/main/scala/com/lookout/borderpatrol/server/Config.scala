@@ -3,9 +3,8 @@ package com.lookout.borderpatrol.server
 import java.net.URL
 
 import com.lookout.borderpatrol.{Manager, LoginManager, ServiceIdentifier}
-import com.lookout.borderpatrol.sessionx.SecretStores.InMemorySecretStore
-import com.lookout.borderpatrol.sessionx.SessionStores.MemcachedStore
-import com.lookout.borderpatrol.sessionx.SessionStores.InMemoryStore
+import com.lookout.borderpatrol.sessionx.SecretStores._
+import com.lookout.borderpatrol.sessionx.SessionStores._
 import com.lookout.borderpatrol.sessionx._
 import com.twitter.finagle.MemcachedClient
 import com.twitter.finagle.httpx.path.Path
@@ -56,14 +55,14 @@ object Config {
 
   // Encoder/Decoder for SessionStore
   implicit val encodeSessionStore: Encoder[SessionStore] = Encoder.instance {
-    case x: InMemoryStore.type => Json.obj(("type", Json.string(x.getClass.getSimpleName)))
-    case y: MemcachedStore =>  Json.obj(("type", Json.string(y.getClass.getSimpleName)),
+    case x: InMemoryStore.type => Json.obj(("type", Json.string("InMemoryStore")))
+    case y: MemcachedStore =>  Json.obj(("type", Json.string("MemcachedStore")),
       ("hosts", Json.string("localhost:123")))
     case other => Json.string("Error: " + other.toString)
   }
   implicit val decodeSessionStore: Decoder[SessionStore] = Decoder.instance { c =>
     c.downField("type").as[String].flatMap {
-      case "InMemoryStore$" => Xor.right(defaultSessionStore)
+      case "InMemoryStore" => Xor.right(defaultSessionStore)
       case "MemcachedStore"   => c.downField("hosts").as[String].map(hosts =>
         SessionStores.MemcachedStore(MemcachedClient.newRichClient(hosts)))
       case other  => Xor.left(DecodingFailure(s"Invalid sessionStore: $other", c.history))
@@ -73,11 +72,15 @@ object Config {
   // Encoder/Decoder for SecretStore
   implicit val encodeSecretStore: Encoder[SecretStoreApi] = Encoder.instance {
     case x: InMemorySecretStore => Json.obj(("type", Json.string(x.getClass.getSimpleName)))
+    case y: ConsulSecretStore => Json.obj(("type", Json.string(y.getClass.getSimpleName)),
+      ("hosts", Json.string(s"${y.consul.host}:${y.consul.port}")))
     case other => Json.string("Error: " + other.toString)
   }
   implicit val decodeSecretStore: Decoder[SecretStoreApi] = Decoder.instance { c =>
     c.downField("type").as[String].flatMap {
       case "InMemorySecretStore" => Xor.right(defaultSecretStore)
+      case "ConsulSecretStore" => c.downField("hosts").as[String].map(hosts =>
+        ConsulSecretStore(new URL("http://" + hosts)))
       case other  => Xor.left(DecodingFailure(s"Invalid secretStore: $other", c.history))
     }
   }
