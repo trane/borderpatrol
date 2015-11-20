@@ -71,13 +71,12 @@ class ConfigSpec extends BorderPatrolSuite {
   it should "uphold encoding/decoding ServerConfig" in {
     def encodeDecode(config: ServerConfig) : ServerConfig = {
       val encoded = config.asJson
-      println("***MVK: encoded = " + encoded)
       decode[ServerConfig](encoded.toString()) match {
         case Xor.Right(a) => a
         case Xor.Left(b) => ServerConfig(defaultSecretStore, defaultSessionStore, Set(), Set(), Set(), Set())
       }
     }
-    //verifyServerConfig(encodeDecode(serverConfig), serverConfig)
+    verifyServerConfig(encodeDecode(serverConfig), serverConfig)
     verifyServerConfig(encodeDecode(serverConfig1), serverConfig1)
   }
 
