@@ -7,7 +7,7 @@ import com.lookout.borderpatrol.auth.keymaster.Keymaster._
 import com.lookout.borderpatrol.auth._
 import com.lookout.borderpatrol.sessionx.SessionStores.MemcachedStore
 import com.lookout.borderpatrol.sessionx._
-import com.lookout.borderpatrol.{LoginManager, Manager, ServiceMatcher, ServiceIdentifier}
+import com.lookout.borderpatrol.{ServiceIdentifier, LoginManager, InternalProtoManager, Manager, ServiceMatcher}
 import com.lookout.borderpatrol.test._
 import com.lookout.borderpatrol.util.Combinators.tap
 import com.twitter.finagle.memcached.GetResult
@@ -26,8 +26,9 @@ class KeymasterSpec extends BorderPatrolSuite  {
   //  Managers
   val keymasterIdManager = Manager("keymaster", Path("/identityProvider"), urls)
   val keymasterAccessManager = Manager("keymaster", Path("/accessIssuer"), urls)
-  val checkpointLoginManager = LoginManager("checkpoint", Path("/check"), urls, Path("/loginConfirm"),
-    keymasterIdManager, keymasterAccessManager)
+  val internalProtoManager = InternalProtoManager(Path("/loginConfirm"), Path("/check"), urls)
+  val checkpointLoginManager = LoginManager("checkpoint", keymasterIdManager, keymasterAccessManager,
+    internalProtoManager)
 
   // sids
   val one = ServiceIdentifier("one", urls, Path("/ent"), "enterprise", checkpointLoginManager)
@@ -96,7 +97,8 @@ class KeymasterSpec extends BorderPatrolSuite  {
     }}
 
     // Execute
-    val output = KeymasterIdentityProvider(testIdentityManagerBinder)(KeymasterIdentifyReq(Credential("foo", "bar", one)))
+    val output = KeymasterIdentityProvider(testIdentityManagerBinder)(
+      KeymasterIdentifyReq(Credential("foo", "bar", one)))
 
     // Validate
     Await.result(output).identity should be (Id(tokens))
@@ -106,7 +108,8 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val testIdentityManagerBinder = mkTestManagerBinder { request => Response(Status.NotFound).toFuture }
 
     // Execute
-    val output = KeymasterIdentityProvider(testIdentityManagerBinder)(KeymasterIdentifyReq(Credential("foo", "bar", one)))
+    val output = KeymasterIdentityProvider(testIdentityManagerBinder)(
+      KeymasterIdentifyReq(Credential("foo", "bar", one)))
 
     // Validate
     val caught = the [IdentityProviderError] thrownBy {
@@ -116,7 +119,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     caught.status should be (Status.NotFound)
   }
 
-  it should "propagate the failure parsing the response from Keymaster service as an IdentityProviderError exception" in {
+  it should "propagate the failure parsing the resp from Keymaster service as an IdentityProviderError exception" in {
     val testIdentityManagerBinder = mkTestManagerBinder {
       request => tap(Response(Status.Ok))(res => {
         res.contentString = """{"key":"data"}"""
@@ -125,7 +128,8 @@ class KeymasterSpec extends BorderPatrolSuite  {
     }
 
     // Execute
-    val output = KeymasterIdentityProvider(testIdentityManagerBinder)(KeymasterIdentifyReq(Credential("foo", "bar", one)))
+    val output = KeymasterIdentityProvider(testIdentityManagerBinder)(
+      KeymasterIdentifyReq(Credential("foo", "bar", one)))
 
     // Validate
     val caught = the [IdentityProviderError] thrownBy {
@@ -235,7 +239,8 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val sessionId = sessionid.untagged
 
     // Execute
-    val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore)(KeymasterAccessReq(Id(tokens2), one, sessionId))
+    val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore)(
+      KeymasterAccessReq(Id(tokens2), one, sessionId))
 
     // Validate
     Await.result(output).access.access should be (serviceToken2)
@@ -253,7 +258,8 @@ class KeymasterSpec extends BorderPatrolSuite  {
     sessionStore.update[Tokens](Session(sessionId, tokens))
 
     // Execute
-    val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore)(KeymasterAccessReq(Id(tokens), one, sessionId))
+    val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore)(
+      KeymasterAccessReq(Id(tokens), one, sessionId))
 
     // Validate
     Await.result(output).access.access should be (serviceToken2)
@@ -266,7 +272,8 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val sessionId = sessionid.untagged
 
     // Execute
-    val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore)(KeymasterAccessReq(Id(tokens), one, sessionId))
+    val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore)(
+      KeymasterAccessReq(Id(tokens), one, sessionId))
 
     // Validate
     val caught = the [AccessIssuerError] thrownBy {
@@ -276,7 +283,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     caught.status should be (Status.NotFound)
   }
 
-  it should "propagate the failure to parse response content from Keymaster service, as AccessIssuerError exception" in {
+  it should "propagate the failure to parse resp content from Keymaster service, as AccessIssuerError exception" in {
     val testAccessManagerBinder = mkTestManagerBinder {
       request => tap(Response(Status.Ok))(res => {
         res.contentString = "invalid string"
@@ -286,7 +293,8 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val sessionId = sessionid.untagged
 
     // Execute
-    val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore)(KeymasterAccessReq(Id(tokens), one, sessionId))
+    val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore)(
+      KeymasterAccessReq(Id(tokens), one, sessionId))
 
     // Validate
     val caught = the [AccessIssuerError] thrownBy {
@@ -305,7 +313,8 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val sessionId = sessionid.untagged
 
     // Execute
-    val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore)(KeymasterAccessReq(Id(tokens), one, sessionId))
+    val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore)(
+      KeymasterAccessReq(Id(tokens), one, sessionId))
 
     // Validate
     val caught = the [AccessDenied] thrownBy {
@@ -458,7 +467,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
   it should "succeed and invoke the GET on loginManager" in {
     val server = com.twitter.finagle.Httpx.serve(
       "localhost:5678", mkTestService[Request, Response]{request =>
-        if (request.path.contains(checkpointLoginManager.path.toString)) Response(Status.Ok).toFuture
+        if (request.path.contains(checkpointLoginManager.protoManager.redirectLocation("lookout.com"))) Response(Status.Ok).toFuture
         else Response(Status.BadRequest).toFuture
       })
 
@@ -467,7 +476,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
       val sessionId = sessionid.untagged
 
       // Login manager request
-      val loginRequest = req("enterprise", checkpointLoginManager.path.toString,
+      val loginRequest = req("enterprise", checkpointLoginManager.protoManager.redirectLocation("lookout.com"),
         ("username" -> "foo"), ("password" -> "bar"))
 
       // Original request
@@ -501,8 +510,8 @@ class KeymasterSpec extends BorderPatrolSuite  {
       val sessionId = sessionid.untagged
 
       // Login manager request
-      val loginRequest = Request(Method.Post, Request.queryString(checkpointLoginManager.loginPath.toString,
-        ("username" -> "foo"), ("password" -> "bar")))
+      val loginRequest = Request(Method.Post, Request.queryString(checkpointLoginManager.protoManager.redirectLocation(
+        "lookout.com"), ("username" -> "foo"), ("password" -> "bar")))
 
       // Original request
       val origReq = req("enterprise", "/ent", ("fake" -> "drake"))
@@ -542,7 +551,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
       sessionStore.update[Tokens](Session(sessionId, tokens))
 
       // Execute
-      val output = (keymasterAccessIssuerChain(sessionStore)(store))(
+      val output = keymasterAccessIssuerChain(sessionStore)(store)(
         SessionIdRequest(ServiceRequest(origReq, one), sessionId))
 
       // Validate

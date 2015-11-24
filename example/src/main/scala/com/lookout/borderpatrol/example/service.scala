@@ -30,7 +30,6 @@ import com.lookout.borderpatrol.sessionx._
 import com.lookout.borderpatrol.util.Combinators._
 import com.twitter.io.Buf
 import com.twitter.finagle.httpx.{Method, Request, Response, Status}
-import com.twitter.finagle.httpx.path._
 import com.twitter.finagle.httpx.service.RoutingService
 import com.twitter.finagle.Service
 import com.twitter.util.Future
@@ -119,12 +118,10 @@ object MockService {
     val keymasterIdManager = config.findIdentityManager("keymaster")
     val keymasterAccessManager = config.findAccessManager("keymaster")
 
-    val mockKeymasterPathMap = Map(keymasterAccessManager.path -> mockKeymasterAccessIssuerService,
-      keymasterIdManager.path -> mockKeymasterIdentityService,
-      checkpointLoginManager.path -> mockCheckpointService)
-
-    RoutingService.byMethodAndPathObject {
-      case _ -> path if mockKeymasterPathMap.contains(path) => mockKeymasterPathMap(path)
+    RoutingService.byPathObject {
+      case keymasterAccessManager.path => mockKeymasterAccessIssuerService
+      case keymasterIdManager.path => mockKeymasterIdentityService
+      case path if checkpointLoginManager.protoManager.getOwnedPaths.contains(path) => mockCheckpointService
       case _ => mockUpstreamService
     }
   }

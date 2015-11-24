@@ -15,8 +15,9 @@ class BinderSpec extends BorderPatrolSuite {
   //  Managers
   val keymasterIdManager = Manager("keymaster", Path("/identityProvider"), urls)
   val keymasterAccessManager = Manager("keymaster", Path("/accessIssuer"), urls)
-  val checkpointLoginManager = LoginManager("checkpoint", Path("/check"), urls, Path("/loginConfirm"),
-    keymasterIdManager, keymasterAccessManager)
+  val internalProtoManager = InternalProtoManager(Path("/loginConfirm"), Path("/check"), urls)
+  val checkpointLoginManager = LoginManager("checkpoint", keymasterIdManager, keymasterAccessManager,
+    internalProtoManager)
 
   // sids
   val one = ServiceIdentifier("one", urls, Path("/ent"), "enterprise", checkpointLoginManager)
@@ -51,7 +52,8 @@ class BinderSpec extends BorderPatrolSuite {
     val server = com.twitter.finagle.Httpx.serve(
       "localhost:5679", mkTestService[Request]{_ => Response(Status.NotAcceptable).toFuture })
     try {
-      val bindReq = BindRequest[LoginManager](checkpointLoginManager, req(checkpointLoginManager.path.toString))
+      val bindReq = BindRequest[LoginManager](checkpointLoginManager,
+        req(checkpointLoginManager.protoManager.redirectLocation("lookout.com")))
       val output = LoginManagerBinder(bindReq)
       Await.result(output).status should be(Status.NotAcceptable)
       /* Make sure client is cached in the cache */

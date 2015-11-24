@@ -2,7 +2,7 @@ package com.lookout.borderpatrol.server
 
 import java.net.URL
 
-import com.lookout.borderpatrol.{Manager, LoginManager, ServiceIdentifier}
+import com.lookout.borderpatrol._
 import com.lookout.borderpatrol.sessionx.SecretStores._
 import com.lookout.borderpatrol.sessionx.SessionStores._
 import com.lookout.borderpatrol.sessionx._
@@ -86,6 +86,45 @@ object Config {
   }
 
   /**
+   * Encoder/Decoder for protoManager
+   *
+   * Note that Decoder for protoManager does not work standalone, it can be only used
+   * while decoding the entire ServerConfig due to dependency issues
+   */
+  implicit val encodeProtoManager: Encoder[ProtoManager] = Encoder.instance {
+    case bpm: InternalProtoManager => Json.fromFields(Seq(
+      ("type", Json.string("Internal")),
+      ("loginConfirm", bpm.loginConfirm.asJson),
+      ("path", bpm.path.asJson),
+      ("hosts", bpm.hsts.asJson)))
+    case opm: OAuth2CodeProtoManager => Json.fromFields(Seq(
+      ("type", Json.string("OAuth2Code")),
+      ("loginConfirm", opm.loginConfirm.asJson),
+      ("authorizeUrl", opm.authorizeUrl.asJson),
+      ("tokenUrl", opm.tokenUrl.asJson),
+      ("clientId", opm.clientId.asJson),
+      ("clientSecret", opm.clientSecret.asJson)))
+  }
+  implicit val decodeProtoManager: Decoder[ProtoManager] = Decoder.instance { c =>
+    c.downField("type").as[String].flatMap {
+      case "Internal" =>
+        for {
+          loginConfirm <- c.downField("loginConfirm").as[Path]
+          path <- c.downField("path").as[Path]
+          hosts <- c.downField("hosts").as[Set[URL]]
+        } yield InternalProtoManager(loginConfirm, path, hosts)
+      case "OAuth2Code" =>
+        for {
+          loginConfirm <- c.downField("loginConfirm").as[Path]
+          authorizeUrl <- c.downField("authorizeUrl").as[URL]
+          tokenUrl <- c.downField("tokenUrl").as[URL]
+          clientId <- c.downField("clientId").as[String]
+          clientSecret <- c.downField("clientSecret").as[String]
+        } yield OAuth2CodeProtoManager(loginConfirm, authorizeUrl, tokenUrl, clientId, clientSecret)
+    }
+  }
+
+  /**
    * Encoder/Decoder for LoginManager
    *
    * Note that Decoder for LoginManager does not work standalone, it can be only used
@@ -94,19 +133,14 @@ object Config {
   implicit val encodeLoginManager: Encoder[LoginManager] = Encoder.instance { lm =>
     Json.fromFields(Seq(
       ("name", lm.name.asJson),
-      ("path", lm.path.asJson),
-      ("hosts", lm.hosts.asJson),
-      ("loginPath", lm.loginPath.asJson),
       ("identityManager", lm.identityManager.name.asJson),
-      ("accessManager", lm.accessManager.name.asJson)))
+      ("accessManager", lm.accessManager.name.asJson),
+      ("proto", lm.protoManager.asJson)))
   }
   def decodeLoginManager(ims: Map[String, Manager], ams: Map[String, Manager]): Decoder[LoginManager] =
     Decoder.instance { c =>
       for {
         name <- c.downField("name").as[String]
-        path <- c.downField("path").as[Path]
-        hosts <- c.downField("hosts").as[Set[URL]]
-        loginPath <- c.downField("loginPath").as[Path]
         ipName <- c.downField("identityManager").as[String]
         im <- Xor.fromOption(ims.get(ipName),
           DecodingFailure(s"No IdentityManager $ipName found: ", c.history))
@@ -114,7 +148,8 @@ object Config {
         am <- Xor.fromOption(ams.get(apName),
           DecodingFailure(s"No AccessManager $apName found: ", c.history)
         )
-      } yield LoginManager(name, path, hosts, loginPath, im, am)
+        pm <- c.downField("proto").as[ProtoManager]
+      } yield LoginManager(name, im, am, pm)
     }
 
   // Encoder/Decoder for ServiceIdentifier
@@ -191,6 +226,18 @@ object Config {
   }
 
   /**
+   * Validate ProtoManager configuration
+   * @param field
+   * @param lmName
+   * @param protoManager
+   */
+  def validateProtoManagerConfig(field: String, lmName: String, protoManager: ProtoManager): Unit = {
+    protoManager match {
+      case ipm: InternalProtoManager => validateHostsConfig(field, lmName, protoManager.hosts)
+      case opm: OAuth2CodeProtoManager =>
+    }
+  }
+  /**
    * Validate Login Manager configurartion
    * @param field
    * @param loginManagers
@@ -201,7 +248,7 @@ object Config {
       throw new DuplicateConfigError("name", field)
 
     // Make sure hosts in LoginManager have http or https protocol
-    loginManagers.map(lm => validateHostsConfig(field, lm.name, lm.hosts))
+    loginManagers.map(lm => validateProtoManagerConfig(field, lm.name, lm.protoManager))
   }
 
   /**
@@ -248,7 +295,8 @@ object Config {
   def readServerConfig(filename: String) : ServerConfig = {
     decode[ServerConfig](Source.fromFile(filename).mkString) match {
       case Xor.Right(a) => validate(a); a
-      case Xor.Left(b) => throw ConfigError("Failed to decode following fields: " +
+      case Xor.Left(b) =>
+        throw ConfigError("Failed to decode following fields: " +
         (serverConfigFields.filter(b.getMessage contains _).reduceOption((a, b) => s"$a, $b") getOrElse "unknown"))
     }
   }

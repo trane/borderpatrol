@@ -4,10 +4,9 @@ import java.net.URL
 
 import com.lookout.borderpatrol.sessionx._
 import com.lookout.borderpatrol.test.BorderPatrolSuite
-import com.lookout.borderpatrol.{LoginManager, Manager, ServiceMatcher, ServiceIdentifier}
+import com.lookout.borderpatrol._
 import com.twitter.finagle.MemcachedClient
 import com.twitter.finagle.httpx.path.Path
-import org.scalatest.{OptionValues, TryValues, Matchers, FlatSpec}
 import cats.data.Xor
 import io.circe._
 import io.circe.jawn._
@@ -22,13 +21,17 @@ class ConfigSpec extends BorderPatrolSuite {
   val urls = Set(new URL("http://localhost:8081"))
   val keymasterIdManager = Manager("keymaster", Path("/identityProvider"), urls)
   val keymasterAccessManager = Manager("keymaster", Path("/accessIssuer"), urls)
-  val checkpointLoginManager = LoginManager("checkpoint", Path("/check"), urls, Path("/loginConfirm"),
-    keymasterIdManager, keymasterAccessManager)
+  val internalProtoManager = InternalProtoManager(Path("/loginConfirm"), Path("/check"), urls)
+  val checkpointLoginManager = LoginManager("checkpoint", keymasterIdManager, keymasterAccessManager,
+    internalProtoManager)
 
   val basicIdManager = Manager("basic", Path("/signin"), urls)
   val basicAccessManager = Manager("basic", Path("/accessin"), urls)
-  val umbrellaLoginManager = LoginManager("umbrella", Path("/umb"), urls, Path("/loginIt"),
-    keymasterIdManager, keymasterAccessManager)
+  val oauth2CodeProtoManager = OAuth2CodeProtoManager(Path("/loginConfirm"),
+    new URL("http://example.com/authorizeUrl"),
+    new URL("http://example.com/tokenUrl"), "clientId", "clientSecret")
+  val umbrellaLoginManager = LoginManager("umbrella", keymasterIdManager, keymasterAccessManager,
+    oauth2CodeProtoManager)
 
   val one = ServiceIdentifier("one", urls, Path("/ent"), "enterprise", checkpointLoginManager)
   val two = ServiceIdentifier("two", urls, Path("/api"), "api", umbrellaLoginManager)
@@ -263,8 +266,8 @@ class ConfigSpec extends BorderPatrolSuite {
       ("sessionStore", defaultSessionStore.asInstanceOf[SessionStore].asJson),
       ("serviceIdentifiers", sids.asJson),
       ("loginManagers", Set(checkpointLoginManager, umbrellaLoginManager,
-        LoginManager("checkpoint", Path("/some"), urls, Path("/some"),
-          keymasterIdManager, keymasterAccessManager)).asJson),
+        LoginManager("checkpoint", keymasterIdManager, keymasterAccessManager,
+          InternalProtoManager(Path("/some"), Path("/some"), urls))).asJson),
       ("identityManagers", Set(keymasterIdManager).asJson),
       ("accessManagers", Set(keymasterAccessManager).asJson)))
 

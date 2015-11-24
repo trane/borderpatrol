@@ -108,8 +108,8 @@ object Keymaster {
       extends Filter[SessionIdRequest, Response, SessionIdRequest, Response] {
     def apply(req: SessionIdRequest,
               service: Service[SessionIdRequest, Response]): Future[Response] =
-      (req.req.req.method, req.req.req.path) match {
-        case (Method.Post, loginPath) => service(req)
+      Path(req.req.req.path) match {
+        case req.req.serviceId.loginManager.protoManager.loginConfirm => service(req)
         case _ => binder(BindRequest(req.req.serviceId.loginManager, req.req.req))
       }
   }

@@ -3,7 +3,7 @@ package com.lookout.borderpatrol.server
 import java.net.URL
 
 import com.lookout.borderpatrol.sessionx._
-import com.lookout.borderpatrol.{ServiceMatcher, ServiceIdentifier, LoginManager, Manager}
+import com.lookout.borderpatrol._
 import com.lookout.borderpatrol.test.BorderPatrolSuite
 import com.twitter.finagle.httpx.path.Path
 
@@ -15,8 +15,9 @@ class ServicesSpec extends BorderPatrolSuite {
   //  Managers
   val keymasterIdManager = Manager("keymaster", Path("/identityProvider"), urls)
   val keymasterAccessManager = Manager("keymaster", Path("/accessIssuer"), urls)
-  val checkpointLoginManager = LoginManager("checkpoint", Path("/check"), urls, Path("/loginConfirm"),
-    keymasterIdManager, keymasterAccessManager)
+  val internalProtoManager = InternalProtoManager(Path("/loginConfirm"), Path("/check"), urls)
+  val checkpointLoginManager = LoginManager("checkpoint", keymasterIdManager, keymasterAccessManager,
+    internalProtoManager)
 
   // sids
   val one = ServiceIdentifier("one", urls, Path("/ent"), "enterprise", checkpointLoginManager)

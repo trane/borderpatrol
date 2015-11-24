@@ -2,7 +2,7 @@ package com.lookout.borderpatrol.test
 
 import java.net.URL
 
-import com.lookout.borderpatrol.{LoginManager, Manager, ServiceIdentifier, ServiceMatcher}
+import com.lookout.borderpatrol._
 import com.twitter.finagle.httpx.{RequestBuilder, Request}
 import com.twitter.finagle.httpx.path.Path
 
@@ -11,12 +11,17 @@ class ServiceMatcherSpec extends BorderPatrolSuite {
   val urls = Set(new URL("http://localhost:8081"))
   val keymasterIdManager = Manager("keymaster", Path("/identityProvider"), urls)
   val keymasterAccessManager = Manager("keymaster", Path("/accessIssuer"), urls)
-  val checkpointLoginManager = LoginManager("checkpoint", Path("/check"), urls, Path("/loginConfirm"),
-    keymasterIdManager, keymasterAccessManager)
+  val internalProtoManager = InternalProtoManager(Path("/loginConfirm"), Path("/check"), urls)
+  val checkpointLoginManager = LoginManager("checkpoint", keymasterIdManager, keymasterAccessManager,
+    internalProtoManager)
+
   val basicIdManager = Manager("basic", Path("/signin"), urls)
   val basicAccessManager = Manager("basic", Path("/accessin"), urls)
-  val umbrellaLoginManager = LoginManager("umbrella", Path("/umb"), urls, Path("/loginIt"),
-    keymasterIdManager, keymasterAccessManager)
+  val oauth2CodeProtoManager = OAuth2CodeProtoManager(Path("/loginConfirm"),
+    new URL("http://example.com/authorizeUrl"),
+    new URL("http://example.com/tokenUrl"), "clientId", "clientSecret")
+  val umbrellaLoginManager = LoginManager("umbrella", keymasterIdManager, keymasterAccessManager,
+    oauth2CodeProtoManager)
 
   val one = ServiceIdentifier("one", urls, Path("/ent"), "enterprise", checkpointLoginManager)
   val two = ServiceIdentifier("two", urls, Path("/api"), "api", umbrellaLoginManager)
