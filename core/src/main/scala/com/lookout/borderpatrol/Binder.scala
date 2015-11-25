@@ -2,10 +2,9 @@ package com.lookout.borderpatrol
 
 import java.net.URL
 
-import com.twitter.finagle.util.InetSocketAddressUtil
 import com.twitter.finagle.{Httpx, Service}
-import com.twitter.finagle.httpx.{Status, Response, Request}
-import com.twitter.util.{Await, Future}
+import com.twitter.finagle.httpx.{Response, Request}
+import com.twitter.util.Future
 import scala.collection.mutable
 
 /**

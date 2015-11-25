@@ -13,7 +13,7 @@ import com.lookout.borderpatrol.util.Combinators.tap
 import com.twitter.finagle.memcached.GetResult
 import com.twitter.finagle.{memcached, Service}
 import com.twitter.finagle.httpx.path.Path
-import com.twitter.finagle.httpx.{Method, Request, Status, Response}
+import com.twitter.finagle.httpx._
 import com.twitter.util.{Await, Future}
 
 
@@ -37,7 +37,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
 
   // Request helper
   def req(subdomain: String, path: String, params: Tuple2[String, String]*): Request =
-    Request(s"http://${subdomain + "."}example.com${path.toString}", params:_*)
+    RequestBuilder().url(s"http://${subdomain + "."}example.com${Request.queryString(path, params:_*)}").buildGet()
 
   //  Tokens
   val serviceToken2 = ServiceToken("SomeServiceTokenData2")
@@ -408,7 +408,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
 
   behavior of "KeymasterMethodMuxLoginFilter"
 
-  it should "succeed and invoke the GET on keymaster service" in {
+  it should "succeed and invoke the method on loginManager" in {
     val testService = mkTestService[SessionIdRequest, Response] { _ => fail("Should not get here") }
     val testLoginManagerBinder = mkTestLoginManagerBinder { _ => Response(Status.Ok).toFuture }
 
@@ -416,7 +416,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val sessionId = sessionid.untagged
 
     // Create request
-    val request = Request(Method.Get, "/ent")
+    val request = req("enterprise", "/check")
 
     // Execute
     val output = (KeymasterMethodMuxLoginFilter(testLoginManagerBinder) andThen testService)(
@@ -426,7 +426,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     Await.result(output).status should be (Status.Ok)
   }
 
-  it should "succeed and invoke the POST on upstream service" in {
+  it should "succeed and invoke the method on keymaster service" in {
     val testService = mkTestService[SessionIdRequest, Response] { _ => Response(Status.Ok).toFuture }
     val testLoginManagerBinder = mkTestLoginManagerBinder { _ => fail("Should not get here") }
 
@@ -434,7 +434,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val sessionId = sessionid.untagged
 
     // Create request
-    val request = Request(Method.Post, "/ent")
+    val request = Request(Method.Post, "/loginConfirm")
 
     // Execute
     val output = (KeymasterMethodMuxLoginFilter(testLoginManagerBinder) andThen testService)(
@@ -467,7 +467,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
   it should "succeed and invoke the GET on loginManager" in {
     val server = com.twitter.finagle.Httpx.serve(
       "localhost:5678", mkTestService[Request, Response]{request =>
-        if (request.path.contains(checkpointLoginManager.protoManager.redirectLocation("lookout.com"))) Response(Status.Ok).toFuture
+        if (request.path.contains("check")) Response(Status.Ok).toFuture
         else Response(Status.BadRequest).toFuture
       })
 
@@ -476,7 +476,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
       val sessionId = sessionid.untagged
 
       // Login manager request
-      val loginRequest = req("enterprise", checkpointLoginManager.protoManager.redirectLocation("lookout.com"),
+      val loginRequest = req("enterprise", "/check",
         ("username" -> "foo"), ("password" -> "bar"))
 
       // Original request
@@ -510,8 +510,8 @@ class KeymasterSpec extends BorderPatrolSuite  {
       val sessionId = sessionid.untagged
 
       // Login manager request
-      val loginRequest = Request(Method.Post, Request.queryString(checkpointLoginManager.protoManager.redirectLocation(
-        "lookout.com"), ("username" -> "foo"), ("password" -> "bar")))
+      val loginRequest = req("enterprise", "/loginConfirm",
+        ("username" -> "foo"), ("password" -> "bar"))
 
       // Original request
       val origReq = req("enterprise", "/ent", ("fake" -> "drake"))

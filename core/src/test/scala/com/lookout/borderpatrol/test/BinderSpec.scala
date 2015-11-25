@@ -53,7 +53,7 @@ class BinderSpec extends BorderPatrolSuite {
       "localhost:5679", mkTestService[Request]{_ => Response(Status.NotAcceptable).toFuture })
     try {
       val bindReq = BindRequest[LoginManager](checkpointLoginManager,
-        req(checkpointLoginManager.protoManager.redirectLocation("lookout.com")))
+        req(checkpointLoginManager.protoManager.redirectLocation(None)))
       val output = LoginManagerBinder(bindReq)
       Await.result(output).status should be(Status.NotAcceptable)
       /* Make sure client is cached in the cache */

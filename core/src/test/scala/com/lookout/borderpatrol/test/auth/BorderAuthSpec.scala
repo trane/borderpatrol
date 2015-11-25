@@ -2,12 +2,11 @@ package com.lookout.borderpatrol.auth
 
 import java.net.URL
 
-import com.lookout.borderpatrol.{ServiceIdentifier, LoginManager, InternalProtoManager, Manager, ServiceMatcher}
+import com.lookout.borderpatrol.{ServiceIdentifier, ServiceMatcher}
+import com.lookout.borderpatrol.{LoginManager, InternalProtoManager, Manager, OAuth2CodeProtoManager}
 import com.lookout.borderpatrol.sessionx.SessionStores.MemcachedStore
 import com.lookout.borderpatrol.sessionx._
-import com.lookout.borderpatrol.test._
 import com.lookout.borderpatrol.test.BorderPatrolSuite
-import com.lookout.borderpatrol.test.sessionx
 import com.twitter.finagle.Service
 import com.twitter.finagle.httpx._
 import com.twitter.finagle.httpx.path.Path
@@ -28,10 +27,16 @@ class BorderAuthSpec extends BorderPatrolSuite  {
   val internalProtoManager = InternalProtoManager(Path("/loginConfirm"), Path("/check"), urls)
   val checkpointLoginManager = LoginManager("checkpoint", keymasterIdManager, keymasterAccessManager,
     internalProtoManager)
+  val oauth2CodeProtoManager = OAuth2CodeProtoManager(Path("/loginConfirm"),
+    new URL("http://example.com/authorizeUrl"),
+    new URL("http://example.com/tokenUrl"), "clientId", "clientSecret")
+  val umbrellaLoginManager = LoginManager("umbrella", keymasterIdManager, keymasterAccessManager,
+    oauth2CodeProtoManager)
 
   // sids
   val one = ServiceIdentifier("one", urls, Path("/ent"), "enterprise", checkpointLoginManager)
-  val serviceMatcher = ServiceMatcher(Set(one))
+  val two = ServiceIdentifier("two", urls, Path("/ftp"), "sky", umbrellaLoginManager)
+  val serviceMatcher = ServiceMatcher(Set(one, two))
   val sessionStore = SessionStores.InMemoryStore
 
   // Request helper
@@ -123,9 +128,40 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     // Validate
     Await.result(output).status should be (Status.Found)
     Await.result(output).location should be equals(
-      one.loginManager.protoManager.redirectLocation("lookout.com"))
+      one.loginManager.protoManager.redirectLocation(None))
     val sessionData = sessionDataFromResponse(Await.result(output))
     Await.result(sessionData).path should be equals(request.path)
+  }
+
+  it should "return redirect to login URI, if no SessionId present in the SessionIdRequest for OAuth2Code" in {
+
+    // Create request
+    val request = req("sky", "/ftp")
+
+    // Execute
+    val output = (SessionIdFilter(sessionStore) andThen sessionIdFilterTestService)(ServiceRequest(request, two))
+
+    // Validate
+    Await.result(output).status should be (Status.Found)
+    Await.result(output).location should be equals(
+      two.loginManager.protoManager.redirectLocation(request.host))
+    val sessionData = sessionDataFromResponse(Await.result(output))
+    Await.result(sessionData).path should be equals(request.path)
+  }
+
+  it should "throw an exception if SessionId and Host are not present in the HTTP Request for OAuth2Code" in {
+
+    // Create request
+    val request = Request("/ftp")
+
+    // Execute
+    val output = (SessionIdFilter(sessionStore) andThen sessionIdFilterTestService)(ServiceRequest(request, two))
+
+    // Validate
+    val caught = the [Exception] thrownBy {
+      Await.result(output)
+    }
+    caught.getMessage should equal ("Host not found in HTTP Request")
   }
 
   it should "propagate the error Status code returned by the upstream Service" in {
@@ -230,7 +266,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     // Verify
     Await.result(output).status should be (Status.Found)
     Await.result(output).location should be equals(
-      one.loginManager.protoManager.redirectLocation("lookout.com"))
+      one.loginManager.protoManager.redirectLocation(None))
     val returnedSessionId = SessionId.fromResponse(Await.result(output)).toFuture
     Await.result(returnedSessionId) should not equals(sessionId)
     val sessionData = sessionDataFromResponse(Await.result(output))

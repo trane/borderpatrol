@@ -17,7 +17,7 @@ class ServiceMatcherSpec extends BorderPatrolSuite {
 
   val basicIdManager = Manager("basic", Path("/signin"), urls)
   val basicAccessManager = Manager("basic", Path("/accessin"), urls)
-  val oauth2CodeProtoManager = OAuth2CodeProtoManager(Path("/loginConfirm"),
+  val oauth2CodeProtoManager = OAuth2CodeProtoManager(Path("/loginIt"),
     new URL("http://example.com/authorizeUrl"),
     new URL("http://example.com/tokenUrl"), "clientId", "clientSecret")
   val umbrellaLoginManager = LoginManager("umbrella", keymasterIdManager, keymasterAccessManager,
@@ -55,7 +55,6 @@ class ServiceMatcherSpec extends BorderPatrolSuite {
     serviceMatcher.get(req("api", "/check")) should be(None)
     serviceMatcher.get(req("api", "/loginConfirm")) should be(None)
     serviceMatcher.get(req("api.testdomain", "/apis/test")).value should be(four)
-    serviceMatcher.get(req("api.testdomain", "/umb")).value should be(four)
     serviceMatcher.get(req("api.testdomain", "/loginIt")).value should be(four)
     serviceMatcher.get(req("api.testdomain", "/login")) should be(None)
   }
