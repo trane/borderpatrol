@@ -12,11 +12,27 @@
   "loginManagers": [
     {
       "name": "checkpoint",
-      "path": "/a",
       "identityManager": "keymaster",
       "accessManager": "keymaster",
-      "loginPath": "/signin",
-      "hosts": ["http://localhost:8081"]
+      "proto": {
+        "type": "Internal",
+        "loginConfirm": "/signin",
+        "path": "/a",
+        "hosts": ["http://localhost:8081"]
+      }
+    },
+    {
+      "name": "cascade",
+      "identityManager": "keymaster",
+      "accessManager": "keymaster",
+      "proto": {
+        "type": "OAuth2Code",
+        "loginConfirm": "/signin",
+        "authorizeUrl": "https://login.microsoftonline.com/8ed23968-6ed0-4923-8227-b9edb1a9b5fd/oauth2/authorize",
+        "tokenUrl": "https://login.microsoftonline.com/8ed23968-6ed0-4923-8227-b9edb1a9b5fd/oauth2/token",
+        "clientId": "d3a7f9b0-99cb-4a97-95ff-e2c9d910c46f",
+        "clientSecret": "OfimThKuL0pTHPqUu2NF2U/BZeEu4m17R7wynzZrHmo="
+      }
     }
   ],
   "secretStore": {
@@ -39,10 +55,10 @@
     },
     {
       "hosts": ["http://localhost:8081"],
-      "loginManager": "checkpoint",
-      "subdomain": "admin",
-      "path": "/admin",
-      "name": "admin"
+      "loginManager": "cascade",
+      "subdomain": "cascade",
+      "path": "/top",
+      "name": "cascade"
     }
   ]
 }

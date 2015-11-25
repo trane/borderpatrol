@@ -4,7 +4,7 @@ import com.lookout.borderpatrol.util.Combinators.tap
 import com.lookout.borderpatrol.{ServiceIdentifier, ServiceMatcher}
 import com.lookout.borderpatrol.sessionx._
 import com.twitter.finagle.httpx.path.Path
-import com.twitter.finagle.httpx.{Method, Status, Request, Response}
+import com.twitter.finagle.httpx.{Status, Request, Response}
 import com.twitter.finagle.{Service, Filter}
 import com.twitter.util.Future
 import scala.util.{Failure, Success}
@@ -55,7 +55,7 @@ case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStor
           session <- Session(req.req)
           _ <- store.update(session)
         } yield tap(Response(Status.Found)) { res =>
-          res.location = req.serviceId.loginManager.path.toString
+          res.location = req.serviceId.loginManager.protoManager.redirectLocation(req.req.host)
           res.addCookie(session.id.asCookie)
         }
     }
@@ -105,7 +105,7 @@ case class BorderService(identityProviderMap: Map[String, Service[SessionIdReque
     redirectTo(req.req.serviceId.path).toFuture
 
   def redirectToLogin(req: SessionIdRequest): Future[Response] =
-    redirectTo(req.req.serviceId.loginManager.path).toFuture
+    redirectTo(Path(req.req.serviceId.loginManager.protoManager.redirectLocation(req.req.req.host))).toFuture
 
   def apply(req: SessionIdRequest): Future[Response] =
     req.sessionId.tag match {
@@ -137,7 +137,7 @@ case class IdentityFilter[A : SessionDataEncoder](store: SessionStore)(implicit 
         s <- Session(req.req.req)
         _ <- store.update(s)
       } yield tap(Response(Status.Found)) { res =>
-          res.location = req.req.serviceId.loginManager.path.toString // set to login url
+          res.location = req.req.serviceId.loginManager.protoManager.redirectLocation(req.req.req.host)
           res.addCookie(s.id.asCookie) // add SessionId value as a Cookie
         }
     })
