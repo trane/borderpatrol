@@ -15,7 +15,7 @@ class BinderSpec extends BorderPatrolSuite {
   //  Managers
   val keymasterIdManager = Manager("keymaster", Path("/identityProvider"), urls)
   val keymasterAccessManager = Manager("keymaster", Path("/accessIssuer"), urls)
-  val internalProtoManager = InternalProtoManager(Path("/loginConfirm"), Path("/check"), urls)
+  val internalProtoManager = InternalAuthProtoManager(Path("/loginConfirm"), Path("/check"), urls)
   val checkpointLoginManager = LoginManager("checkpoint", keymasterIdManager, keymasterAccessManager,
     internalProtoManager)
 

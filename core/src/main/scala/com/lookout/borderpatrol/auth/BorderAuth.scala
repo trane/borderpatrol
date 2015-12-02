@@ -1,7 +1,8 @@
 package com.lookout.borderpatrol.auth
 
+import com.lookout.borderpatrol.Binder.{BindRequest, MBinder}
 import com.lookout.borderpatrol.util.Combinators.tap
-import com.lookout.borderpatrol.{ServiceIdentifier, ServiceMatcher}
+import com.lookout.borderpatrol.{LoginManager, ServiceIdentifier, ServiceMatcher}
 import com.lookout.borderpatrol.sessionx._
 import com.twitter.finagle.httpx.path.Path
 import com.twitter.finagle.httpx.{Status, Request, Response}
@@ -141,6 +142,38 @@ case class IdentityFilter[A : SessionDataEncoder](store: SessionStore)(implicit 
           res.addCookie(s.id.asCookie) // add SessionId value as a Cookie
         }
     })
+}
+
+/**
+ * Decodes the methods Get and Post differently
+ * - Get is directed to login form
+ * - Post processes the login credentials
+ *
+ * @param binder It binds to upstream login provider using the information passed in LoginManager
+ */
+case class LoginManagerFilter(binder: MBinder[LoginManager])
+    extends Filter[SessionIdRequest, Response, SessionIdRequest, Response] {
+  def apply(req: SessionIdRequest,
+            service: Service[SessionIdRequest, Response]): Future[Response] =
+    Path(req.req.req.path) match {
+      case req.req.serviceId.loginManager.protoManager.loginConfirm => service(req)
+      case _ => binder(BindRequest(req.req.serviceId.loginManager, req.req.req))
+    }
+}
+
+/**
+ * This filter acquires the access and then forwards the request to upstream service
+ *
+ * @param binder It binds to the upstream service endpoint using the info passed in ServiceIdentifier
+ */
+case class AccessFilter[A, B](binder: MBinder[ServiceIdentifier])
+  extends Filter[AccessIdRequest[A], Response, AccessRequest[A], AccessResponse[B]] {
+  def apply(req: AccessIdRequest[A],
+            accessService: Service[AccessRequest[A], AccessResponse[B]]): Future[Response] =
+    accessService(AccessRequest(req.id, req.req.req.serviceId, req.req.sessionId)).flatMap(accessResp =>
+      binder(BindRequest(req.req.req.serviceId,
+        tap(req.req.req.req) { r => r.headerMap.add("Auth-Token", accessResp.access.access.toString)}))
+    )
 }
 
 /**

@@ -2,10 +2,11 @@ package com.lookout.borderpatrol
 
 import java.net.URL
 
-import com.twitter.finagle.{Httpx, Service}
+import com.twitter.finagle.{ChannelWriteException, Httpx, Service}
 import com.twitter.finagle.httpx.{Response, Request}
 import com.twitter.util.Future
 import scala.collection.mutable
+import scala.util.{Failure, Success, Try}
 
 /**
  * Binder object defines methods and shells used to bind to upstream endpoints
@@ -84,4 +85,38 @@ object Binder {
   case object LoginManagerBinder extends MBinder[LoginManager]
   case object ManagerBinder extends MBinder[Manager]
   case object ServiceIdentifierBinder extends MBinder[ServiceIdentifier]
+}
+
+
+object BinderBase {
+  val cache: mutable.Map[String, Service[Request, Response]] =
+    mutable.Map.empty[String, Service[Request, Response]]
+
+  private[this] def client(name: String, urls: Set[URL]): Future[Service[Request, Response]] =
+    this.synchronized {
+      cache.getOrElse(name, {
+
+        // If its https, use TLS
+        val https = urls.filter(u => u.getProtocol == "https").nonEmpty
+        val hostname = urls.map(u => u.getHost).mkString
+
+        // Find CSV of host & ports
+        val hostAndPorts = urls.map(u => u.getAuthority).mkString(",")
+        util.Combinators.tap(
+          if (https) Httpx.client.withTls(hostname).newService(hostAndPorts)
+          else Httpx.newService(hostAndPorts)
+        )(cli => cache(name) = cli)
+      })
+    }.toFuture
+
+  def connect(name: String, urls: Set[URL], request: Request): Future[Response] = {
+    (for {
+      cl <- client(name, urls)
+      res <- cl.apply(request)
+    } yield res) handle {
+      case e => throw CommunicationError(s"${name} with ${e.getMessage}")
+    }
+  }
+
+  def get(name: String): Option[Service[Request, Response]] = cache.get(name)
 }

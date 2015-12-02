@@ -154,7 +154,8 @@ lazy val auth = project
     libraryDependencies ++= Seq(
       "io.circe" %% "circe-core" % circeVersion,
       "io.circe" %% "circe-generic" % circeVersion,
-      "io.circe" %% "circe-jawn" % circeVersion
+      "io.circe" %% "circe-jawn" % circeVersion,
+      "com.nimbusds" % "nimbus-jose-jwt" % "4.7"
     )
   )
   .dependsOn(core % "test->test;compile->compile")

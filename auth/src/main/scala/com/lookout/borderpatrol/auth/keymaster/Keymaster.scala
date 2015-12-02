@@ -2,17 +2,19 @@ package com.lookout.borderpatrol.auth.keymaster
 
 import com.lookout.borderpatrol.util.Combinators.tap
 import com.lookout.borderpatrol.sessionx._
-import com.lookout.borderpatrol._
+import com.lookout.borderpatrol.ServiceIdentifier
+import com.lookout.borderpatrol.{InternalAuthProtoManager, Manager, OAuth2CodeProtoManager}
 import com.lookout.borderpatrol.Binder._
 import com.lookout.borderpatrol.auth._
-import com.twitter.finagle.httpx.path.Path
 import com.twitter.finagle.{Filter, Service}
 import com.twitter.finagle.httpx._
 import com.twitter.util.Future
 
 
 object Keymaster {
-  case class Credential(email: String, password: String, serviceId: ServiceIdentifier)
+  import Tokens._
+  import KeymasterTransform._
+
   case class KeymasterIdentifyReq(credential: Credential) extends IdentifyRequest[Credential]
   case class KeymasterIdentifyRes(tokens: Tokens) extends IdentifyResponse[Tokens] {
     val identity = Identity(tokens)
@@ -29,19 +31,12 @@ object Keymaster {
   case class KeymasterIdentityProvider(binder: MBinder[Manager])
       extends IdentityProvider[Credential, Tokens] {
 
-    def api(cred: Credential): Request =
-      tap(Request(Method.Post,  cred.serviceId.loginManager.identityManager.path.toString))(req => {
-        req.contentType = "application/x-www-form-urlencoded"
-        req.contentString = Request.queryString(("e", cred.email), ("p", cred.password), ("s", cred.serviceId.name))
-          .drop(1) /* Drop '?' */
-      })
-
     /**
      * Sends credentials, if authenticated successfully will return a MasterToken otherwise a Future.exception
      */
     def apply(req: IdentifyRequest[Credential]): Future[IdentifyResponse[Tokens]] =
       //  Authenticate user by the Keymaster
-      binder(BindRequest(req.credential.serviceId.loginManager.identityManager, api(req.credential)))
+      binder(BindRequest(req.credential.serviceId.loginManager.identityManager, req.credential.toRequest))
         .flatMap(res => res.status match {
         //  Parse for Tokens if Status.Ok
         case Status.Ok =>
@@ -52,7 +47,7 @@ object Keymaster {
           )
         //  Preserve Response Status code by throwing AccessDenied exceptions
         case _ => Future.exception(IdentityProviderError(res.status,
-          s"Invalid credentials for user ${req.credential.email}"))
+          s"Invalid credentials for user ${req.credential.uniqueId}"))
       })
   }
 
@@ -67,51 +62,32 @@ object Keymaster {
   case class KeymasterPostLoginFilter(store: SessionStore)(implicit secretStoreApi: SecretStoreApi)
       extends Filter[SessionIdRequest, Response, IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
 
-    def createIdentifyReq(req: SessionIdRequest): Option[IdentifyRequest[Credential]] =
-      for {
-        u <- req.req.req.params.get("username")
-        p <- req.req.req.params.get("password")
-      } yield KeymasterIdentifyReq(Credential(u, p, req.req.serviceId))
-
     /**
      * Grab the original request from the session store, otherwise just send them to the default location of '/'
      */
-    def getRequestFromSessionStore(id: SessionId): Future[Request] =
-      store.get[Request](id).flatMap(_ match {
+    def requestFromSessionStore(id: SessionId): Future[Request] =
+      store.get[Request](id).flatMap {
         case Some(session) => Future.value(session.data)
         case None => Future.exception(OriginalRequestNotFound(s"no request stored for $id"))
-      })
+      }
 
     def apply(req: SessionIdRequest,
-              service: Service[IdentifyRequest[Credential], IdentifyResponse[Tokens]]): Future[Response] =
-      createIdentifyReq(req).fold(Future.value(Response(Status.BadRequest)))(credReq =>
-        for {
-          tokenResponse <- service(credReq)
+              service: Service[IdentifyRequest[Credential], IdentifyResponse[Tokens]]): Future[Response] = {
+      for {
+          transformed <- req.req.serviceId.loginManager.protoManager match {
+            case a: InternalAuthProtoManager => a.transform[SessionIdRequest, InternalAuthCredential](req)
+            case b: OAuth2CodeProtoManager => b.transform[SessionIdRequest, OAuth2CodeCredential](req)
+          }
+          tokenResponse <- service(KeymasterIdentifyReq(transformed))
           session <- Session(tokenResponse.identity.id, AuthenticatedTag)
           _ <- store.update[Tokens](session)
-          originReq <- getRequestFromSessionStore(req.sessionId)
+          originReq <- requestFromSessionStore(req.sessionId)
           _ <- store.delete(req.sessionId)
         } yield tap(Response(Status.Found))(res => {
           res.location = originReq.uri
           res.addCookie(session.id.asCookie)
-        }))
-  }
-
-  /**
-   * Decodes the methods Get and Post differently
-   * - Get is directed to login form
-   * - Post processes the login credentials
-   *
-   * @param binder It binds to upstream login provider using the information passed in LoginManager
-   */
-  case class KeymasterMethodMuxLoginFilter(binder: MBinder[LoginManager])
-      extends Filter[SessionIdRequest, Response, SessionIdRequest, Response] {
-    def apply(req: SessionIdRequest,
-              service: Service[SessionIdRequest, Response]): Future[Response] =
-      Path(req.req.req.path) match {
-        case req.req.serviceId.loginManager.protoManager.loginConfirm => service(req)
-        case _ => binder(BindRequest(req.req.serviceId.loginManager, req.req.req))
-      }
+        })
+    }
   }
 
   /**
@@ -124,7 +100,7 @@ object Keymaster {
     def api(accessRequest: AccessRequest[Tokens]): Request =
       tap(Request(Method.Post, accessRequest.serviceId.loginManager.accessManager.path.toString))(req => {
         req.contentType = "application/x-www-form-urlencoded"
-        req.contentString = Request.queryString(("services" -> accessRequest.serviceId.name))
+        req.contentString = Request.queryString("services" -> accessRequest.serviceId.name)
           .drop(1) /* Drop '?' */
         req.headerMap.add("Auth-Token", accessRequest.identity.id.master.value)
       })
@@ -157,27 +133,12 @@ object Keymaster {
   }
 
   /**
-   * This filter acquires the access and then forwards the request to upstream service
-   *
-   * @param binder It binds to the upstream service endpoint using the info passed in ServiceIdentifier
-   */
-  case class KeymasterAccessFilter(binder: MBinder[ServiceIdentifier])
-      extends Filter[AccessIdRequest[Tokens], Response, AccessRequest[Tokens], AccessResponse[ServiceToken]] {
-    def apply(req: AccessIdRequest[Tokens],
-              accessService: Service[AccessRequest[Tokens], AccessResponse[ServiceToken]]): Future[Response] =
-      accessService(AccessRequest(req.id, req.req.req.serviceId, req.req.sessionId)).flatMap(accessResp =>
-        binder(BindRequest(req.req.req.serviceId,
-          tap(req.req.req.req) { r => r.headerMap.add("Auth-Token", accessResp.access.access.value)}))
-      )
-  }
-
-  /**
    *  Keymaster Identity provider service Chain
    * @param store
    */
   def keymasterIdentityProviderChain(store: SessionStore)(
     implicit secretStoreApi: SecretStoreApi): Service[SessionIdRequest, Response] = {
-    KeymasterMethodMuxLoginFilter(LoginManagerBinder) andThen
+    LoginManagerFilter(LoginManagerBinder) andThen
       KeymasterPostLoginFilter(store) andThen
       KeymasterIdentityProvider(ManagerBinder)
   }
@@ -189,7 +150,7 @@ object Keymaster {
   def keymasterAccessIssuerChain(store: SessionStore)(
     implicit secretStoreApi: SecretStoreApi): Service[SessionIdRequest, Response] = {
     IdentityFilter[Tokens](store) andThen
-      KeymasterAccessFilter(ServiceIdentifierBinder) andThen
+      AccessFilter[Tokens, ServiceToken](ServiceIdentifierBinder) andThen
       KeymasterAccessIssuer(ManagerBinder, store)
   }
 }

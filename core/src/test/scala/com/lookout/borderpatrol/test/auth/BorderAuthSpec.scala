@@ -2,8 +2,9 @@ package com.lookout.borderpatrol.auth
 
 import java.net.URL
 
+import com.lookout.borderpatrol.Binder.{BindRequest, MBinder}
 import com.lookout.borderpatrol.{ServiceIdentifier, ServiceMatcher}
-import com.lookout.borderpatrol.{LoginManager, InternalProtoManager, Manager, OAuth2CodeProtoManager}
+import com.lookout.borderpatrol.{LoginManager, InternalAuthProtoManager, Manager, OAuth2CodeProtoManager}
 import com.lookout.borderpatrol.sessionx.SessionStores.MemcachedStore
 import com.lookout.borderpatrol.sessionx._
 import com.lookout.borderpatrol.test.BorderPatrolSuite
@@ -24,7 +25,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
   //  Managers
   val keymasterIdManager = Manager("keymaster", Path("/identityProvider"), urls)
   val keymasterAccessManager = Manager("keymaster", Path("/accessIssuer"), urls)
-  val internalProtoManager = InternalProtoManager(Path("/loginConfirm"), Path("/check"), urls)
+  val internalProtoManager = InternalAuthProtoManager(Path("/loginConfirm"), Path("/check"), urls)
   val checkpointLoginManager = LoginManager("checkpoint", keymasterIdManager, keymasterAccessManager,
     internalProtoManager)
   val oauth2CodeProtoManager = OAuth2CodeProtoManager(Path("/loginConfirm"),
@@ -48,10 +49,10 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     (for {
       sessionId <- SessionId.fromResponse(resp).toFuture
       sessionMaybe <- sessionStore.get[Request](sessionId)
-    } yield sessionMaybe.fold[Identity[Request]](EmptyIdentity)(s => Id(s.data))).map(i => i match {
+    } yield sessionMaybe.fold[Identity[Request]](EmptyIdentity)(s => Id(s.data))).map {
       case Id(req) => req
       case EmptyIdentity => null
-    })
+    }
 
   //  Test Services
   def mkTestService[A](f: (A) => Future[Response]) : Service[A, Response] = new Service[A, Response] {
@@ -62,6 +63,13 @@ class BorderAuthSpec extends BorderPatrolSuite  {
   val identityFilterTestService = mkTestService[AccessIdRequest[Request]] { req => Future.value(Response(Status.Ok)) }
   val workingService = mkTestService[SessionIdRequest] { req => Response(Status.Ok).toFuture }
   val workingMap = Map("keymaster" -> workingService)
+
+  // Binders
+  case class TestLoginManagerBinder() extends MBinder[LoginManager]
+  def mkTestLoginManagerBinder(f: (BindRequest[LoginManager]) => Future[Response]): TestLoginManagerBinder =
+    new TestLoginManagerBinder {
+      override def apply(request: BindRequest[LoginManager]) = f(request)
+    }
 
   //  Mock SessionStore client
   case object FailingMockClient extends memcached.MockClient {
@@ -543,5 +551,61 @@ class BorderAuthSpec extends BorderPatrolSuite  {
         SessionIdRequest(ServiceRequest(request, one), sessionId))
     }
     caught.getMessage should equal ("Failed to find IdentityProvider Service Chain for keymaster")
+  }
+
+  behavior of "LoginManagerFilter"
+
+  it should "succeed and invoke the method on loginManager" in {
+    val testService = mkTestService[SessionIdRequest] { _ => fail("Should not get here") }
+    val testLoginManagerBinder = mkTestLoginManagerBinder { _ => Response(Status.Ok).toFuture }
+
+    // Allocate and Session
+    val sessionId = sessionid.untagged
+
+    // Create request
+    val request = req("enterprise", "/check")
+
+    // Execute
+    val output = (LoginManagerFilter(testLoginManagerBinder) andThen testService)(
+      SessionIdRequest(ServiceRequest(request, one), sessionId))
+
+    // Validate
+    Await.result(output).status should be (Status.Ok)
+  }
+
+  it should "succeed and invoke the method on keymaster service" in {
+    val testService = mkTestService[SessionIdRequest] { _ => Response(Status.Ok).toFuture }
+    val testLoginManagerBinder = mkTestLoginManagerBinder { _ => fail("Should not get here") }
+
+    // Allocate and Session
+    val sessionId = sessionid.untagged
+
+    // Create request
+    val request = Request(Method.Post, "/loginConfirm")
+
+    // Execute
+    val output = (LoginManagerFilter(testLoginManagerBinder) andThen testService)(
+      SessionIdRequest(ServiceRequest(request, one), sessionId))
+
+    // Validate
+    Await.result(output).status should be (Status.Ok)
+  }
+
+  it should "succeed and invoke the non GET or POST method on keymaster service" in {
+    val testService = mkTestService[SessionIdRequest] { _ => fail("Should not get here") }
+    val testLoginManagerBinder = mkTestLoginManagerBinder { _ => Response(Status.Ok).toFuture }
+
+    // Allocate and Session
+    val sessionId = sessionid.untagged
+
+    // Create request
+    val request = Request(Method.Head, "/ent")
+
+    // Execute
+    val output = (LoginManagerFilter(testLoginManagerBinder) andThen testService)(
+      SessionIdRequest(ServiceRequest(request, one), sessionId))
+
+    // Validate
+    Await.result(output).status should be (Status.Ok)
   }
 }
