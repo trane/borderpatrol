@@ -57,6 +57,10 @@ val baseSettings = Seq(
   wartremoverWarnings in (Compile, compile) ++= Warts.allBut(Wart.FinalCaseClass, Wart.NoNeedForMonad, Wart.Throw, Wart.Null, Wart.Nothing, Wart.DefaultArguments)
 )
 
+/**
+ * Automatic deployments to JFrog OSS and Bintray/jCenter/Maven Central via Travis CI from SBT
+ * http://szimano.org/automatic-deployments-to-jfrog-oss-and-bintrayjcentermaven-central-via-travis-ci-from-sbt/
+ */
 lazy val publishSettings =
   if (Version.endsWith("-SNAPSHOT"))
     Seq(
