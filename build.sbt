@@ -1,7 +1,7 @@
 import sbtunidoc.Plugin.UnidocKeys._
 import scoverage.ScoverageSbtPlugin.ScoverageKeys.coverageExcludedPackages
 
-lazy val Version = "0.1.0-SNAPSHOT"
+lazy val Version = "0.1.0"
 
 lazy val buildSettings = Seq(
   organization := "com.lookout",
@@ -57,19 +57,33 @@ val baseSettings = Seq(
   wartremoverWarnings in (Compile, compile) ++= Warts.allBut(Wart.FinalCaseClass, Wart.NoNeedForMonad, Wart.Throw, Wart.Null, Wart.Nothing, Wart.DefaultArguments)
 )
 
-lazy val publishSettings = Seq(
-  licenses := Seq("MIT" -> url("http://opensource.org/licenses/MIT")),
-  homepage := Some(url("https://github.com/lookout/borderpatrol")),
-  scmInfo := Some(
-    ScmInfo(
-      url("https://github.com/lookout/borderpatrol"),
-      "scm:git:git@github.com:lookout/borderpatrol.git"
+lazy val publishSettings =
+  if (Version.endsWith("-SNAPSHOT"))
+    Seq(
+      licenses := Seq("MIT" -> url("http://opensource.org/licenses/MIT")),
+      publishTo := Some("Artifactory Realm" at "http://oss.jfrog.org/artifactory/oss-snapshot-local"),
+      bintrayReleaseOnPublish := false,
+      // Only setting the credentials file if it exists (#52)
+      credentials := List(Path.userHome / ".bintray" / ".artifactory").filter(_.exists).map(Credentials(_))
     )
-  ),
-  bintrayRepository := "borderpatrol",
-  publishMavenStyle := true,
-  bintrayOrganization := Some("lookout")
-)
+  else
+    Seq(
+      licenses := Seq("MIT" -> url("http://opensource.org/licenses/MIT")),
+      homepage := Some(url("https://github.com/lookout/borderpatrol")),
+      scmInfo := Some(
+        ScmInfo(
+          url("https://github.com/lookout/borderpatrol"),
+          "scm:git:git@github.com:lookout/borderpatrol.git"
+        )
+      ),
+      /**
+       * there’s some weird resolver added – this is apparently some recent Bintray bug described here:
+       * http://stackoverflow.com/questions/31704818/releasing-and-publishing-from-sbt-bintray
+       */
+      publishMavenStyle := true,
+      publishArtifact in Test := false,
+      resolvers += Resolver.bintrayRepo("maheshkelkar", "maven")
+    )
 
 lazy val noPublish = Seq(
   publish := {},
@@ -96,11 +110,27 @@ lazy val docSettings = site.settings ++ ghpages.settings ++ unidocSettings ++ Se
   tutSourceDirectory := baseDirectory.value / "docs" / "src" / "main" / "tut"
 )
 
+// Enables the Maven Central Synchronisation
+lazy val makeVersionSh = taskKey[Seq[File]]("Creates .run.central.synchro.sh file.")
+
+lazy val mavenSyncSettings = Seq(
+  publishArtifact := false,
+  makeVersionSh := {
+    val pf = new java.io.File(".run.central.synchro.sh")
+    val content = s"""|#!/bin/bash
+                     |PROJECT_VERSION=${version.value} /bin/bash .central.synchro.sh
+                      """.stripMargin
+    IO.write(pf, content)
+    Seq(pf)
+  }
+)
+
 lazy val root = project.in(file("."))
   .settings(moduleName := "borderpatrol")
   .settings(allSettings)
   .settings(tutSettings)
   .settings(docSettings)
+  .settings(mavenSyncSettings)
   .settings(noPublish)
   .settings(
     initialCommands in console :=
@@ -121,6 +151,7 @@ lazy val core = project
 lazy val test = project
   .settings(moduleName := "borderpatrol-test")
   .settings(allSettings)
+  .settings(noPublish)
   .settings(libraryDependencies ++= testDependencies)
   .dependsOn(core)
 
@@ -138,7 +169,7 @@ lazy val example = project
       "com.github.finagle" %% "finch-argonaut" % finchVersion
     )
   )
-  .settings(assemblyJarName in assembly := s"borderpatrol-example-all-${Version}.jar")
+  .settings(assemblyJarName in assembly := s"borderpatrol-example-all-${version.value}.jar")
   .disablePlugins(JmhPlugin)
   .dependsOn(core, auth, server, security, test % "test")
 
