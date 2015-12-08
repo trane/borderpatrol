@@ -150,8 +150,6 @@ object Tokens {
    * JWT parser wrapper
    */
   def JwtParse(tokenStr: String): Future[JWTClaimsSet] =
-    try { Future.value(PlainJWT.parse(tokenStr).getJWTClaimsSet) } catch {
-      case e: Throwable => Future.exception(TokenParsingError("Failed to parse JWT token with: " + e.getMessage))
-    }
+    wrapFuture[JWTClaimsSet]({() => PlainJWT.parse(tokenStr).getJWTClaimsSet }, TokenParsingError.apply)
 }
 

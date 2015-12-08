@@ -74,7 +74,7 @@ object Keymaster {
     def apply(req: SessionIdRequest,
               service: Service[IdentifyRequest[Credential], IdentifyResponse[Tokens]]): Future[Response] = {
       for {
-          transformed <- req.req.serviceId.loginManager.protoManager match {
+          transformed: Credential <- req.req.serviceId.loginManager.protoManager match {
             case a: InternalAuthProtoManager => a.transform[SessionIdRequest, InternalAuthCredential](req)
             case b: OAuth2CodeProtoManager => b.transform[SessionIdRequest, OAuth2CodeCredential](req)
           }

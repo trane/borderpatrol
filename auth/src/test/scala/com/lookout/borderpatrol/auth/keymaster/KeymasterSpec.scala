@@ -310,7 +310,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
       val caught = the [TokenParsingError] thrownBy {
         Await.result(output)
       }
-      caught.getMessage should startWith ("Failed to parse JWT token with: Invalid serialized")
+      caught.getMessage should startWith ("Failed to parse token with: Invalid serialized")
     } finally {
       server.close()
     }

@@ -32,4 +32,5 @@ case class AccessIssuerError(status: Status, msg: String) extends AuthError(msg,
 /**
  * Parsing error
  */
-case class TokenParsingError(msg: String) extends AuthError(msg, null)
+case class TokenParsingError(e: Throwable)
+    extends AuthError(s"Failed to parse token with: ${e.getMessage}", e)
