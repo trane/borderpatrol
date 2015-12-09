@@ -48,8 +48,8 @@ package object auth {
 
   implicit class TryOps[A](val tryA: Try[A]) extends AnyVal {
     def toFuture: Future[A] = tryA match {
-        case Success(a) => Future.value[A](a)
-        case Failure(e) => Future.exception(e)
-      }
+      case Success(a) => Future.value[A](a)
+      case Failure(e) => Future.exception(e)
+    }
   }
 }

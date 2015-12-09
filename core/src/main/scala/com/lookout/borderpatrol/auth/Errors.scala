@@ -28,3 +28,9 @@ case class IdentityProviderError(status: Status, msg: String) extends AuthError(
  * This exception stores the response code
  */
 case class AccessIssuerError(status: Status, msg: String) extends AuthError(msg, null)
+
+/**
+ * Parsing error
+ */
+case class TokenParsingError(e: Throwable)
+    extends AuthError(s"Failed to parse token with: ${e.getMessage}", e)

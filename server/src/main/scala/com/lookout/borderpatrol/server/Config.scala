@@ -92,7 +92,7 @@ object Config {
    * while decoding the entire ServerConfig due to dependency issues
    */
   implicit val encodeProtoManager: Encoder[ProtoManager] = Encoder.instance {
-    case bpm: InternalProtoManager => Json.fromFields(Seq(
+    case bpm: InternalAuthProtoManager => Json.fromFields(Seq(
       ("type", Json.string("Internal")),
       ("loginConfirm", bpm.loginConfirm.asJson),
       ("path", bpm.path.asJson),
@@ -112,7 +112,7 @@ object Config {
           loginConfirm <- c.downField("loginConfirm").as[Path]
           path <- c.downField("path").as[Path]
           hosts <- c.downField("hosts").as[Set[URL]]
-        } yield InternalProtoManager(loginConfirm, path, hosts)
+        } yield InternalAuthProtoManager(loginConfirm, path, hosts)
       case "OAuth2Code" =>
         for {
           loginConfirm <- c.downField("loginConfirm").as[Path]
@@ -233,7 +233,7 @@ object Config {
    */
   def validateProtoManagerConfig(field: String, lmName: String, protoManager: ProtoManager): Unit = {
     protoManager match {
-      case ipm: InternalProtoManager => validateHostsConfig(field, lmName, protoManager.hosts)
+      case ipm: InternalAuthProtoManager => validateHostsConfig(field, lmName, protoManager.hosts)
       case opm: OAuth2CodeProtoManager =>
     }
   }
