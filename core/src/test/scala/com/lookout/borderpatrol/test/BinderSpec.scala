@@ -40,7 +40,7 @@ class BinderSpec extends BorderPatrolSuite {
       val output = ManagerBinder(bindReq)
       Await.result(output).status should be(Status.NotAcceptable)
       /* Make sure client is cached in the cache */
-      ManagerBinder.get(keymasterIdManager.name) should not be None
+      BinderBase.get(keymasterIdManager.name) should not be None
     } finally {
       server.close()
     }
@@ -57,7 +57,7 @@ class BinderSpec extends BorderPatrolSuite {
       val output = LoginManagerBinder(bindReq)
       Await.result(output).status should be(Status.NotAcceptable)
       /* Make sure client is cached in the cache */
-      LoginManagerBinder.get(checkpointLoginManager.name) should not be None
+      BinderBase.get(checkpointLoginManager.name) should not be None
     } finally {
       server.close()
     }
@@ -73,7 +73,7 @@ class BinderSpec extends BorderPatrolSuite {
       val output = ServiceIdentifierBinder(bindReq)
       Await.result(output).status should be(Status.NotAcceptable)
       /* Make sure client is cached in the cache */
-      ServiceIdentifierBinder.get(one.name) should not be None
+      BinderBase.get(one.name) should not be None
     } finally {
       server.close()
     }
