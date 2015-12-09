@@ -80,7 +80,7 @@ object BinderBase {
     // Find CSV of host & ports
     val hostAndPorts = urls.map(u => u.getAuthority).mkString(",")
 
-    // Create 
+    // Create
     if (https) Httpx.client.withTls(hostname).newService(hostAndPorts)
     else Httpx.newService(hostAndPorts)
   }
