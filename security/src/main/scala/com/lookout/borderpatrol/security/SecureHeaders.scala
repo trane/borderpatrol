@@ -26,7 +26,10 @@ object SecureHeaders {
 }
 
 /**
-  * Inject specific headers into requests and responses for added security
+  * Inject and override specific headers in requests and responses for added security
+  *
+  * This filter is best added to the very beginning of the filter chain to ensure that
+  * 4xx-5xx level responses get these headers added.
   *
   * By default it includes the following default headers and values:
   *
@@ -49,6 +52,10 @@ case class SecureHeaderFilter(requestHeaders: HeaderMap = SecureHeaders.request,
     extends SimpleFilter[Request, Response] {
   val localIp = InetAddress.getLocalHost.getHostAddress
 
+  /**
+    * Requests get X-Forwarded-For and other request headers added before passing to the service
+    * Responses get response headers added before returning to the client
+    */
   def apply(req: Request, service: Service[Request, Response]): Future[Response] =
     service(tap(req) { r =>
       r.xForwardedFor = (r.xForwardedFor match {
@@ -56,5 +63,5 @@ case class SecureHeaderFilter(requestHeaders: HeaderMap = SecureHeaders.request,
         case None => localIp
       })
       r.headerMap ++= requestHeaders
-    }).map(r => tap(r)(_.headerMap ++= responseHeaders))
+    }).map(res => tap(res)(_.headerMap ++= responseHeaders))
 }
