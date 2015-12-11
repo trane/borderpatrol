@@ -25,10 +25,11 @@ class ServicesSpec extends BorderPatrolSuite {
   val serviceMatcher = ServiceMatcher(sids)
 
   //  Config helpers
+  val defaultStatsdExporterConfig = StatsdExporterConfig("host", 300, "prefix")
   val defaultSecretStore = SecretStores.InMemorySecretStore(Secrets(Secret(), Secret()))
   val defaultSessionStore = SessionStores.InMemoryStore
-  val serverConfig = ServerConfig(defaultSecretStore, defaultSessionStore, sids,
-    Set(checkpointLoginManager), Set(keymasterIdManager), Set(keymasterAccessManager))
+  val serverConfig = ServerConfig(defaultSecretStore, defaultSessionStore, defaultStatsdExporterConfig,
+    sids, Set(checkpointLoginManager), Set(keymasterIdManager), Set(keymasterAccessManager))
 
   /***FIXME: use this write integration test-suite */
   behavior of "MainServiceChain"

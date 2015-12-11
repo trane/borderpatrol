@@ -1,4 +1,9 @@
 {
+  "statsdReporter": {
+     "host": "localhost:8125",
+     "durationInSec": 60,
+     "prefix": "bp"
+  },
   "accessManagers": [
     {
       "hosts": ["http://localhost:8081"],
@@ -11,7 +16,7 @@
   },
   "loginManagers": [
     {
-      "name": "domestic",
+      "name": "checkpoint",
       "identityManager": "keymaster",
       "accessManager": "keymaster",
       "proto": {

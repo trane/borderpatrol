@@ -17,11 +17,12 @@ import io.circe.syntax._
 import scala.io.Source
 
 case class ServerConfig(secretStore: SecretStoreApi,
-                   sessionStore: SessionStore,
-                   serviceIdentifiers: Set[ServiceIdentifier],
-                   loginManagers: Set[LoginManager],
-                   identityManagers: Set[Manager],
-                   accessManagers: Set[Manager]) {
+                        sessionStore: SessionStore,
+                        statsdExporterConfig: StatsdExporterConfig,
+                        serviceIdentifiers: Set[ServiceIdentifier],
+                        loginManagers: Set[LoginManager],
+                        identityManagers: Set[Manager],
+                        accessManagers: Set[Manager]) {
 
   def findIdentityManager(n: String): Manager = identityManagers.find(_.name == n)
     .getOrElse(throw new InvalidConfigError("Failed to find IdentityManager for: " + n))
@@ -33,6 +34,8 @@ case class ServerConfig(secretStore: SecretStoreApi,
     .getOrElse(throw new InvalidConfigError("Failed to find LoginManager for: " + n))
 }
 
+case class StatsdExporterConfig(host: String, durationInSec: Int, prefix: String)
+
 /**
  * Where you will find the Secret Store and Session Store
  */
@@ -43,7 +46,7 @@ object Config {
   val defaultSessionStore = SessionStores.InMemoryStore
   val defaultServiceIdsFile = "bpConfig.json"
   val serverConfigFields = Set("secretStore", "sessionStore", "serviceIdentifiers", "loginManagers",
-    "identityManagers", "accessManager")
+    "identityManagers", "accessManager", "statsdReporter")
 
   // Encoder/Decoder for Path
   implicit val encodePath: Encoder[Path] = Encoder[String].contramap(_.toString)
@@ -182,13 +185,14 @@ object Config {
     for {
       secretStore <- c.downField("secretStore").as[SecretStoreApi]
       sessionStore <- c.downField("sessionStore").as[SessionStore]
+      statsdExporterConfig <- c.downField("statsdReporter").as[StatsdExporterConfig]
       ims <- c.downField("identityManagers").as[Set[Manager]]
       ams <- c.downField("accessManagers").as[Set[Manager]]
       lms <- c.downField("loginManagers").as(Decoder.decodeSet(
         decodeLoginManager(ims.map(im => im.name -> im).toMap, ams.map(am => am.name -> am).toMap)))
       sids <- c.downField("serviceIdentifiers").as(Decoder.decodeSet(
         decodeServiceIdentifier(lms.map(lm => lm.name -> lm).toMap)))
-    } yield ServerConfig(secretStore, sessionStore, sids, lms, ims, ams)
+    } yield ServerConfig(secretStore, sessionStore, statsdExporterConfig, sids, lms, ims, ams)
   }
 
   /**
