@@ -1,5 +1,7 @@
 package com.lookout.borderpatrol
 
+import com.twitter.finagle.Service
+import com.twitter.finagle.httpx.{Status, Request, Response}
 import com.twitter.util.{Await, Future}
 
 package object test {
@@ -20,4 +22,11 @@ package object test {
     def isThrowable: Boolean =
       Await.ready(future).poll.get.isThrow
   }
+
+  def testService(f: Request => Boolean): Service[Request, Response] = Service.mk[Request, Response](r => {
+    val res = if (f(r)) Response(Status.Ok)
+              else Response(Status.BadRequest)
+    res.contentString = r.contentString
+    Future.value(res)
+  })
 }
