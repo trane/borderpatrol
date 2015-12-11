@@ -78,7 +78,7 @@ class ConfigSpec extends BorderPatrolSuite {
   }
 
   it should "uphold encoding/decoding ServerConfig" in {
-    def encodeDecode(config: ServerConfig) : ServerConfig = {
+    def encodeDecode(config: ServerConfig): ServerConfig = {
       val encoded = config.asJson
       decode[ServerConfig](encoded.toString()) match {
         case Xor.Right(a) => a
@@ -127,6 +127,7 @@ class ConfigSpec extends BorderPatrolSuite {
   it should "raise a ConfigError exception due to lack of Secret Store config" in {
     val partialContents = Json.fromFields(Seq(
       ("sessionStore", defaultSessionStore.asInstanceOf[SessionStore].asJson),
+      ("statsdReporter", defaultStatsdExporterConfig.asJson),
       ("serviceIdentifiers", sids.asJson),
       ("loginManagers", Set(checkpointLoginManager).asJson),
       ("identityManagers", Set(keymasterIdManager).asJson),
@@ -145,6 +146,7 @@ class ConfigSpec extends BorderPatrolSuite {
     val partialContents = Json.fromFields(Seq(
       ("secretStore", Json.obj(("type", Json.string("woof")))),
       ("sessionStore", defaultSessionStore.asInstanceOf[SessionStore].asJson),
+      ("statsdReporter", defaultStatsdExporterConfig.asJson),
       ("serviceIdentifiers", sids.asJson),
       ("loginManagers", Set(checkpointLoginManager).asJson),
       ("identityManagers", Set(keymasterIdManager).asJson),
@@ -162,6 +164,7 @@ class ConfigSpec extends BorderPatrolSuite {
   it should "raise a ConfigError exception due to lack of Session Store config" in {
     val partialContents = Json.fromFields(Seq(
       ("secretStore", defaultSecretStore.asInstanceOf[SecretStoreApi].asJson),
+      ("statsdReporter", defaultStatsdExporterConfig.asJson),
       ("serviceIdentifiers", sids.asJson),
       ("loginManagers", Set(checkpointLoginManager).asJson),
       ("identityManagers", Set(keymasterIdManager).asJson),
@@ -180,6 +183,7 @@ class ConfigSpec extends BorderPatrolSuite {
     val partialContents = Json.fromFields(Seq(
       ("secretStore", defaultSecretStore.asInstanceOf[SecretStoreApi].asJson),
       ("sessionStore", Json.obj(("type", Json.string("woof")))),
+      ("statsdReporter", defaultStatsdExporterConfig.asJson),
       ("serviceIdentifiers", sids.asJson),
       ("loginManagers", Set(checkpointLoginManager).asJson),
       ("identityManagers", Set(keymasterIdManager).asJson),
@@ -194,10 +198,29 @@ class ConfigSpec extends BorderPatrolSuite {
     caught.getMessage should include ("Failed to decode following fields: sessionStore")
   }
 
+  it should "raise a ConfigError exception due to lack of Statsd Reporter config" in {
+    val partialContents = Json.fromFields(Seq(
+      ("secretStore", defaultSecretStore.asInstanceOf[SecretStoreApi].asJson),
+      ("sessionStore", defaultSessionStore.asInstanceOf[SessionStore].asJson),
+      ("serviceIdentifiers", sids.asJson),
+      ("loginManagers", Set(checkpointLoginManager).asJson),
+      ("identityManagers", Set(keymasterIdManager).asJson),
+      ("accessManagers", Set(keymasterAccessManager).asJson)))
+
+    val tempFile = File.makeTemp("ServerConfigTest", ".tmp")
+    tempFile.writeAll(partialContents.toString)
+
+    val caught = the [ConfigError] thrownBy {
+      readServerConfig(tempFile.toCanonical.toString)
+    }
+    caught.getMessage should include regex ("Failed to decode following fields: statsdReporter")
+  }
+
   it should "raise a ConfigError exception due to lack of ServiceIdentifier config" in {
     val partialContents = Json.fromFields(Seq(
       ("secretStore", defaultSecretStore.asInstanceOf[SecretStoreApi].asJson),
       ("sessionStore", defaultSessionStore.asInstanceOf[SessionStore].asJson),
+      ("statsdReporter", defaultStatsdExporterConfig.asJson),
       ("loginManagers", Set(checkpointLoginManager).asJson),
       ("identityManagers", Set(keymasterIdManager).asJson),
       ("accessManagers", Set(keymasterAccessManager).asJson)))
@@ -215,6 +238,7 @@ class ConfigSpec extends BorderPatrolSuite {
     val partialContents = Json.fromFields(Seq(
       ("secretStore", defaultSecretStore.asInstanceOf[SecretStoreApi].asJson),
       ("sessionStore", defaultSessionStore.asInstanceOf[SessionStore].asJson),
+      ("statsdReporter", defaultStatsdExporterConfig.asJson),
       ("serviceIdentifiers", sids.asJson),
       ("loginManagers", Set(checkpointLoginManager).asJson),
       ("identityManagers", Set(Manager("some", Path("/some"), urls)).asJson),
@@ -233,6 +257,7 @@ class ConfigSpec extends BorderPatrolSuite {
     val partialContents = Json.fromFields(Seq(
       ("secretStore", defaultSecretStore.asInstanceOf[SecretStoreApi].asJson),
       ("sessionStore", defaultSessionStore.asInstanceOf[SessionStore].asJson),
+      ("statsdReporter", defaultStatsdExporterConfig.asJson),
       ("serviceIdentifiers", sids.asJson),
       ("loginManagers", Set(checkpointLoginManager, umbrellaLoginManager).asJson),
       ("identityManagers", Set(keymasterIdManager,
@@ -252,6 +277,7 @@ class ConfigSpec extends BorderPatrolSuite {
     val partialContents = Json.fromFields(Seq(
       ("secretStore", defaultSecretStore.asInstanceOf[SecretStoreApi].asJson),
       ("sessionStore", defaultSessionStore.asInstanceOf[SessionStore].asJson),
+      ("statsdReporter", defaultStatsdExporterConfig.asJson),
       ("serviceIdentifiers", sids.asJson),
       ("loginManagers", Set(checkpointLoginManager, umbrellaLoginManager).asJson),
       ("identityManagers", Set(keymasterIdManager).asJson),
@@ -271,6 +297,7 @@ class ConfigSpec extends BorderPatrolSuite {
     val partialContents = Json.fromFields(Seq(
       ("secretStore", defaultSecretStore.asInstanceOf[SecretStoreApi].asJson),
       ("sessionStore", defaultSessionStore.asInstanceOf[SessionStore].asJson),
+      ("statsdReporter", defaultStatsdExporterConfig.asJson),
       ("serviceIdentifiers", sids.asJson),
       ("loginManagers", Set(checkpointLoginManager, umbrellaLoginManager,
         LoginManager("checkpoint", keymasterIdManager, keymasterAccessManager,
@@ -291,6 +318,7 @@ class ConfigSpec extends BorderPatrolSuite {
     val partialContents = Json.fromFields(Seq(
       ("secretStore", defaultSecretStore.asInstanceOf[SecretStoreApi].asJson),
       ("sessionStore", defaultSessionStore.asInstanceOf[SessionStore].asJson),
+      ("statsdReporter", defaultStatsdExporterConfig.asJson),
       ("serviceIdentifiers", (sids + ServiceIdentifier("some", urls, Path("/ent"), "enterprise",
         checkpointLoginManager)).asJson),
       ("loginManagers", Set(checkpointLoginManager, umbrellaLoginManager).asJson),

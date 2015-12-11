@@ -41,10 +41,7 @@ class StatsdExporter(registry: Metrics, timer: Timer, prefix: String = "", durat
   private[this] def byteBuf(buf: Buf): ByteBuffer =
     Buf.ByteBuffer.Owned.extract(buf)
 
-  private[this] def send(str: String): Unit = {
-    println(str)
-    channel.send(byteBuf(buf(str)), addr)
-  }
+  private[this] def send(str: String): Unit = channel.send(byteBuf(buf(str)), addr)
 
   // Computer helpers
   private[this] def labelPercentile(p: Double): String = {
@@ -58,7 +55,6 @@ class StatsdExporter(registry: Metrics, timer: Timer, prefix: String = "", durat
   }
 
   def report(): Unit = {
-    println("IN the report")
     val gauges = try registry.sampleGauges().asScala catch {
       case NonFatal(e) =>
         // because gauges run arbitrary user code, we want to protect ourselves here.

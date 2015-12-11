@@ -16,6 +16,7 @@ import io.circe.generic.auto._
 import io.circe.syntax._
 import scala.io.Source
 
+
 case class ServerConfig(secretStore: SecretStoreApi,
                         sessionStore: SessionStore,
                         statsdExporterConfig: StatsdExporterConfig,
@@ -181,6 +182,16 @@ object Config {
   /**
    * Decoder for ServerConfig (Using circe default encoder for encoding)
    */
+  implicit val serverConfigEncoder: Encoder[ServerConfig] = Encoder.instance { serverConfig =>
+    Json.fromFields(Seq(
+      ("secretStore", serverConfig.secretStore.asJson),
+      ("sessionStore", serverConfig.sessionStore.asJson),
+      ("statsdReporter", serverConfig.statsdExporterConfig.asJson),
+      ("identityManagers", serverConfig.identityManagers.asJson),
+      ("accessManagers", serverConfig.accessManagers.asJson),
+      ("loginManagers", serverConfig.loginManagers.asJson),
+      ("serviceIdentifiers", serverConfig.serviceIdentifiers.asJson)))
+  }
   implicit val serverConfigDecoder: Decoder[ServerConfig] = Decoder.instance { c =>
     for {
       secretStore <- c.downField("secretStore").as[SecretStoreApi]
