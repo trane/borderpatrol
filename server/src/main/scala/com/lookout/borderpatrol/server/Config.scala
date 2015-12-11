@@ -62,7 +62,6 @@ object Config {
     case x: InMemoryStore.type => Json.obj(("type", Json.string("InMemoryStore")))
     case y: MemcachedStore =>  Json.obj(("type", Json.string("MemcachedStore")),
       ("hosts", Json.string("localhost:123")))
-    case other => Json.string("Error: " + other.toString)
   }
   implicit val decodeSessionStore: Decoder[SessionStore] = Decoder.instance { c =>
     c.downField("type").as[String].flatMap {
@@ -78,7 +77,6 @@ object Config {
     case x: InMemorySecretStore => Json.obj(("type", Json.string(x.getClass.getSimpleName)))
     case y: ConsulSecretStore => Json.obj(("type", Json.string(y.getClass.getSimpleName)),
       ("hosts", Json.string(s"${y.consul.host}:${y.consul.port}")))
-    case other => Json.string("Error: " + other.toString)
   }
   implicit val decodeSecretStore: Decoder[SecretStoreApi] = Decoder.instance { c =>
     c.downField("type").as[String].flatMap {

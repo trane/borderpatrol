@@ -10,6 +10,7 @@ import com.twitter.io.Buf
 import com.twitter.util.{Duration, Timer, NonFatal}
 import scala.collection.JavaConverters.mapAsScalaMapConverter
 import scala.collection.Map
+import scala.util.Try
 
 
 class StatsdExporter(registry: Metrics, timer: Timer, prefix: String = "", duration: Duration, hostAndPort: String) {
@@ -18,8 +19,8 @@ class StatsdExporter(registry: Metrics, timer: Timer, prefix: String = "", durat
 
   // Alternate constructor
   def this(config: StatsdExporterConfig) = this(MetricsStatsReceiver.defaultRegistry, DefaultTimer.twitter,
-    config.prefix.getOrDefault(InetAddress.getLocalHost.getHostName), Duration.fromSeconds(config.durationInSec),
-    config.host)
+    config.prefix.getOrDefault(Try(InetAddress.getLocalHost.getHostName).getOrDefault("localhost")),
+    Duration.fromSeconds(config.durationInSec), config.host)
 
   // Schedule exporter
   timer.schedule(duration)(report)

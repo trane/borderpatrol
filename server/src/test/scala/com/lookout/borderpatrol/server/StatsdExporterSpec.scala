@@ -18,6 +18,9 @@ class StatsdExporterSpec extends BorderPatrolSuite {
   server.configureBlocking(false)
   private[this] val host = s"localhost:$port"
 
+  // StatdExporter
+  val defaultStatsdExporterConfig = StatsdExporterConfig("localhost:1234", 300, "prefix")
+
   private[this] def receiveString: Option[String] = {
     val buf1 = ByteBuffer.allocateDirect(128)
     server.receive(buf1)
@@ -28,14 +31,19 @@ class StatsdExporterSpec extends BorderPatrolSuite {
 
   behavior of "StatsdExporter"
 
+  it should "instantiate with StatsExporterConfig" in {
+    val metrics = new StatsdExporter(defaultStatsdExporterConfig)
+    metrics.report()
+  }
+
   it should "report counter increment" in {
     val metrics1 = Metrics.createDetached()
     val exporter1 = new StatsdExporter(metrics1, DefaultTimer.twitter,
       "ut", Duration.fromSeconds(300), host)
     val c = metrics1.createCounter("counter1")
     c.increment()
-    exporter1.report
-    assert(receiveString == Some("ut.counter1:1|c"))
+    exporter1.report()
+    receiveString should be (Some("ut.counter1:1|c"))
   }
 
   it should "report gauge increment" in {
@@ -48,7 +56,27 @@ class StatsdExporterSpec extends BorderPatrolSuite {
     }
     val gauge = metrics2.registerGauge(g)
     x = 10
-    exporter2.report
-    assert(receiveString === Some("ut.gauge1:10|g"))
+    exporter2.report()
+    receiveString should be (Some("ut.gauge1:10|g"))
+  }
+
+  it should "report historgram increment" in {
+    val metrics3 = Metrics.createDetached()
+    val exporter3 = new StatsdExporter(metrics3, DefaultTimer.twitter,
+      "ut", Duration.fromSeconds(300), host)
+    val r = new scala.util.Random(10000)
+    val histo = metrics3.createHistogram("histo")
+    exporter3.report()
+    receiveString should be (Some("ut.histo.count:0|g"))
+    receiveString should be (Some("ut.histo.avg:0.00|t"))
+    receiveString should be (Some("ut.histo.min:0|t"))
+    receiveString should be (Some("ut.histo.max:0|t"))
+    receiveString should be (Some("ut.histo.stddev:0.00|t"))
+    receiveString should be (Some("ut.histo.p50:0|t"))
+    receiveString should be (Some("ut.histo.p90:0|t"))
+    receiveString should be (Some("ut.histo.p95:0|t"))
+    receiveString should be (Some("ut.histo.p99:0|t"))
+    receiveString should be (Some("ut.histo.p9990:0|t"))
+    receiveString should be (Some("ut.histo.p9999:0|t"))
   }
 }

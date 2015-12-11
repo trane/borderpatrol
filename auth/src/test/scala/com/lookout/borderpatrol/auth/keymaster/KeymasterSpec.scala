@@ -124,7 +124,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
 
     // Execute
     val output = KeymasterIdentityProvider(testIdentityManagerBinder)(
-      KeymasterIdentifyReq(InternalAuthCredential("foo", "bar", one)))
+      KeymasterIdentifyReq(OAuth2CodeCredential("foo", "bar", two)))
 
     // Validate
     val caught = the [IdentityProviderError] thrownBy {

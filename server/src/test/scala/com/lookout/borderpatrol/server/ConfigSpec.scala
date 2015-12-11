@@ -273,6 +273,25 @@ class ConfigSpec extends BorderPatrolSuite {
     caught.getMessage should include ("Duplicate entries for key(s) (name) - are found in the field: identityManagers")
   }
 
+  it should "raise a ConfigError exception if accessManager that is used in LoginManager is missing" in {
+    val partialContents = Json.fromFields(Seq(
+      ("secretStore", defaultSecretStore.asInstanceOf[SecretStoreApi].asJson),
+      ("sessionStore", defaultSessionStore.asInstanceOf[SessionStore].asJson),
+      ("statsdReporter", defaultStatsdExporterConfig.asJson),
+      ("serviceIdentifiers", sids.asJson),
+      ("loginManagers", Set(checkpointLoginManager).asJson),
+      ("identityManagers", Set(keymasterIdManager).asJson),
+      ("accessManagers", Set(Manager("some", Path("/some"), urls)).asJson)))
+
+    val tempFile = File.makeTemp("ServerConfigTest", ".tmp")
+    tempFile.writeAll(partialContents.toString)
+
+    val caught = the [ConfigError] thrownBy {
+      readServerConfig(tempFile.toCanonical.toString)
+    }
+    caught.getMessage should include regex ("Failed to decode following fields: loginManagers")
+  }
+
   it should "raise a ConfigError exception if duplicates are configured in accessManagers config" in {
     val partialContents = Json.fromFields(Seq(
       ("secretStore", defaultSecretStore.asInstanceOf[SecretStoreApi].asJson),
@@ -333,6 +352,27 @@ class ConfigSpec extends BorderPatrolSuite {
     }
     caught.getMessage should include (
       "Duplicate entries for key(s) (path and subdomain) - are found in the field: serviceIdentifiers")
+  }
+
+
+  it should "raise a ConfigError exception if loginManager that is used in ServiceIdentifier is missing" in {
+    val partialContents = Json.fromFields(Seq(
+      ("secretStore", defaultSecretStore.asInstanceOf[SecretStoreApi].asJson),
+      ("sessionStore", defaultSessionStore.asInstanceOf[SessionStore].asJson),
+      ("statsdReporter", defaultStatsdExporterConfig.asJson),
+      ("serviceIdentifiers", (sids + ServiceIdentifier("some", urls, Path("/ent"), "enterprise",
+        umbrellaLoginManager)).asJson),
+      ("loginManagers", Set(checkpointLoginManager).asJson),
+      ("identityManagers", Set(keymasterIdManager).asJson),
+      ("accessManagers", Set(keymasterAccessManager).asJson)))
+
+    val tempFile = File.makeTemp("ServerConfigTest", ".tmp")
+    tempFile.writeAll(partialContents.toString)
+
+    val caught = the [ConfigError] thrownBy {
+      readServerConfig(tempFile.toCanonical.toString)
+    }
+    caught.getMessage should include regex ("Failed to decode following fields: serviceIdentifiers")
   }
 
   it should "validate URLs configuration" in {
