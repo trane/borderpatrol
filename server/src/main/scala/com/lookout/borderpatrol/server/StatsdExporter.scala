@@ -35,6 +35,13 @@ class StatsdExporter(registry: Metrics, timer: Timer, prefix: String = "", durat
 
   private[this] def format(v: Double): String = "%2.2f".format(v)
 
+  private[this] def labelPercentile(d: Double): String =
+    d.toString.replace("0.", "p") match {
+      case "p5" => "p50"
+      case "p9" => "p90"
+      case p => p
+    }
+
   // Send helpers
   private[this] def buf(utf8: String): Buf =
     Buf.Utf8(utf8)
@@ -44,17 +51,7 @@ class StatsdExporter(registry: Metrics, timer: Timer, prefix: String = "", durat
 
   private[this] def send(str: String): Unit = channel.send(byteBuf(buf(str)), addr)
 
-  // Computer helpers
-  private[this] def labelPercentile(p: Double): String = {
-    // this has a strange quirk that p999 gets formatted as p9990
-    val gname: String = "p" + (p * 10000).toInt
-    if (3 < gname.length && ("00" == gname.substring(3))) {
-      gname.substring(0, 3)
-    } else {
-      gname
-    }
-  }
-
+  // Report
   def report(): Unit = {
     val gauges = try registry.sampleGauges().asScala catch {
       case NonFatal(e) =>
