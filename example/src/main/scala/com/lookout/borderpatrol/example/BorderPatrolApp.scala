@@ -12,6 +12,7 @@ object BorderPatrolApp extends TwitterServer with Config {
 
   premain {
     implicit val serverConfig = readServerConfig(configFile())
+    implicit val bpStatsReceiver = statsReceiver
 
     // Create a StatsD exporter
     val statsdReporter = new StatsdExporter(serverConfig.statsdExporterConfig)

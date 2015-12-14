@@ -112,7 +112,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     }}
 
     // Execute
-    val output = KeymasterIdentityProvider(testIdentityManagerBinder)(
+    val output = KeymasterIdentityProvider(testIdentityManagerBinder).apply(
       KeymasterIdentifyReq(InternalAuthCredential("foo", "bar", one)))
 
     // Validate
@@ -123,7 +123,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val testIdentityManagerBinder = mkTestManagerBinder { request => Response(Status.NotFound).toFuture }
 
     // Execute
-    val output = KeymasterIdentityProvider(testIdentityManagerBinder)(
+    val output = KeymasterIdentityProvider(testIdentityManagerBinder).apply(
       KeymasterIdentifyReq(OAuth2CodeCredential("foo", "bar", two)))
 
     // Validate
@@ -143,7 +143,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     }
 
     // Execute
-    val output = KeymasterIdentityProvider(testIdentityManagerBinder)(
+    val output = KeymasterIdentityProvider(testIdentityManagerBinder).apply(
       KeymasterIdentifyReq(InternalAuthCredential("foo", "bar", one)))
 
     // Validate
@@ -465,7 +465,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val sessionId = sessionid.untagged
 
     // Execute
-    val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore)(
+    val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore).apply(
       KeymasterAccessReq(Id(tokens2), one, sessionId))
 
     // Validate
@@ -484,7 +484,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     sessionStore.update[Tokens](Session(sessionId, tokens))
 
     // Execute
-    val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore)(
+    val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore).apply(
       KeymasterAccessReq(Id(tokens), one, sessionId))
 
     // Validate
@@ -498,7 +498,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val sessionId = sessionid.untagged
 
     // Execute
-    val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore)(
+    val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore).apply(
       KeymasterAccessReq(Id(tokens), one, sessionId))
 
     // Validate
@@ -519,7 +519,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val sessionId = sessionid.untagged
 
     // Execute
-    val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore)(
+    val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore).apply(
       KeymasterAccessReq(Id(tokens), one, sessionId))
 
     // Validate
@@ -539,7 +539,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val sessionId = sessionid.untagged
 
     // Execute
-    val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore)(
+    val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore).apply(
       KeymasterAccessReq(Id(tokens), one, sessionId))
 
     // Validate
@@ -654,7 +654,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
       sessionStore.update[Request](Session(sessionId, origReq))
 
       // Execute
-      val output = (keymasterIdentityProviderChain(sessionStore)(store))(
+      val output = keymasterIdentityProviderChain(sessionStore).apply(
         SessionIdRequest(ServiceRequest(loginRequest, one), sessionId))
 
       // Validate
@@ -688,7 +688,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
       sessionStore.update[Request](Session(sessionId, origReq))
 
       // Execute
-      val output = (keymasterIdentityProviderChain(sessionStore)(store))(
+      val output = keymasterIdentityProviderChain(sessionStore).apply(
         SessionIdRequest(ServiceRequest(loginRequest, one), sessionId))
 
       // Validate
@@ -721,7 +721,7 @@ class KeymasterSpec extends BorderPatrolSuite  {
       sessionStore.update[Tokens](Session(sessionId, tokens))
 
       // Execute
-      val output = keymasterAccessIssuerChain(sessionStore)(store)(
+      val output = keymasterAccessIssuerChain(sessionStore).apply(
         SessionIdRequest(ServiceRequest(origReq, one), sessionId))
 
       // Validate

@@ -76,7 +76,7 @@ class StatsdExporterSpec extends BorderPatrolSuite {
     receiveString should be (Some("ut.histo.p90:0|t"))
     receiveString should be (Some("ut.histo.p95:0|t"))
     receiveString should be (Some("ut.histo.p99:0|t"))
-    receiveString should be (Some("ut.histo.p9990:0|t"))
+    receiveString should be (Some("ut.histo.p999:0|t"))
     receiveString should be (Some("ut.histo.p9999:0|t"))
   }
 }

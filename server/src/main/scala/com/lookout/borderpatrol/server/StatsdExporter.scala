@@ -3,6 +3,7 @@ package com.lookout.borderpatrol.server
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.nio.channels.DatagramChannel
+import java.util.logging.Logger
 import com.twitter.common.metrics.Metrics
 import com.twitter.finagle.stats._
 import com.twitter.finagle.util.{InetSocketAddressUtil, DefaultTimer}
@@ -14,6 +15,8 @@ import scala.util.Try
 
 
 class StatsdExporter(registry: Metrics, timer: Timer, prefix: String = "", duration: Duration, hostAndPort: String) {
+  val log = Logger.getLogger(getClass.getSimpleName)
+
   private[this] val addr = InetSocketAddressUtil.parseHosts(hostAndPort).head
   private[this] val channel = DatagramChannel.open()
 
@@ -49,7 +52,10 @@ class StatsdExporter(registry: Metrics, timer: Timer, prefix: String = "", durat
   private[this] def byteBuf(buf: Buf): ByteBuffer =
     Buf.ByteBuffer.Owned.extract(buf)
 
-  private[this] def send(str: String): Unit = channel.send(byteBuf(buf(str)), addr)
+  private[this] def send(str: String): Unit =
+    Try(channel.send(byteBuf(buf(str)), addr)).recover {
+      case e => log.info(s"Failed to send stats to: $hostAndPort with: ${e.getMessage}")
+    }
 
   // Report
   def report(): Unit = {

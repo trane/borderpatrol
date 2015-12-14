@@ -4,10 +4,12 @@ import java.net.URL
 
 import com.lookout.borderpatrol.sessionx._
 import com.lookout.borderpatrol._
-import com.lookout.borderpatrol.test.BorderPatrolSuite
+import com.lookout.borderpatrol.test.sessionx.helpers._
+import com.lookout.borderpatrol.test.{sessionx, BorderPatrolSuite}
 import com.twitter.finagle.httpx.path.Path
 
 class ServicesSpec extends BorderPatrolSuite {
+  import sessionx.helpers.{secretStore => store, _}
   import services._
 
   val urls = Set(new URL("http://localhost:5678"))

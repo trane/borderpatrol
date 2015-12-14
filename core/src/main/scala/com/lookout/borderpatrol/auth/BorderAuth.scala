@@ -6,6 +6,7 @@ import com.lookout.borderpatrol.{LoginManager, ServiceIdentifier, ServiceMatcher
 import com.lookout.borderpatrol.sessionx._
 import com.twitter.finagle.httpx.path.Path
 import com.twitter.finagle.httpx.{Status, Request, Response}
+import com.twitter.finagle.stats.StatsReceiver
 import com.twitter.finagle.{Service, Filter}
 import com.twitter.util.Future
 import scala.util.{Failure, Success}
@@ -151,13 +152,18 @@ case class IdentityFilter[A : SessionDataEncoder](store: SessionStore)(implicit 
  *
  * @param binder It binds to upstream login provider using the information passed in LoginManager
  */
-case class LoginManagerFilter(binder: MBinder[LoginManager])
+case class LoginManagerFilter(binder: MBinder[LoginManager])(implicit statsReceiver: StatsReceiver)
     extends Filter[SessionIdRequest, Response, SessionIdRequest, Response] {
+  private[this] val requestSends = statsReceiver.counter("login.manager.request.sends")
+
   def apply(req: SessionIdRequest,
             service: Service[SessionIdRequest, Response]): Future[Response] =
     Path(req.req.req.path) match {
       case req.req.serviceId.loginManager.protoManager.loginConfirm => service(req)
-      case _ => binder(BindRequest(req.req.serviceId.loginManager, req.req.req))
+      case _ => {
+        requestSends.incr
+        binder(BindRequest(req.req.serviceId.loginManager, req.req.req))
+      }
     }
 }
 
@@ -168,6 +174,7 @@ case class LoginManagerFilter(binder: MBinder[LoginManager])
  */
 case class AccessFilter[A, B](binder: MBinder[ServiceIdentifier])
   extends Filter[AccessIdRequest[A], Response, AccessRequest[A], AccessResponse[B]] {
+
   def apply(req: AccessIdRequest[A],
             accessService: Service[AccessRequest[A], AccessResponse[B]]): Future[Response] =
     accessService(AccessRequest(req.id, req.req.req.serviceId, req.req.sessionId)).flatMap(accessResp =>
