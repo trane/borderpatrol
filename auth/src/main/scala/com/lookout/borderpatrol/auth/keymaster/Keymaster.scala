@@ -6,6 +6,7 @@ import com.lookout.borderpatrol.ServiceIdentifier
 import com.lookout.borderpatrol.{InternalAuthProtoManager, Manager, OAuth2CodeProtoManager}
 import com.lookout.borderpatrol.Binder._
 import com.lookout.borderpatrol.auth._
+import com.twitter.finagle.stats.StatsReceiver
 import com.twitter.finagle.{Filter, Service}
 import com.twitter.finagle.httpx._
 import com.twitter.util.Future
@@ -29,26 +30,46 @@ object Keymaster {
    * @param binder Binder that binds to Keymaster identity service passed in the IdentityManager
    */
   case class KeymasterIdentityProvider(binder: MBinder[Manager])
+                                      (implicit statsReceiver: StatsReceiver)
       extends IdentityProvider[Credential, Tokens] {
+    private[this] val requestSends = statsReceiver.counter("keymaster.identity.provider.request.sends")
+    private[this] val responseParsingFailed =
+      statsReceiver.counter("keymaster.identity.provider.response.parsing.failed")
+    private[this] val responseSuccess =
+      statsReceiver.counter("keymaster.identity.provider.response.success")
+    private[this] val responseFailed =
+      statsReceiver.counter("keymaster.identity.provider.response.failed")
 
     /**
      * Sends credentials, if authenticated successfully will return a MasterToken otherwise a Future.exception
      */
-    def apply(req: IdentifyRequest[Credential]): Future[IdentifyResponse[Tokens]] =
+    def apply(req: IdentifyRequest[Credential]): Future[IdentifyResponse[Tokens]] = {
+      requestSends.incr
+
       //  Authenticate user by the Keymaster
       binder(BindRequest(req.credential.serviceId.loginManager.identityManager, req.credential.toRequest))
         .flatMap(res => res.status match {
         //  Parse for Tokens if Status.Ok
         case Status.Ok =>
           Tokens.derive[Tokens](res.contentString).fold[Future[IdentifyResponse[Tokens]]](
-            err => Future.exception(IdentityProviderError(Status.InternalServerError,
-              "Failed to parse the Keymaster Identity Response")),
-            t => Future.value(KeymasterIdentifyRes(t))
+            err => {
+              responseParsingFailed.incr
+              Future.exception(IdentityProviderError(Status.InternalServerError,
+                "Failed to parse the Keymaster Identity Response"))
+            },
+            t => {
+              responseSuccess.incr
+              Future.value(KeymasterIdentifyRes(t))
+            }
           )
         //  Preserve Response Status code by throwing AccessDenied exceptions
-        case _ => Future.exception(IdentityProviderError(res.status,
-          s"Invalid credentials for user ${req.credential.uniqueId}"))
+        case _ => {
+          responseFailed.incr
+          Future.exception(IdentityProviderError(res.status,
+            s"Invalid credentials for user ${req.credential.uniqueId}"))
+        }
       })
+    }
   }
 
   /**
@@ -59,8 +80,10 @@ object Keymaster {
    * @param store
    * @param secretStoreApi
    */
-  case class KeymasterPostLoginFilter(store: SessionStore)(implicit secretStoreApi: SecretStoreApi)
+  case class KeymasterPostLoginFilter(store: SessionStore)
+                                     (implicit secretStoreApi: SecretStoreApi, statsReceiver: StatsReceiver)
       extends Filter[SessionIdRequest, Response, IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
+    private[this] val sessionAuthenticated = statsReceiver.counter("keymaster.session.authenticated")
 
     /**
      * Grab the original request from the session store, otherwise just send them to the default location of '/'
@@ -84,6 +107,7 @@ object Keymaster {
           originReq <- requestFromSessionStore(req.sessionId)
           _ <- store.delete(req.sessionId)
         } yield tap(Response(Status.Found))(res => {
+          sessionAuthenticated.incr
           res.location = originReq.uri
           res.addCookie(session.id.asCookie)
         })
@@ -96,7 +120,17 @@ object Keymaster {
    * @param store Session store
    */
   case class KeymasterAccessIssuer(binder: MBinder[Manager], store: SessionStore)
+                                  (implicit statsReceiver: StatsReceiver)
       extends AccessIssuer[Tokens, ServiceToken] {
+    private[this] val requestSends = statsReceiver.counter("keymaster.access.issuer.request.sends")
+    private[this] val responseParsingFailed =
+      statsReceiver.counter("keymaster.access.issuer.response.parsing.failed")
+    private[this] val responseSuccess =
+      statsReceiver.counter("keymaster.access.issuer.response.success")
+    private[this] val responseFailed =
+      statsReceiver.counter("keymaster.access.issuer.response.failed")
+    private[this] val cacheHits = statsReceiver.counter("keymaster.access.issuer.cache.hits")
+
     def api(accessRequest: AccessRequest[Tokens]): Request =
       tap(Request(Method.Post, accessRequest.serviceId.loginManager.accessManager.path.toString))(req => {
         req.contentType = "application/x-www-form-urlencoded"
@@ -110,26 +144,40 @@ object Keymaster {
      */
     def apply(req: AccessRequest[Tokens]): Future[AccessResponse[ServiceToken]] =
       //  Check if ServiceToken is already available for Service
-      req.identity.id.service(req.serviceId.name).fold[Future[ServiceToken]](
+      req.identity.id.service(req.serviceId.name).fold[Future[ServiceToken]]({
+        requestSends.incr
+
         //  Fetch ServiceToken from the Keymaster
         binder(BindRequest(req.serviceId.loginManager.accessManager, api(req))).flatMap(res => res.status match {
           //  Parse for Tokens if Status.Ok
           case Status.Ok =>
             Tokens.derive[Tokens](res.contentString).fold[Future[ServiceToken]](
-              e => Future.exception(AccessIssuerError(Status.NotAcceptable,
-                "Failed to parse the Keymaster Access Response")),
-              t => t.service(req.serviceId.name).fold[Future[ServiceToken]](
-                Future.exception(AccessDenied(Status.NotAcceptable,
-                  s"No access allowed to service ${req.serviceId.name}"))
-              )(st => for {
-                _ <- store.update(Session(req.sessionId, req.identity.id.add(req.serviceId.name, st)))
-              } yield st)
+              e => {
+                responseParsingFailed.incr
+                Future.exception(AccessIssuerError(Status.NotAcceptable,
+                  "Failed to parse the Keymaster Access Response"))
+              },
+              t => {
+                responseSuccess.incr
+                t.service(req.serviceId.name).fold[Future[ServiceToken]](
+                  Future.exception(AccessDenied(Status.NotAcceptable,
+                    s"No access allowed to service ${req.serviceId.name}"))
+                )(st => for {
+                  _ <- store.update(Session(req.sessionId, req.identity.id.add(req.serviceId.name, st)))
+                } yield st)
+              }
             )
           //  Preserve Response Status code by throwing AccessDenied exceptions
-          case _ => Future.exception(AccessIssuerError(res.status,
-            s"No access allowed to service ${req.serviceId.name} due to error: ${res.status}"))
+          case _ => {
+            responseFailed.incr
+            Future.exception(AccessIssuerError(res.status,
+              s"No access allowed to service ${req.serviceId.name} due to error: ${res.status}"))
+          }
         })
-      )(t => Future.value(t)).map(t => KeymasterAccessRes(Access(t)))
+      })(t => {
+        cacheHits.incr
+        Future.value(t)
+      }).map(t => KeymasterAccessRes(Access(t)))
   }
 
   /**
@@ -137,7 +185,7 @@ object Keymaster {
    * @param store
    */
   def keymasterIdentityProviderChain(store: SessionStore)(
-    implicit secretStoreApi: SecretStoreApi): Service[SessionIdRequest, Response] = {
+    implicit secretStoreApi: SecretStoreApi, statsReceiver: StatsReceiver): Service[SessionIdRequest, Response] = {
     LoginManagerFilter(LoginManagerBinder) andThen
       KeymasterPostLoginFilter(store) andThen
       KeymasterIdentityProvider(ManagerBinder)
@@ -148,7 +196,7 @@ object Keymaster {
    * @param store
    */
   def keymasterAccessIssuerChain(store: SessionStore)(
-    implicit secretStoreApi: SecretStoreApi): Service[SessionIdRequest, Response] = {
+    implicit secretStoreApi: SecretStoreApi, statsReceiver: StatsReceiver): Service[SessionIdRequest, Response] = {
     IdentityFilter[Tokens](store) andThen
       AccessFilter[Tokens, ServiceToken](ServiceIdentifierBinder) andThen
       KeymasterAccessIssuer(ManagerBinder, store)

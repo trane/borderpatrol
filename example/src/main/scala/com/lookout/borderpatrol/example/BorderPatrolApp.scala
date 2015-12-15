@@ -12,7 +12,12 @@ object BorderPatrolApp extends TwitterServer with Config {
 
   premain {
     implicit val serverConfig = readServerConfig(configFile())
+    implicit val bpStatsReceiver = statsReceiver
 
+    // Create a StatsD exporter
+    val statsdReporter = new StatsdExporter(serverConfig.statsdExporterConfig)
+
+    // Create a server
     val server1 = Httpx.serve(":8080", MainServiceChain)
     val server2 = Httpx.serve(":8081", getMockRoutingService)
     Await.all(server1, server2)

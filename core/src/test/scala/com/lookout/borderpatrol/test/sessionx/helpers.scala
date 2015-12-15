@@ -3,6 +3,7 @@ package com.lookout.borderpatrol.test.sessionx
 import com.lookout.borderpatrol.sessionx.SecretStores.InMemorySecretStore
 import com.twitter.finagle.httpx.Method.{Put, Get}
 import com.twitter.finagle.httpx.{Response, Request}
+import com.twitter.finagle.stats.NullStatsReceiver
 import com.twitter.util._
 import com.twitter.finagle.httpx
 import scala.util.{Success, Try}
@@ -23,6 +24,11 @@ object helpers {
      val secrets = Secrets(current, previous)
    }
    implicit val secretStore = InMemorySecretStore(secrets.secrets)
+
+  /**
+   *
+   */
+  implicit val bpTestStatsReceiver = NullStatsReceiver
 
    /**
     * Common usage of sessionid across tests

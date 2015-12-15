@@ -2,6 +2,7 @@ package com.lookout.borderpatrol
 
 import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
+import java.util.logging.Logger
 
 import com.twitter.finagle.{Httpx, Service}
 import com.twitter.finagle.httpx.{Response, Request}
@@ -69,6 +70,7 @@ object Binder {
 
 
 object BinderBase {
+  val log = Logger.getLogger(getClass.getSimpleName)
   val cache: collection.concurrent.Map[String, Service[Request, Response]] =
     new ConcurrentHashMap[String, Service[Request, Response]] asScala
 
@@ -101,7 +103,11 @@ object BinderBase {
       cl <- getOrCreate(name, urls)
       res <- cl.apply(request)
     } yield res) handle {
-      case e => throw CommunicationError(s"${name} with ${e.getMessage}")
+      case e => {
+        log.warning("Failed to connect " +
+          s"for: $name to: ${urls.map(u => u.getAuthority).mkString(",")} with: ${e.getMessage}")
+        throw CommunicationError(s"${name} with ${e.getMessage}")
+      }
     }
   }
 

@@ -1,7 +1,7 @@
 import sbtunidoc.Plugin.UnidocKeys._
 import scoverage.ScoverageSbtPlugin.ScoverageKeys.coverageExcludedPackages
 
-lazy val Version = "0.1.0"
+lazy val Version = "0.1.1-SNAPSHOT"
 
 lazy val buildSettings = Seq(
   organization := "com.lookout",
@@ -168,7 +168,6 @@ lazy val example = project
   .settings(
     libraryDependencies ++= Seq(
       "com.twitter" %% "twitter-server" % twitterServerVersion,
-      "com.twitter" %% "finagle-stats" % finagleVersion,
       "com.github.finagle" %% "finch-core" % finchVersion,
       "com.github.finagle" %% "finch-argonaut" % finchVersion
     )
@@ -202,7 +201,8 @@ lazy val server = project
     libraryDependencies ++= Seq(
       "io.circe" %% "circe-core" % circeVersion,
       "io.circe" %% "circe-generic" % circeVersion,
-      "io.circe" %% "circe-jawn" % circeVersion
+      "io.circe" %% "circe-jawn" % circeVersion,
+      "com.twitter" %% "finagle-stats" % finagleVersion
     )
   )
   .dependsOn(core % "test->test;compile->compile", auth)

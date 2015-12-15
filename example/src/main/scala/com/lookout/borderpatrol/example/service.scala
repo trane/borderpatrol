@@ -50,8 +50,8 @@ object MockService {
     def apply(request: Request): Future[Response] = {
       val tokens = Tokens(MasterToken("masterT"), ServiceTokens())
       (for {
-        email <- request.getParam("e").toFuture
-        pass <- request.getParam("p").toFuture
+        email <- request.getParam("email").toFuture
+        pass <- request.getParam("password").toFuture
         if userMap(email) == (pass)
       } yield tap(Response(Status.Ok))(res => {
           res.contentString = TokensEncoder(tokens).toString()

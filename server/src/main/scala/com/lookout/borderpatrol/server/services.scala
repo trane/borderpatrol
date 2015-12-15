@@ -6,6 +6,7 @@ import com.lookout.borderpatrol._
 import com.lookout.borderpatrol.sessionx.{SessionStore, SecretStoreApi}
 import com.twitter.finagle.Service
 import com.twitter.finagle.httpx.{Request, Response}
+import com.twitter.finagle.stats.StatsReceiver
 
 
 object services {
@@ -15,7 +16,8 @@ object services {
    *
    * As of now, we only support `keymaster` as an Identity Provider
    */
-  def identityProviderChainMap(sessionStore: SessionStore)(implicit store: SecretStoreApi):
+  def identityProviderChainMap(sessionStore: SessionStore)(
+    implicit store: SecretStoreApi, statsReceiver: StatsReceiver):
       Map[String, Service[SessionIdRequest, Response]] =
     Map("keymaster" -> keymasterIdentityProviderChain(sessionStore))
 
@@ -24,14 +26,15 @@ object services {
    *
    * As of now, we only support `keymaster` as an Access Issuer
    */
-  def accessIssuerChainMap(sessionStore: SessionStore)(implicit store: SecretStoreApi):
+  def accessIssuerChainMap(sessionStore: SessionStore)(
+    implicit store: SecretStoreApi, statsReceiver: StatsReceiver):
       Map[String, Service[SessionIdRequest, Response]] =
     Map("keymaster" -> keymasterAccessIssuerChain(sessionStore))
 
   /**
    * The sole entry point for all service chains
    */
-  def MainServiceChain(implicit config: ServerConfig): Service[Request, Response] = {
+  def MainServiceChain(implicit config: ServerConfig, statsReceiver: StatsReceiver): Service[Request, Response] = {
     implicit val secretStore = config.secretStore
     val serviceMatcher = ServiceMatcher(config.serviceIdentifiers)
 
