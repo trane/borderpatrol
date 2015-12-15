@@ -36,7 +36,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
 
   // sids
   val one = ServiceIdentifier("one", urls, Path("/ent"), None, "enterprise", checkpointLoginManager)
-  val two = ServiceIdentifier("two", urls, Path("/ftp"), None, "sky", umbrellaLoginManager)
+  val two = ServiceIdentifier("two", urls, Path("/umb"), Some(Path("/broken/umb")), "sky", umbrellaLoginManager)
   val serviceMatcher = ServiceMatcher(Set(one, two))
   val sessionStore = SessionStores.InMemoryStore
 
@@ -149,7 +149,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
   it should "return redirect to login URI, if no SessionId present in the SessionIdRequest for OAuth2Code" in {
 
     // Create request
-    val request = req("sky", "/ftp")
+    val request = req("sky", "/umb")
 
     // Execute
     val output = (SessionIdFilter(sessionStore) andThen sessionIdFilterTestService)(ServiceRequest(request, two))
@@ -165,7 +165,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
   it should "throw an exception if SessionId and Host are not present in the HTTP Request for OAuth2Code" in {
 
     // Create request
-    val request = Request("/ftp")
+    val request = Request("/umb")
 
     // Execute
     val output = (SessionIdFilter(sessionStore) andThen sessionIdFilterTestService)(ServiceRequest(request, two))
@@ -640,6 +640,54 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     // Execute
     val output = (AccessFilter[Int, String](testSidBinder) andThen accessService)(
       AccessIdRequest(SessionIdRequest(ServiceRequest(request, one), sessionId), Id(10)))
+
+    // Validate
+    Await.result(output).status should be (Status.Ok)
+  }
+
+  behavior of "RewriteFilter"
+
+  it should "succeed and include service token in the request and invoke the REST API of upstream service" in {
+    val testService = mkTestService[SessionIdRequest, Response] {
+      req => {
+        // Verify path is unchanged in the request
+        assert(req.req.req.uri.startsWith(one.path.toString))
+        Response(Status.Ok).toFuture
+      }
+    }
+
+    // Allocate and Session
+    val sessionId = sessionid.authenticated
+
+    // Create request
+    val request = req("enterprise", "/ent/whatever")
+
+    // Execute
+    val output = (RewriteFilter() andThen testService)(
+      SessionIdRequest(ServiceRequest(request, one), sessionId))
+
+    // Validate
+    Await.result(output).status should be (Status.Ok)
+  }
+
+  it should "succeed and include service token in the request and invoke rewritten URL on upstream service" in {
+    val testService = mkTestService[SessionIdRequest, Response] {
+      req => {
+        // Verify path is rewritten in the request
+        assert(req.req.req.uri.startsWith(two.rewritePath.get.toString))
+        Response(Status.Ok).toFuture
+      }
+    }
+
+    // Allocate and Session
+    val sessionId = sessionid.authenticated
+
+    // Create request
+    val request = req("umbrella", "/umb/some/weird/path")
+
+    // Execute
+    val output = (RewriteFilter() andThen testService)(
+      SessionIdRequest(ServiceRequest(request, two), sessionId))
 
     // Validate
     Await.result(output).status should be (Status.Ok)

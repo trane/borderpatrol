@@ -1,13 +1,13 @@
 package com.lookout.borderpatrol.auth
 
 import com.lookout.borderpatrol.Binder.{BindRequest, MBinder}
-import com.lookout.borderpatrol.util.Combinators.tap
+import com.lookout.borderpatrol.util.Combinators._
 import com.lookout.borderpatrol.{LoginManager, ServiceIdentifier, ServiceMatcher}
 import com.lookout.borderpatrol.sessionx._
 import com.twitter.finagle.httpx.path.Path
 import com.twitter.finagle.httpx.{Status, Request, Response}
 import com.twitter.finagle.stats.StatsReceiver
-import com.twitter.finagle.{Service, Filter}
+import com.twitter.finagle.{SimpleFilter, Service, Filter}
 import com.twitter.util.Future
 import scala.util.{Failure, Success}
 
@@ -15,7 +15,10 @@ import scala.util.{Failure, Success}
  * PODs
  */
 case class ServiceRequest(req: Request, serviceId: ServiceIdentifier)
-case class SessionIdRequest(req: ServiceRequest, sessionId: SessionId)
+case class SessionIdRequest(req: ServiceRequest, sessionId: SessionId) {
+  def this(serviceId: ServiceIdentifier, sessionId: SessionId, req: Request) =
+    this(ServiceRequest(req, serviceId), sessionId)
+}
 case class AccessIdRequest[A](req: SessionIdRequest, id: Id[A])
 
 /**
@@ -189,10 +192,23 @@ case class AccessFilter[A, B](binder: MBinder[ServiceIdentifier])
 }
 
 /**
+ * This filter rewrites Request Path as per the ServiceIdentifier configuration
+ */
+case class RewriteFilter() extends SimpleFilter[SessionIdRequest, Response] {
+  def apply(req: SessionIdRequest,
+            service: Service[SessionIdRequest, Response]): Future[Response] = {
+    service(new SessionIdRequest(req.req.serviceId, req.sessionId, tap(req.req.req) { r =>
+      // Rewrite the URI (i.e. path)
+      r.uri = req.req.serviceId.rewritePath.fold(r.uri)(p =>
+        r.uri.replaceFirst(req.req.serviceId.path.toString, p.toString))
+    }))
+  }
+}
+
+/**
  * Top level filter that maps exceptions into appropriate status codes
  */
-case class ExceptionFilter()
-    extends Filter[Request, Response, Request, Response] {
+case class ExceptionFilter() extends SimpleFilter[Request, Response] {
 
   /**
    * Tells the service how to handle certain types of servable errors (i.e. PetstoreError)
