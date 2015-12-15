@@ -23,10 +23,10 @@ class ServiceMatcherSpec extends BorderPatrolSuite {
   val umbrellaLoginManager = LoginManager("umbrella", keymasterIdManager, keymasterAccessManager,
     oauth2CodeProtoManager)
 
-  val one = ServiceIdentifier("one", urls, Path("/ent"), "enterprise", checkpointLoginManager)
-  val two = ServiceIdentifier("two", urls, Path("/api"), "api", umbrellaLoginManager)
-  val three = ServiceIdentifier("three", urls, Path("/apis"), "api.subdomain", checkpointLoginManager)
-  val four = ServiceIdentifier("four", urls, Path("/apis/test"), "api.testdomain", umbrellaLoginManager)
+  val one = ServiceIdentifier("one", urls, Path("/ent"), None, "enterprise", checkpointLoginManager)
+  val two = ServiceIdentifier("two", urls, Path("/api"), None, "api", umbrellaLoginManager)
+  val three = ServiceIdentifier("three", urls, Path("/apis"), None, "api.subdomain", checkpointLoginManager)
+  val four = ServiceIdentifier("four", urls, Path("/apis/test"), None, "api.testdomain", umbrellaLoginManager)
   val sids = Set(one, two, three, four)
   val serviceMatcher = ServiceMatcher(sids)
 

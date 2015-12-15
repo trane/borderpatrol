@@ -160,6 +160,7 @@ object Config {
       ("name", sid.name.asJson),
       ("hosts", sid.hosts.asJson),
       ("path", sid.path.asJson),
+      ("rewritePath", sid.rewritePath.asJson),
       ("subdomain", sid.subdomain.asJson),
       ("loginManager", sid.loginManager.name.asJson)))
   }
@@ -169,12 +170,13 @@ object Config {
         name <- c.downField("name").as[String]
         hosts <- c.downField("hosts").as[Set[URL]]
         path <- c.downField("path").as[Path]
+        rewritePathOpt <- c.downField("rewritePath").as[Option[Path]]
         subdomain <- c.downField("subdomain").as[String]
         lmName <- c.downField("loginManager").as[String]
         lm <- Xor.fromOption(lms.get(lmName),
           DecodingFailure(s"No LoginManager $lmName found: ", c.history)
         )
-      } yield ServiceIdentifier(name, hosts, path, subdomain, lm)
+      } yield ServiceIdentifier(name, hosts, path, rewritePathOpt, subdomain, lm)
     }
 
   /**

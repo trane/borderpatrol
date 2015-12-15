@@ -179,7 +179,12 @@ case class AccessFilter[A, B](binder: MBinder[ServiceIdentifier])
             accessService: Service[AccessRequest[A], AccessResponse[B]]): Future[Response] =
     accessService(AccessRequest(req.id, req.req.req.serviceId, req.req.sessionId)).flatMap(accessResp =>
       binder(BindRequest(req.req.req.serviceId,
-        tap(req.req.req.req) { r => r.headerMap.add("Auth-Token", accessResp.access.access.toString)}))
+        tap(req.req.req.req) { r => {
+          // Rewrite the URI (i.e. path)
+          r.uri = req.req.req.serviceId.rewritePath.fold(r.uri)(p =>
+            r.uri.replaceFirst(req.req.req.serviceId.path.toString, p.toString))
+          r.headerMap.add("Auth-Token", accessResp.access.access.toString)
+        }}))
     )
 }
 

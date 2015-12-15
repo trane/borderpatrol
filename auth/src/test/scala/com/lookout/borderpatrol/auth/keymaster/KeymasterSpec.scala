@@ -44,9 +44,9 @@ class KeymasterSpec extends BorderPatrolSuite  {
     oauth2CodeBadProtoManager)
 
   // sids
-  val one = ServiceIdentifier("one", urls, Path("/ent"), "enterprise", checkpointLoginManager)
-  val two = ServiceIdentifier("two", urls, Path("/umb"), "umbrella", umbrellaLoginManager)
-  val three = ServiceIdentifier("three", urls, Path("/rain"), "rainy", rainyLoginManager)
+  val one = ServiceIdentifier("one", urls, Path("/ent"), None, "enterprise", checkpointLoginManager)
+  val two = ServiceIdentifier("two", urls, Path("/umb"), Some(Path("/broken/umb")), "umbrella", umbrellaLoginManager)
+  val three = ServiceIdentifier("three", urls, Path("/rain"), None, "rainy", rainyLoginManager)
   val serviceMatcher = ServiceMatcher(Set(one, two, three))
   val sessionStore = SessionStores.InMemoryStore
 
@@ -559,20 +559,48 @@ class KeymasterSpec extends BorderPatrolSuite  {
     val testSidBinder = mkTestSidBinder {
       request => {
         // Verify service token in the request
-        assert (request.req.headerMap.get("Auth-Token") == Some(serviceToken2.value))
+        assert(request.req.uri == one.path.toString)
+        assert(request.req.headerMap.get("Auth-Token") == Some(serviceToken2.value))
         Response(Status.Ok).toFuture
       }
     }
 
     // Allocate and Session
-    val sessionId = sessionid.untagged
+    val sessionId = sessionid.authenticated
 
     // Create request
-    val request = req("enterprise", "/dang")
+    val request = req("enterprise", "/ent")
 
     // Execute
     val output = (AccessFilter[Tokens, ServiceToken](testSidBinder) andThen accessService)(
       AccessIdRequest(SessionIdRequest(ServiceRequest(request, one), sessionId), Id(tokens)))
+
+    // Validate
+    Await.result(output).status should be (Status.Ok)
+  }
+
+  it should "succeed and include service token in the request and invoke rewritten URL on upstream service" in {
+    val accessService = mkTestService[AccessRequest[Tokens], AccessResponse[ServiceToken]] {
+      request => KeymasterAccessRes(Access(serviceToken2)).toFuture
+    }
+    val testSidBinder = mkTestSidBinder {
+      request => {
+        // Verify service token in the request
+        assert(request.req.uri.startsWith(two.rewritePath.get.toString))
+        assert(request.req.headerMap.get("Auth-Token") == Some(serviceToken2.value))
+        Response(Status.Ok).toFuture
+      }
+    }
+
+    // Allocate and Session
+    val sessionId = sessionid.authenticated
+
+    // Create request
+    val request = req("umbrella", "/umb/some/weird/path")
+
+    // Execute
+    val output = (AccessFilter[Tokens, ServiceToken](testSidBinder) andThen accessService)(
+      AccessIdRequest(SessionIdRequest(ServiceRequest(request, two), sessionId), Id(tokens)))
 
     // Validate
     Await.result(output).status should be (Status.Ok)
@@ -591,10 +619,10 @@ class KeymasterSpec extends BorderPatrolSuite  {
     }
 
     // Allocate and Session
-    val sessionId = sessionid.untagged
+    val sessionId = sessionid.authenticated
 
     // Create request
-    val request = req("enterprise", "/dang")
+    val request = req("enterprise", "/ent/whatever")
 
     // Execute
     val output = (AccessFilter[Tokens, ServiceToken](testSidBinder) andThen accessService)(
@@ -617,10 +645,10 @@ class KeymasterSpec extends BorderPatrolSuite  {
     }
 
     // Allocate and Session
-    val sessionId = sessionid.untagged
+    val sessionId = sessionid.authenticated
 
     // Create request
-    val request = req("enterprise", "/dang")
+    val request = req("enterprise", "/ent/something")
 
     // Execute
     val output = (AccessFilter[Tokens, ServiceToken](testSidBinder) andThen accessService)(

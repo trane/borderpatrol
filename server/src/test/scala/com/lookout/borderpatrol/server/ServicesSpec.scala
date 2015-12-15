@@ -4,7 +4,6 @@ import java.net.URL
 
 import com.lookout.borderpatrol.sessionx._
 import com.lookout.borderpatrol._
-import com.lookout.borderpatrol.test.sessionx.helpers._
 import com.lookout.borderpatrol.test.{sessionx, BorderPatrolSuite}
 import com.twitter.finagle.httpx.path.Path
 
@@ -22,7 +21,7 @@ class ServicesSpec extends BorderPatrolSuite {
     internalProtoManager)
 
   // sids
-  val one = ServiceIdentifier("one", urls, Path("/ent"), "enterprise", checkpointLoginManager)
+  val one = ServiceIdentifier("one", urls, Path("/ent"), None, "enterprise", checkpointLoginManager)
   val sids = Set(one)
   val serviceMatcher = ServiceMatcher(sids)
 
