@@ -25,7 +25,9 @@ import scala.util.{Success, Failure, Try}
  * @param secret the secret used to sign this session id
  * @param signature the bytes of the signature(expires, entropy, secret.id)
  */
-case class SessionId(expires: Time, entropy: Entropy, secret: Secret, tag: Tag, signature: Signature)
+case class SessionId(expires: Time, entropy: Entropy, secret: Secret, tag: Tag, signature: Signature) {
+  override def toString: String = SessionId.toBase64(this)
+}
 
 object SessionId {
 
@@ -175,6 +177,5 @@ object SessionId {
 
     implicit def str2SessionId(s: String)(implicit store: SecretStoreApi): Try[SessionId] =
       seq2SessionId(str2seq(s))
-
   }
 }
