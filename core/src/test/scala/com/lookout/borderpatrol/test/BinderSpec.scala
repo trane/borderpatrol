@@ -20,7 +20,7 @@ class BinderSpec extends BorderPatrolSuite {
     internalProtoManager)
 
   // sids
-  val one = ServiceIdentifier("one", urls, Path("/ent"), "enterprise", checkpointLoginManager)
+  val one = ServiceIdentifier("one", urls, Path("/ent"), None, "enterprise", checkpointLoginManager)
 
   // Request helper
   def req(path: String): Request =

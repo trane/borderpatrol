@@ -185,20 +185,21 @@ object Keymaster {
    * @param store
    */
   def keymasterIdentityProviderChain(store: SessionStore)(
-    implicit secretStoreApi: SecretStoreApi, statsReceiver: StatsReceiver): Service[SessionIdRequest, Response] = {
-    LoginManagerFilter(LoginManagerBinder) andThen
-      KeymasterPostLoginFilter(store) andThen
-      KeymasterIdentityProvider(ManagerBinder)
-  }
+    implicit secretStoreApi: SecretStoreApi, statsReceiver: StatsReceiver): Service[SessionIdRequest, Response] =
+      LoginManagerFilter(LoginManagerBinder) andThen
+        KeymasterPostLoginFilter(store) andThen
+        KeymasterIdentityProvider(ManagerBinder)
+
 
   /**
    * Keymaster Access Issuer service Chain
    * @param store
    */
   def keymasterAccessIssuerChain(store: SessionStore)(
-    implicit secretStoreApi: SecretStoreApi, statsReceiver: StatsReceiver): Service[SessionIdRequest, Response] = {
-    IdentityFilter[Tokens](store) andThen
-      AccessFilter[Tokens, ServiceToken](ServiceIdentifierBinder) andThen
-      KeymasterAccessIssuer(ManagerBinder, store)
-  }
+    implicit secretStoreApi: SecretStoreApi, statsReceiver: StatsReceiver): Service[SessionIdRequest, Response] =
+      RewriteFilter() andThen
+        IdentityFilter[Tokens](store) andThen
+        AccessFilter[Tokens, ServiceToken](ServiceIdentifierBinder) andThen
+        KeymasterAccessIssuer(ManagerBinder, store)
+
 }

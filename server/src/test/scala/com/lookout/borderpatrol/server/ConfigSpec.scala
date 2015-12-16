@@ -32,11 +32,13 @@ class ConfigSpec extends BorderPatrolSuite {
     new URL("http://example.com/tokenUrl"), "clientId", "clientSecret")
   val umbrellaLoginManager = LoginManager("umbrella", keymasterIdManager, keymasterAccessManager,
     oauth2CodeProtoManager)
+  val lmp = Map(checkpointLoginManager.name -> checkpointLoginManager,
+    umbrellaLoginManager.name -> umbrellaLoginManager)
 
-  val one = ServiceIdentifier("one", urls, Path("/ent"), "enterprise", checkpointLoginManager)
-  val two = ServiceIdentifier("two", urls, Path("/api"), "api", umbrellaLoginManager)
-  val three = ServiceIdentifier("three", urls, Path("/apis"), "api.subdomain", checkpointLoginManager)
-  val four = ServiceIdentifier("four", urls, Path("/apis/test"), "api.testdomain", umbrellaLoginManager)
+  val one = ServiceIdentifier("one", urls, Path("/ent"), None, "enterprise", checkpointLoginManager)
+  val two = ServiceIdentifier("two", urls, Path("/api"), Some(Path("/api")), "api", umbrellaLoginManager)
+  val three = ServiceIdentifier("three", urls, Path("/apis"), None, "api.subdomain", checkpointLoginManager)
+  val four = ServiceIdentifier("four", urls, Path("/apis/test"), None, "api.testdomain", umbrellaLoginManager)
   val sids = Set(one, two, three, four)
   val serviceMatcher = ServiceMatcher(sids)
 
@@ -65,6 +67,28 @@ class ConfigSpec extends BorderPatrolSuite {
   }
 
   behavior of "Config"
+
+  it should "uphold encoding/decoding ServiceIdentifier" in {
+    def decode(s: String) : ServiceIdentifier = {
+      implicit val d = decodeServiceIdentifier(lmp)
+      val out = parse(s).flatMap { json => d(Cursor(json).hcursor) }
+      out match {
+        case Xor.Right(a) => a
+        case Xor.Left(b) => ServiceIdentifier("failed", urls, Path("f"), None, "f", checkpointLoginManager)
+      }
+    }
+
+    val partialContents = Json.fromFields(Seq(
+      ("name", one.name.asJson),
+      ("hosts", one.hosts.asJson),
+      ("path", one.path.asJson),
+      ("subdomain", one.subdomain.asJson),
+      ("loginManager", one.loginManager.name.asJson)))
+
+    decode(one.asJson.toString) should be (one)
+    decode(partialContents.toString) should be (one)
+    decode(two.asJson.toString) should be (two)
+  }
 
   it should "uphold encoding/decoding Manager" in {
     def encodeDecode(m: Manager) : Manager = {
@@ -338,8 +362,8 @@ class ConfigSpec extends BorderPatrolSuite {
       ("secretStore", defaultSecretStore.asInstanceOf[SecretStoreApi].asJson),
       ("sessionStore", defaultSessionStore.asInstanceOf[SessionStore].asJson),
       ("statsdReporter", defaultStatsdExporterConfig.asJson),
-      ("serviceIdentifiers", (sids + ServiceIdentifier("some", urls, Path("/ent"), "enterprise",
-        checkpointLoginManager)).asJson),
+      ("serviceIdentifiers", (sids +
+        ServiceIdentifier("some", urls, Path("/ent"), None, "enterprise", checkpointLoginManager)).asJson),
       ("loginManagers", Set(checkpointLoginManager, umbrellaLoginManager).asJson),
       ("identityManagers", Set(keymasterIdManager).asJson),
       ("accessManagers", Set(keymasterAccessManager).asJson)))
@@ -360,8 +384,8 @@ class ConfigSpec extends BorderPatrolSuite {
       ("secretStore", defaultSecretStore.asInstanceOf[SecretStoreApi].asJson),
       ("sessionStore", defaultSessionStore.asInstanceOf[SessionStore].asJson),
       ("statsdReporter", defaultStatsdExporterConfig.asJson),
-      ("serviceIdentifiers", (sids + ServiceIdentifier("some", urls, Path("/ent"), "enterprise",
-        umbrellaLoginManager)).asJson),
+      ("serviceIdentifiers", (sids +
+        ServiceIdentifier("some", urls, Path("/ent"), None, "enterprise", umbrellaLoginManager)).asJson),
       ("loginManagers", Set(checkpointLoginManager).asJson),
       ("identityManagers", Set(keymasterIdManager).asJson),
       ("accessManagers", Set(keymasterAccessManager).asJson)))
