@@ -117,8 +117,8 @@ object Keymaster {
           sessionAuthenticated.incr
           res.location = originReq.uri
           res.addCookie(session.id.asCookie)
-          log.log(Level.DEBUG, s"Session: ${req.sessionId}} is authenticated, allocated new Session: ${session.id} " +
-            s"and redirecting to location: ${res.location}")
+          log.log(Level.DEBUG, s"Session: ${req.sessionId.toLogIdString}} is authenticated, " +
+            s"allocated new Session: ${session.id.toLogIdString} and redirecting to location: ${res.location}")
         })
     }
   }

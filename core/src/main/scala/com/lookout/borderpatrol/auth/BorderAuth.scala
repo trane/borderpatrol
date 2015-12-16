@@ -69,8 +69,8 @@ case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStor
         } yield tap(Response(Status.Found)) { res =>
           res.location = req.serviceId.loginManager.protoManager.redirectLocation(req.req.host)
           res.addCookie(session.id.asCookie)
-          log.log(Level.DEBUG, s"Untagged Request: ${req.req}, allocating a new session: ${session.id}, " +
-            s"redirecting to location: ${res.location}")
+          log.log(Level.DEBUG, s"Untagged Request: ${req.req}, allocating a new session: " +
+            s"${session.id.toLogIdString}, redirecting to location: ${res.location}")
         }
     }
 }
@@ -100,7 +100,7 @@ case class BorderService(identityProviderMap: Map[String, Service[SessionIdReque
     req.req.serviceId.isLoginManagerPath(Path(req.req.req.path))
 
   def sendToIdentityProvider(req: SessionIdRequest): Future[Response] = {
-    log.log(Level.DEBUG, s"Send Request: ${req.req.req} for Session: ${req.sessionId} " +
+    log.log(Level.DEBUG, s"Send Request: ${req.req.req} for Session: ${req.sessionId.toLogIdString} " +
       s"to identity provider chain for service: ${req.req.serviceId.name}")
     identityProviderMap.get(req.req.serviceId.loginManager.identityManager.name) match {
       case Some(ip) => ip(req)
@@ -110,7 +110,7 @@ case class BorderService(identityProviderMap: Map[String, Service[SessionIdReque
   }
 
   def sendToAccessIssuer(req: SessionIdRequest): Future[Response] = {
-    log.log(Level.DEBUG, s"Send Request: ${req.req.req} for Session: ${req.sessionId} " +
+    log.log(Level.DEBUG, s"Send Request: ${req.req.req} for Session: ${req.sessionId.toLogIdString} " +
       s"to access issuer chain for service: ${req.req.serviceId.name}")
     accessIssuerMap.get(req.req.serviceId.loginManager.accessManager.name) match {
       case Some(ip) => ip(req)
@@ -130,7 +130,7 @@ case class BorderService(identityProviderMap: Map[String, Service[SessionIdReque
 
   def redirectToLogin(req: SessionIdRequest): Future[Response] = {
     val p = Path(req.req.serviceId.loginManager.protoManager.redirectLocation(req.req.req.host))
-    log.log(Level.DEBUG, s"Redirecting the ${req.req.req} for Untagged Session: ${req.sessionId} " +
+    log.log(Level.DEBUG, s"Redirecting the ${req.req.req} for Untagged Session: ${req.sessionId.toLogIdString} " +
       s"to login service, location: ${p}")
     redirectTo(p).toFuture
   }
@@ -171,8 +171,8 @@ case class IdentityFilter[A : SessionDataEncoder](store: SessionStore)(implicit 
       } yield tap(Response(Status.Found)) { res =>
           res.location = req.req.serviceId.loginManager.protoManager.redirectLocation(req.req.req.host)
           res.addCookie(s.id.asCookie) // add SessionId value as a Cookie
-          log.info(s"Failed to find Session: ${req.sessionId} for Request: ${req.req}, " +
-            s"allocating a new session: ${s.id}, redirecting to location: ${res.location}")
+          log.info(s"Failed to find Session: ${req.sessionId.toLogIdString} for Request: ${req.req}, " +
+            s"allocating a new session: ${s.id.toLogIdString}, redirecting to location: ${res.location}")
         }
     })
 }
@@ -218,7 +218,7 @@ case class AccessFilter[A, B](binder: MBinder[ServiceIdentifier])(implicit stats
       binder(BindRequest(req.req.req.serviceId,
         tap(req.req.req.req) { r => {
           requestSends.incr
-          log.log(Level.DEBUG, s"Send Request ${req.req.req.req} for Session: ${req.req.sessionId} " +
+          log.log(Level.DEBUG, s"Send Request ${req.req.req.req} for Session: ${req.req.sessionId.toLogIdString} " +
             s"to the upstream service: ${req.req.req.serviceId.name}")
           r.headerMap.add("Auth-Token", accessResp.access.access.toString)
         }}))

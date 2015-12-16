@@ -26,7 +26,7 @@ import scala.util.{Success, Failure, Try}
  * @param signature the bytes of the signature(expires, entropy, secret.id)
  */
 case class SessionId(expires: Time, entropy: Entropy, secret: Secret, tag: Tag, signature: Signature) {
-  override def toString: String = SessionId.toBase64(this)
+  def toLogIdString: String = Base64StringEncoder.encode(signature.toArray)
 }
 
 object SessionId {
