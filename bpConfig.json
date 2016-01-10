@@ -35,6 +35,7 @@
         "loginConfirm": "/signin",
         "authorizeUrl": "https://login.zoo.com:443/common/oauth2/authorize",
         "tokenUrl": "https://login.zoo.com:443/common/oauth2/token",
+        "certificateUrl": "https://login.zoo.com:443/common/certificate",
         "clientId": "MySecretClientId",
         "clientSecret": "MySecretClientSecret"
       }

@@ -1,10 +1,7 @@
 package com.lookout.borderpatrol.auth.keymaster
 
-import com.lookout.borderpatrol.auth.TokenParsingError
 import com.lookout.borderpatrol.sessionx.{SessionDataError, SessionDataEncoder}
-import com.nimbusds.jwt.{PlainJWT, JWTClaimsSet}
 import com.twitter.io.Buf
-import com.twitter.util.Future
 import io.circe._
 import io.circe.generic.auto._
 import io.circe.syntax._
@@ -64,13 +61,6 @@ case class Tokens(master: MasterToken, services: ServiceTokens) {
     copy(services = this.services.add(name, serviceToken))
 }
 
-/**
- * AAD token
- * @param accessToken JWT Access Token
- * @param idToken JWT ID Token
- */
-case class AadToken(accessToken: String, idToken: String) extends Token
-
 object Tokens {
 
   import io.circe.generic.semiauto._
@@ -129,27 +119,5 @@ object Tokens {
         )
       )
   }
-
-  /**
-   * AadToken Encoder/Decoder
-   */
-  implicit val AadTokenEncoder: Encoder[AadToken] = Encoder.instance {t =>
-    Json.fromFields(Seq(
-      ("access_token", t.accessToken.asJson),
-      ("id_token", t.idToken.asJson)))
-  }
-
-  implicit val AadTokenDecoder: Decoder[AadToken] = Decoder.instance {c =>
-    for {
-      accessToken <- c.downField("access_token").as[String]
-      idToken <- c.downField("id_token").as[String]
-    } yield AadToken(accessToken, idToken)
-  }
-
-  /**
-   * JWT parser wrapper
-   */
-  def JwtParse(tokenStr: String): Future[JWTClaimsSet] =
-    wrapFuture[JWTClaimsSet]({() => PlainJWT.parse(tokenStr).getJWTClaimsSet }, TokenParsingError.apply)
 }
 

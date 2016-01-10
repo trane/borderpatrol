@@ -1,0 +1,713 @@
+package com.lookout.borderpatrol.auth
+
+import java.math.BigInteger
+import java.net.URL
+import java.security.{PublicKey, KeyPairGenerator, KeyPair}
+import java.security.interfaces.{ECPublicKey, ECPrivateKey, RSAPublicKey, RSAPrivateKey}
+import java.util.Date
+import javax.security.auth.x500.X500Principal
+import javax.xml.bind.DatatypeConverter
+
+import com.lookout.borderpatrol.{OAuth2CodeProtoManager, InternalAuthProtoManager, CommunicationError}
+import com.lookout.borderpatrol.{Manager, LoginManager, ServiceIdentifier, ServiceMatcher}
+import com.lookout.borderpatrol.sessionx._
+import com.lookout.borderpatrol.test.{sessionx, BorderPatrolSuite}
+import com.lookout.borderpatrol.util.Combinators.tap
+import com.nimbusds.jose.{JWSVerifier, JWSSigner, JWSHeader, JWSAlgorithm}
+import com.nimbusds.jose.crypto.{ECDSAVerifier, ECDSASigner, RSASSAVerifier, RSASSASigner}
+import com.nimbusds.jose.util.{X509CertUtils, Base64URL}
+import com.nimbusds.jwt.{PlainJWT, SignedJWT, JWTClaimsSet}
+import com.twitter.finagle.Service
+import com.twitter.finagle.httpx._
+import com.twitter.finagle.httpx.path.Path
+import com.twitter.finagle.httpx.service.RoutingService
+import com.twitter.util.{Await, Future}
+import org.bouncycastle.x509.X509V1CertificateGenerator
+
+
+class OAuth2Spec extends BorderPatrolSuite {
+  import sessionx.helpers._
+  import OAuth2._
+
+  val urls = Set(new URL("http://localhost:8081"))
+
+  //  Managers
+  val keymasterIdManager = Manager("keymaster", Path("/identityProvider"), urls)
+  val keymasterAccessManager = Manager("keymaster", Path("/accessIssuer"), urls)
+  val internalProtoManager = InternalAuthProtoManager(Path("/loginConfirm"), Path("/check"), urls)
+  val checkpointLoginManager = LoginManager("checkpoint", keymasterIdManager, keymasterAccessManager,
+    internalProtoManager)
+  val oauth2CodeProtoManager = OAuth2CodeProtoManager(Path("/loginConfirm"),
+    new URL("http://example.com/authorizeUrl"),
+    new URL("http://localhost:4567/tokenUrl"),
+    new URL("http://localhost:4567/certificateUrl"), "clientId", "clientSecret")
+  val umbrellaLoginManager = LoginManager("umbrella", keymasterIdManager, keymasterAccessManager,
+    oauth2CodeProtoManager)
+  val oauth2CodeBadProtoManager = OAuth2CodeProtoManager(Path("/signblew"),
+    new URL("http://localhost:9999/authorizeUrl"),
+    new URL("http://localhost:9999/tokenUrl"),
+    new URL("http://localhost:9999/certificateUrl"),
+    "clientId", "clientSecret")
+  val rainyLoginManager = LoginManager("rlm", keymasterIdManager, keymasterAccessManager,
+    oauth2CodeBadProtoManager)
+
+  // sids
+  val one = ServiceIdentifier("one", urls, Path("/ent"), None, "enterprise", checkpointLoginManager)
+  val two = ServiceIdentifier("two", urls, Path("/umb"), Some(Path("/broken/umb")), "sky", umbrellaLoginManager)
+  val three = ServiceIdentifier("three", urls, Path("/rain"), None, "rainy", rainyLoginManager)
+  val serviceMatcher = ServiceMatcher(Set(one, two, three))
+  val sessionStore = SessionStores.InMemoryStore
+
+  // Request helper
+  def req(subdomain: String, path: String, params: Tuple2[String, String]*): Request =
+    RequestBuilder().url(s"http://${subdomain + "."}example.com${Request.queryString(path, params: _*)}").buildGet()
+
+  //  Test Services
+  def mkTestService[A, B](f: (A) => Future[B]): Service[A, B] = new Service[A, B] {
+    def apply(request: A) = f(request)
+  }
+
+  // Mock
+  class MockOAuth2CodeVerify extends OAuth2CodeVerify {
+    def mockAdd(name: String, certificate: String): Unit = add(name, certificate)
+
+    def mockVerifier(pk: PublicKey): JWSVerifier = verifier(pk)
+  }
+
+  // Simple AAD tokens
+  val simpleAadToken = AadToken("TestAccessToken", "TestIdToken")
+  val simpleEmptyAadToken = AadToken("", "")
+
+  // RSA signatures require a public and private RSA key pair, the public key
+  // must be made known to the JWS recipient in order to verify the signatures
+  def generateTestKeyPair(algorithm: String, keySize: Int) = {
+    val keyGenerator: KeyPairGenerator = KeyPairGenerator.getInstance(algorithm)
+    keyGenerator.initialize(keySize)
+    keyGenerator.genKeyPair()
+  }
+
+  def generateTestCertificate(kp: KeyPair, algorithm: String) = {
+    val startDate: Date = new Date(2010, 1, 1);
+    // time from which certificate is valid
+    val expiryDate: Date = new Date(2020, 1, 1);
+    // time after which certificate is not valid
+    val serialNumber: BigInteger = BigInteger.TEN;
+    // serial number for certificate
+    val certGen: X509V1CertificateGenerator = new X509V1CertificateGenerator();
+    val dnName: X500Principal = new X500Principal("CN=Test CA Certificate");
+    certGen.setSerialNumber(serialNumber);
+    certGen.setIssuerDN(dnName);
+    certGen.setNotBefore(startDate);
+    certGen.setNotAfter(expiryDate);
+    certGen.setSubjectDN(dnName); // note: same as issuer
+    certGen.setPublicKey(kp.getPublic());
+    certGen.setSignatureAlgorithm(algorithm);
+    certGen.generate(kp.getPrivate())
+  }
+
+  // RSA Stuff
+  val testRsaKeyPair = generateTestKeyPair("RSA", 1024)
+  val testRsaSigner: JWSSigner = new RSASSASigner(testRsaKeyPair.getPrivate.asInstanceOf[RSAPrivateKey])
+  val testRsaCertificate = generateTestCertificate(testRsaKeyPair, "SHA256withRSA")
+  val testRsaCertificateEncoded = DatatypeConverter.printBase64Binary(testRsaCertificate.getEncoded)
+  val testRsaCertificateThumb = {
+    val md = java.security.MessageDigest.getInstance("SHA-1")
+    val dec = DatatypeConverter.parseBase64Binary(testRsaCertificateEncoded)
+    DatatypeConverter.printBase64Binary(md.digest(dec)).replaceAll("=", "").replaceAll("/", "_")
+  }
+  val testRsaAccessToken = new SignedJWT(
+    new JWSHeader.Builder(JWSAlgorithm.RS256).x509CertThumbprint(new Base64URL(testRsaCertificateThumb)).build,
+    new JWTClaimsSet.Builder().subject("abc123").claim("upn", "test@example.com").build)
+  testRsaAccessToken.sign(testRsaSigner)
+  val testRsaIdToken = new PlainJWT(new JWTClaimsSet.Builder().subject("SomeIdToken")
+    .claim("upn", "test@example.com").build)
+  val testRsaAadToken = AadToken(testRsaAccessToken.serialize(), testRsaIdToken.serialize())
+
+  // EC Stuff
+  val testEcKeyPair = generateTestKeyPair("EC", 256)
+  val testEcSigner: JWSSigner = new ECDSASigner(testEcKeyPair.getPrivate.asInstanceOf[ECPrivateKey])
+  val testEcCertificate = generateTestCertificate(testEcKeyPair, "SHA256withECDSA")
+  val testEcCertificateEncoded = DatatypeConverter.printBase64Binary(testEcCertificate.getEncoded)
+  val testEcCertificateThumb = {
+    val md = java.security.MessageDigest.getInstance("SHA-1")
+    val dec = DatatypeConverter.parseBase64Binary(testEcCertificateEncoded)
+    DatatypeConverter.printBase64Binary(md.digest(dec)).replaceAll("=", "").replaceAll("/", "_")
+  }
+  val testEcAccessToken = new SignedJWT(
+    new JWSHeader.Builder(JWSAlgorithm.ES256).x509CertThumbprint(new Base64URL(testEcCertificateThumb)).build,
+    new JWTClaimsSet.Builder().subject("abc123").claim("upn", "test@example.com").build)
+  testEcAccessToken.sign(testEcSigner)
+  val testEcIdToken = new PlainJWT(new JWTClaimsSet.Builder().subject("SomeIdToken")
+    .claim("upn", "test@example.com").build)
+  val testEcAadToken = AadToken(testEcAccessToken.serialize(), testEcIdToken.serialize())
+
+
+  behavior of "AadToken"
+
+  it should "uphold encoding/decoding AadToken" in {
+    def encodeDecode(toks: AadToken): AadToken = {
+      val encoded = AadTokenEncoder(toks)
+      AadTokenDecoder.decodeJson(encoded).fold[AadToken](e => simpleEmptyAadToken, t => t)
+    }
+    encodeDecode(simpleAadToken) should be(simpleAadToken)
+  }
+
+  behavior of "codeToClaimsSet"
+
+  it should "RSA Certificate generate" in {
+
+    println("Custom RSA certificate = " + testRsaCertificate)
+    println("Custom RSA certificate string = " + testRsaCertificateEncoded)
+    println("Custom RSA thumb: " + testRsaCertificateThumb)
+
+    val stuff1Dec = DatatypeConverter.parseBase64Binary(testRsaCertificateEncoded)
+    val certAgain = X509CertUtils.parse(stuff1Dec)
+    //println("Custom certificate again = " + certAgain)
+
+    val certAgainStr = DatatypeConverter.printBase64Binary(certAgain.getEncoded)
+    println("Custom RSA certificate again string = " + certAgainStr)
+
+    println("Compare RSA Certificates = " + (testRsaCertificateEncoded == certAgainStr))
+
+    val againKey = certAgain.getPublicKey.asInstanceOf[RSAPublicKey]
+    val againVerifier = new RSASSAVerifier(againKey)
+    println("VERIFIED RSA = " + testRsaAccessToken.verify(againVerifier))
+  }
+
+  it should "EC Certificate generate" in {
+
+    println("Custom EC certificate = " + testEcCertificate)
+    println("Custom EC certificate string = " + testEcCertificateEncoded)
+    println("Custom EC thumb: " + testEcCertificateThumb)
+
+    val stuff1Dec = DatatypeConverter.parseBase64Binary(testEcCertificateEncoded)
+    val certAgain = X509CertUtils.parse(stuff1Dec)
+    //println("Custom certificate again = " + certAgain)
+
+    val certAgainStr = DatatypeConverter.printBase64Binary(certAgain.getEncoded)
+    println("Custom EC certificate again string = " + certAgainStr)
+
+    println("Compare EC certificates= " + (testEcCertificateEncoded == certAgainStr))
+
+    val againKey = certAgain.getPublicKey.asInstanceOf[ECPublicKey]
+    val againVerifier = new ECDSAVerifier(againKey)
+    println("VERIFIED EC = " + testEcAccessToken.verify(againVerifier))
+  }
+
+  it should "succeed and transform the Request with OAuth2 code to JWT ClaimsSet using RSA certificates" in {
+
+    //Launch a server for fetching token from a code
+    val server = com.twitter.finagle.Httpx.serve(
+      "localhost:4567",
+      RoutingService.byPath {
+        case p1 if p1 contains "tokenUrl" => mkTestService[Request, Response] { req =>
+          assert(req.getParam("code") == "XYZ123")
+          tap(Response(Status.Ok))(res => {
+            res.contentString = AadTokenEncoder(testRsaAadToken).toString()
+            res.contentType = "application/json"
+          }).toFuture
+        }
+        case p2 if p2 contains "certificateUrl" => mkTestService[Request, Response] { req =>
+          tap(Response(Status.Ok))(res => {
+            res.contentString = s"""<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" ID="_535c5971-00df-43d4-915e-841cfed13adc" entityID="https://sts.windows.net/{tenantid}/">
+                <RoleDescriptor xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:fed="http://docs.oasis-open.org/wsfed/federation/200706" xsi:type="fed:SecurityTokenServiceType" protocolSupportEnumeration="http://docs.oasis-open.org/wsfed/federation/200706">
+                <KeyDescriptor use="signing">
+                <KeyInfo xmlns="http://www.w3.org/2000/09/xmldsig#">
+                <X509Data>
+                <X509Certificate>$testRsaCertificateEncoded</X509Certificate>
+                </X509Data>
+                </KeyInfo>
+                </KeyDescriptor>
+                </RoleDescriptor>
+                </EntityDescriptor>"""
+            res.contentType = "text/xml"
+          }).toFuture
+        }
+      })
+
+    try {
+      // Allocate and Session
+      val sessionId = sessionid.untagged
+
+      // Login POST request
+      val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
+
+      // SessionIdRequest
+      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+
+      // Execute
+      val output = new OAuth2CodeVerify().codeToClaimsSet(sessionIdRequest, oauth2CodeProtoManager)
+
+      // Validate
+      Await.result(output).getSubject should be("abc123")
+      Await.result(output).getStringClaim("upn") should be("test@example.com")
+    } finally {
+      server.close()
+    }
+  }
+
+  it should "succeed and transform the Request with OAuth2 code to JWT ClaimsSet using EC certificates" in {
+
+    //Launch a server for fetching token from a code
+    val server = com.twitter.finagle.Httpx.serve(
+      "localhost:4567",
+      RoutingService.byPath {
+        case p1 if p1 contains "tokenUrl" => mkTestService[Request, Response] { req =>
+          assert(req.getParam("code") == "XYZ123")
+          tap(Response(Status.Ok))(res => {
+            res.contentString = AadTokenEncoder(testEcAadToken).toString()
+            res.contentType = "application/json"
+          }).toFuture
+        }
+        case p2 if p2 contains "certificateUrl" => mkTestService[Request, Response] { req =>
+          tap(Response(Status.Ok))(res => {
+            res.contentString = s"""<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" ID="_535c5971-00df-43d4-915e-841cfed13adc" entityID="https://sts.windows.net/{tenantid}/">
+                <RoleDescriptor xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:fed="http://docs.oasis-open.org/wsfed/federation/200706" xsi:type="fed:SecurityTokenServiceType" protocolSupportEnumeration="http://docs.oasis-open.org/wsfed/federation/200706">
+                <KeyDescriptor use="signing">
+                <KeyInfo xmlns="http://www.w3.org/2000/09/xmldsig#">
+                <X509Data>
+                <X509Certificate>$testEcCertificateEncoded</X509Certificate>
+                </X509Data>
+                </KeyInfo>
+                </KeyDescriptor>
+                </RoleDescriptor>
+                </EntityDescriptor>"""
+            res.contentType = "text/xml"
+          }).toFuture
+        }
+      })
+
+    try {
+      // Allocate and Session
+      val sessionId = sessionid.untagged
+
+      // Login POST request
+      val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
+
+      // SessionIdRequest
+      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+
+      // Execute
+      val output = new OAuth2CodeVerify().codeToClaimsSet(sessionIdRequest, oauth2CodeProtoManager)
+
+      // Validate
+      Await.result(output).getSubject should be("abc123")
+      Await.result(output).getStringClaim("upn") should be("test@example.com")
+    } finally {
+      server.close()
+    }
+  }
+
+  it should "succeed and use cached certificate to transform the Request with OAuth2 code to JWT ClaimsSet" in {
+
+    //Launch a server for fetching token from a code
+    val server = com.twitter.finagle.Httpx.serve(
+      "localhost:4567",
+      RoutingService.byPath {
+        case p1 if p1 contains "tokenUrl" => mkTestService[Request, Response] { req =>
+          assert(req.getParam("code") == "XYZ123")
+          tap(Response(Status.Ok))(res => {
+            res.contentString = AadTokenEncoder(testRsaAadToken).toString()
+            res.contentType = "application/json"
+          }).toFuture
+        }
+        case p2 if p2 contains "certificateUrl" => mkTestService[Request, Response] { req =>
+          fail("Use cached certificate, should not get here")
+        }
+      })
+
+    try {
+      // Allocate and Session
+      val sessionId = sessionid.untagged
+
+      // Login POST request
+      val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
+
+      // SessionIdRequest
+      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+
+      // Add certificate
+      val oAuth2CodeVerify = new MockOAuth2CodeVerify()
+      oAuth2CodeVerify.mockAdd(testRsaCertificateThumb, testRsaCertificateEncoded)
+
+      // Execute
+      val output = oAuth2CodeVerify.codeToClaimsSet(sessionIdRequest, oauth2CodeProtoManager)
+
+      // Validate
+      Await.result(output).getSubject should be("abc123")
+      Await.result(output).getStringClaim("upn") should be("test@example.com")
+    } finally {
+      server.close()
+    }
+  }
+
+  it should "throw a BpCommunicationError if it fails to reach OAuth2 IDP to convert code to token" in {
+
+    // Allocate and Session
+    val sessionId = sessionid.untagged
+
+    // Login POST request
+    val loginRequest = req("rainy", "/signblew", ("code" -> "XYZ123"))
+
+    // SessionIdRequest
+    val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, three), sessionId)
+
+    // Execute
+    val output = new OAuth2CodeVerify().codeToClaimsSet(sessionIdRequest, oauth2CodeBadProtoManager)
+
+    // Validate
+    val caught = the[CommunicationError] thrownBy {
+      Await.result(output)
+    }
+    caught.getMessage should startWith("An error occurred while talking to: " +
+      "http://localhost:9999/tokenUrl with java.net.ConnectException: Connection refused:")
+  }
+
+  /** this exception is thrown by codeToToken method in OAuth2CodeProtoManager */
+  it should "throw an Exception on if it receives HTTP request w/ OAuth2 code but without hostname" in {
+    // Allocate and Session
+    val sessionId = sessionid.untagged
+
+    // Login POST request
+    val loginRequest = Request("/signin", ("code" -> "XYZ123"))
+
+    // SessionIdRequest
+    val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+
+    // Validate
+    val caught = the[Exception] thrownBy {
+
+      // Execute
+      val output = new OAuth2CodeVerify().codeToClaimsSet(sessionIdRequest, oauth2CodeProtoManager)
+    }
+    caught.getMessage should be("Host not found in HTTP Request")
+  }
+
+  it should "throw an exception if fails to parse OAuth2 AAD Token in the response" in {
+    val server = com.twitter.finagle.Httpx.serve(
+      "localhost:4567", mkTestService[Request, Response] { req =>
+        assert(req.getParam("code") == "XYZ123")
+        tap(Response(Status.Ok))(res => {
+          res.contentString = """{"key":"value"}"""
+          res.contentType = "application/json"
+        }).toFuture
+      })
+    try {
+      // Allocate and Session
+      val sessionId = sessionid.untagged
+
+      // Login POST request
+      val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
+
+      // SessionIdRequest
+      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+
+      // Execute
+      val output = new OAuth2CodeVerify().codeToClaimsSet(sessionIdRequest, oauth2CodeProtoManager)
+
+      // Validate
+      val caught = the[IdentityProviderError] thrownBy {
+        Await.result(output)
+      }
+      caught.getMessage should be("Failed to parse the AadToken received from OAuth2 Server: umbrella")
+      caught.status should be(Status.InternalServerError)
+    } finally {
+      server.close()
+    }
+  }
+
+  it should "throw an exception if OAuth2 Server returns an failure response for code to token conversion" in {
+    val server = com.twitter.finagle.Httpx.serve(
+      "localhost:4567", mkTestService[Request, Response] { req =>
+        assert(req.getParam("code") == "XYZ123")
+        Response(Status.NotAcceptable).toFuture
+      })
+    try {
+      // Allocate and Session
+      val sessionId = sessionid.untagged
+
+      // Login POST request
+      val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
+
+      // SessionIdRequest
+      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+
+      // Execute
+      val output = new OAuth2CodeVerify().codeToClaimsSet(sessionIdRequest, oauth2CodeProtoManager)
+
+      // Validate
+      val caught = the[IdentityProviderError] thrownBy {
+        Await.result(output)
+      }
+      caught.getMessage should be("Failed to receive the AadToken from OAuth2 Server: umbrella")
+      caught.status should be(Status.NotAcceptable)
+    } finally {
+      server.close()
+    }
+  }
+
+  it should "throw an Exception if it fails to parse ID-token in AAD-token returned by OAuth2 Server" in {
+    val idToken = "stuff" //"""{"key":"value"}"""
+    val aadToken = AadToken(testRsaAccessToken.serialize(), idToken)
+    val server = com.twitter.finagle.Httpx.serve(
+      "localhost:4567", mkTestService[Request, Response] { req =>
+        assert(req.getParam("code") == "XYZ123")
+        tap(Response(Status.Ok))(res => {
+          res.contentString = AadTokenEncoder(aadToken).toString()
+          res.contentType = "application/json"
+        }).toFuture
+      })
+    try {
+      // Allocate and Session
+      val sessionId = sessionid.untagged
+
+      // Login POST request
+      val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
+
+      // SessionIdRequest
+      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+
+      // Execute
+      val output = new OAuth2CodeVerify().codeToClaimsSet(sessionIdRequest, oauth2CodeProtoManager)
+
+      // Validate
+      val caught = the[BpTokenParsingError] thrownBy {
+        Await.result(output)
+      }
+      caught.getMessage should startWith("Failed to parse token with: Invalid serialized")
+    } finally {
+      server.close()
+    }
+  }
+
+  it should "throw an Exception if it fails to parse Access-token in AAD-token returned by OAuth2 Server" in {
+    val accessToken = new PlainJWT(new JWTClaimsSet.Builder().subject("SomethingAccess").build)
+    val aadToken = AadToken(accessToken.serialize(), testRsaIdToken.serialize())
+    val server = com.twitter.finagle.Httpx.serve(
+      "localhost:4567", mkTestService[Request, Response] { req =>
+        assert(req.getParam("code") == "XYZ123")
+        tap(Response(Status.Ok))(res => {
+          res.contentString = AadTokenEncoder(aadToken).toString()
+          res.contentType = "application/json"
+        }).toFuture
+      })
+    try {
+      // Allocate and Session
+      val sessionId = sessionid.untagged
+
+      // Login POST request
+      val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
+
+      // SessionIdRequest
+      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+
+      // Execute
+      val output = new OAuth2CodeVerify().codeToClaimsSet(sessionIdRequest, oauth2CodeProtoManager)
+
+      // Validate
+      val caught = the[BpTokenParsingError] thrownBy {
+        Await.result(output)
+      }
+      caught.getMessage should startWith("Failed to parse token with: Invalid ")
+    } finally {
+      server.close()
+    }
+  }
+
+  it should "throw an Exception if it fails to find thumbprint in the Access-token returned by OAuth2 Server" in {
+    // Prepare JWT with claims set
+    val accessToken = new SignedJWT(
+      new JWSHeader.Builder(JWSAlgorithm.RS256).build,
+      new JWTClaimsSet.Builder().subject("abc123").claim("upn", "test@example.com").build)
+    accessToken.sign(testRsaSigner)
+    val aadToken = AadToken(accessToken.serialize(), testRsaIdToken.serialize())
+    val server = com.twitter.finagle.Httpx.serve(
+      "localhost:4567", mkTestService[Request, Response] { req =>
+        assert(req.getParam("code") == "XYZ123")
+        tap(Response(Status.Ok))(res => {
+          res.contentString = AadTokenEncoder(aadToken).toString()
+          res.contentType = "application/json"
+        }).toFuture
+      })
+    try {
+      // Allocate and Session
+      val sessionId = sessionid.untagged
+
+      // Login POST request
+      val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
+
+      // SessionIdRequest
+      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+
+      // Execute
+      val output = new OAuth2CodeVerify().codeToClaimsSet(sessionIdRequest, oauth2CodeProtoManager)
+
+      // Validate
+      val caught = the[BpTokenParsingError] thrownBy {
+        Await.result(output)
+      }
+      caught.getMessage should startWith("Failed to parse token with: Wrapping null input")
+    } finally {
+      server.close()
+    }
+  }
+
+  it should "throw an exception if it fails to find Certificate in the XML code returned by OAuth2 Server" in {
+
+    //Launch a server for fetching token from a code
+    val server = com.twitter.finagle.Httpx.serve(
+      "localhost:4567",
+      RoutingService.byPath {
+        case p1 if p1 contains "tokenUrl" => mkTestService[Request, Response] { req =>
+          assert(req.getParam("code") == "XYZ123")
+          tap(Response(Status.Ok))(res => {
+            res.contentString = AadTokenEncoder(testRsaAadToken).toString()
+            res.contentType = "application/json"
+          }).toFuture
+        }
+        case p2 if p2 contains "certificateUrl" => mkTestService[Request, Response] { req =>
+          tap(Response(Status.Ok))(res => {
+            res.contentString = s"""<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" ID="_535c5971-00df-43d4-915e-841cfed13adc" entityID="https://sts.windows.net/{tenantid}/">
+                <RoleDescriptor xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:fed="http://docs.oasis-open.org/wsfed/federation/200706" xsi:type="fed:SecurityTokenServiceType" protocolSupportEnumeration="http://docs.oasis-open.org/wsfed/federation/200706">
+                <KeyDescriptor use="signing">
+                <KeyInfo xmlns="http://www.w3.org/2000/09/xmldsig#">
+                <X509Data>
+                </X509Data>
+                </KeyInfo>
+                </KeyDescriptor>
+                </RoleDescriptor>
+                </EntityDescriptor>"""
+            res.contentType = "text/xml"
+          }).toFuture
+        }
+      })
+
+    try {
+      // Allocate and Session
+      val sessionId = sessionid.untagged
+
+      // Login POST request
+      val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
+
+      // SessionIdRequest
+      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+
+      // Execute
+      val output = new OAuth2CodeVerify().codeToClaimsSet(sessionIdRequest, oauth2CodeProtoManager)
+
+      // Validate
+      val caught = the[BpCertificateError] thrownBy {
+        Await.result(output)
+      }
+      caught.getMessage should startWith("Failed to process Certificate with: Unable to find certificate for")
+    } finally {
+      server.close()
+    }
+  }
+
+  it should "throw an exception if it fails to parse XML code returned by OAuth2 Server" in {
+
+    //Launch a server for fetching token from a code
+    val server = com.twitter.finagle.Httpx.serve(
+      "localhost:4567",
+      RoutingService.byPath {
+        case p1 if p1 contains "tokenUrl" => mkTestService[Request, Response] { req =>
+          assert(req.getParam("code") == "XYZ123")
+          tap(Response(Status.Ok))(res => {
+            res.contentString = AadTokenEncoder(testRsaAadToken).toString()
+            res.contentType = "application/json"
+          }).toFuture
+        }
+        case p2 if p2 contains "certificateUrl" => mkTestService[Request, Response] { req =>
+          tap(Response(Status.Ok))(res => {
+            res.contentString = s"""<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" ID="_535c5971-00df-43d4-915e-841cfed13adc" entityID="https://sts.windows.net/{tenantid}/">
+                <RoleDescriptor xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:fed="http://docs.oasis-open.org/wsfed/federation/200706" xsi:type="fed:SecurityTokenServiceType" protocolSupportEnumeration="http://docs.oasis-open.org/wsfed/federation/200706">
+                <KeyDescriptor use="signing">
+                <KeyInfo xmlns="http://www.w3.org/2000/09/xmldsig#">
+                <X509Data>
+                <X509Certificate>$testRsaCertificateEncoded</X509Certificate>
+                </X509Data>
+                </KeyInfo>
+                </EntityDescriptor>"""
+            res.contentType = "text/xml"
+          }).toFuture
+        }
+      })
+
+    try {
+      // Allocate and Session
+      val sessionId = sessionid.untagged
+
+      // Login POST request
+      val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
+
+      // SessionIdRequest
+      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+
+      // Execute
+      val output = new OAuth2CodeVerify().codeToClaimsSet(sessionIdRequest, oauth2CodeProtoManager)
+
+      // Validate
+      val caught = the[BpCertificateError] thrownBy {
+        Await.result(output)
+      }
+      caught.getMessage should startWith("Failed to process Certificate with: The element type")
+    } finally {
+      server.close()
+    }
+  }
+
+  it should "throw  an exception if it fails to decode Certificate returned by OAuth2 Server" in {
+
+    //Launch a server for fetching token from a code
+    val server = com.twitter.finagle.Httpx.serve(
+      "localhost:4567",
+      RoutingService.byPath {
+        case p1 if p1 contains "tokenUrl" => mkTestService[Request, Response] { req =>
+          assert(req.getParam("code") == "XYZ123")
+          tap(Response(Status.Ok))(res => {
+            res.contentString = AadTokenEncoder(testRsaAadToken).toString()
+            res.contentType = "application/json"
+          }).toFuture
+        }
+      })
+
+    try {
+      // Allocate and Session
+      val sessionId = sessionid.untagged
+
+      // Login POST request
+      val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
+
+      // SessionIdRequest
+      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+
+      // Add certificate
+      val oAuth2CodeVerify = new MockOAuth2CodeVerify()
+      oAuth2CodeVerify.mockAdd(testRsaCertificateThumb, "SOMEHACKCERTIFICATE")
+
+      // Execute
+      val output = oAuth2CodeVerify.codeToClaimsSet(sessionIdRequest, oauth2CodeProtoManager)
+
+      // Validate
+      val caught = the[BpCertificateError] thrownBy {
+        Await.result(output)
+      }
+      caught.getMessage should startWith("Failed to process Certificate with: Wrapping null input argument")
+    } finally {
+      server.close()
+    }
+  }
+
+  it should "throw an exception if algorithm of public key used by the certificate is unsupported " in {
+
+    //  Generate key
+    val pk = generateTestKeyPair("DSA", 1024)
+
+    // Validate
+    val caught = the[BpCertificateError] thrownBy {
+      val output = new MockOAuth2CodeVerify().mockVerifier(pk.getPublic)
+    }
+    caught.getMessage should startWith("Failed to process Certificate with: Unsupported PublicKey algorithm")
+  }
+}

@@ -3,11 +3,12 @@ package com.lookout.borderpatrol.auth.keymaster
 import java.net.URL
 
 import com.lookout.borderpatrol.Binder._
+import com.lookout.borderpatrol.auth.OAuth2.OAuth2CodeVerify
 import com.lookout.borderpatrol.auth.keymaster.Keymaster._
 import com.lookout.borderpatrol.auth._
 import com.lookout.borderpatrol.sessionx.SessionStores.MemcachedStore
 import com.lookout.borderpatrol.sessionx._
-import com.lookout.borderpatrol.{ServiceIdentifier, ServiceMatcher, CommunicationError}
+import com.lookout.borderpatrol.{ServiceIdentifier, ServiceMatcher}
 import com.lookout.borderpatrol.{LoginManager, InternalAuthProtoManager, Manager, OAuth2CodeProtoManager}
 import com.lookout.borderpatrol.test._
 import com.lookout.borderpatrol.util.Combinators.tap
@@ -18,11 +19,12 @@ import com.twitter.finagle.httpx.path.Path
 import com.twitter.finagle.httpx._
 import com.twitter.util.{Await, Future}
 
+import org.scalatest.mock.MockitoSugar
+import org.mockito.Mockito._
 
-class KeymasterSpec extends BorderPatrolSuite  {
+class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
   import sessionx.helpers.{secretStore => store, _}
   import Tokens._
-  import KeymasterTransform._
 
   val urls = Set(new URL("http://localhost:5678"))
 
@@ -34,14 +36,19 @@ class KeymasterSpec extends BorderPatrolSuite  {
     internalProtoManager)
   val oauth2CodeProtoManager = OAuth2CodeProtoManager(Path("/signin"),
     new URL("http://example.com/authorizeUrl"),
-    new URL("http://localhost:4567/tokenUrl"), "clientId", "clientSecret")
+    new URL("http://localhost:4567/tokenUrl"),
+    new URL("http://localhost:4567/certificateUrl"),
+    "clientId", "clientSecret")
   val umbrellaLoginManager = LoginManager("ulm", keymasterIdManager, keymasterAccessManager,
     oauth2CodeProtoManager)
   val oauth2CodeBadProtoManager = OAuth2CodeProtoManager(Path("/signblew"),
     new URL("http://localhost:9999/authorizeUrl"),
-    new URL("http://localhost:9999/tokenUrl"), "clientId", "clientSecret")
+    new URL("http://localhost:9999/tokenUrl"),
+    new URL("http://localhost:9999/certificateUrl"),
+    "clientId", "clientSecret")
   val rainyLoginManager = LoginManager("rlm", keymasterIdManager, keymasterAccessManager,
     oauth2CodeBadProtoManager)
+  val oAuth2CodeVerify = new OAuth2CodeVerify
 
   // sids
   val one = ServiceIdentifier("one", urls, Path("/ent"), None, "enterprise", checkpointLoginManager)
@@ -154,188 +161,115 @@ class KeymasterSpec extends BorderPatrolSuite  {
     caught.status should be (Status.InternalServerError)
   }
 
-  behavior of "transformOAuth2"
+  behavior of "KeymasterTransformFilter"
 
-  it should "succeed and exchange code for token with OAuth2 IDP" in {
-    val accessToken = new PlainJWT(new JWTClaimsSet.Builder().subject("SomethingAccess").build)
-    val idToken = new PlainJWT(new JWTClaimsSet.Builder().subject("abc123").claim("upn", "test@example.com").build)
-    val aadToken = AadToken(accessToken.serialize, idToken.serialize())
-    val server = com.twitter.finagle.Httpx.serve(
-      "localhost:4567", mkTestService[Request, Response] { req =>
-        assert(req.getParam("code") == "XYZ123")
-        tap(Response(Status.Ok))(res => {
-          res.contentString = AadTokenEncoder(aadToken).toString()
-          res.contentType = "application/json"
-        }).toFuture
-      })
-    try {
-      // Allocate and Session
-      val sessionId = sessionid.untagged
-
-      // Login POST request
-      val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
-
-      // Execute
-      val output = two.loginManager.protoManager.transform[SessionIdRequest, OAuth2CodeCredential](
-        SessionIdRequest(ServiceRequest(loginRequest, two), sessionId))
-
-      // Validate
-      Await.result(output).uniqueId should be("test@example.com")
-      Await.result(output).subject should be("abc123")
-    } finally {
-      server.close()
+  it should "succeed and transform the username and password to Keymaster Credential" in {
+    val testService = mkTestService[KeymasterSessionIdRequest, Response] {
+      request =>
+        assert(request.credential.serviceId == one)
+        assert(request.req.req.serviceId == one)
+        request.credential match {
+          case a: InternalAuthCredential => assert(a.uniqueId == "test@example.com")
+          case _ => assert(false)
+        }
+        Future(Response(Status.Ok))
     }
-  }
-
-  it should "throw a CommunicationError on failure to talk with OAuth2 IDP" in {
 
     // Allocate and Session
     val sessionId = sessionid.untagged
 
     // Login POST request
-    val loginRequest = req("rainy", "/signblew", ("code" -> "XYZ123"))
+    val loginRequest = req("enterprise", "/loginConfirm", ("username" -> "test@example.com"), ("password" -> "bar"))
 
     // Execute
-    val output = three.loginManager.protoManager.transform[SessionIdRequest, OAuth2CodeCredential](
-      SessionIdRequest(ServiceRequest(loginRequest, three), sessionId))
+    val output = (KeymasterTransformFilter(oAuth2CodeVerify) andThen testService)(
+      SessionIdRequest(ServiceRequest(loginRequest, one), sessionId))
 
     // Validate
-    val caught = the [CommunicationError] thrownBy {
+    Await.result(output).status should be(Status.Ok)
+  }
+
+  it should "succeed and transform the oAuth2 code to Keymaster Credential" in {
+    val testService = mkTestService[KeymasterSessionIdRequest, Response] {
+      request =>
+        assert(request.credential.serviceId == two)
+        assert(request.req.req.serviceId == two)
+        request.credential match {
+          case a: OAuth2CodeCredential => assert(a.uniqueId == "test@example.com")
+          case _ => assert(false)
+        }
+        Future(Response(Status.Ok))
+    }
+
+    val idToken = new PlainJWT(new JWTClaimsSet.Builder().subject("SomeIdToken")
+      .claim("upn", "test@example.com").build)
+
+    // Allocate and Session
+    val sessionId = sessionid.untagged
+
+    // Login POST request
+    val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
+
+    //  Request
+    val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+
+    // Mock the oAuth2 verifier
+    val mockVerify = mock[OAuth2CodeVerify]
+    when(mockVerify.codeToClaimsSet(sessionIdRequest, oauth2CodeProtoManager)).thenReturn(
+      Future(idToken.getJWTClaimsSet))
+
+    // Execute
+    val output = (KeymasterTransformFilter(mockVerify) andThen testService)(sessionIdRequest)
+
+    // Validate
+    Await.result(output).status should be(Status.Ok)
+  }
+
+  it should "return BadRequest Status if username or password is not present in the Request" in {
+    val testService = mkTestService[KeymasterSessionIdRequest, Response] { request => Future(Response(Status.Ok)) }
+
+    // Allocate and Session
+    val sessionId = sessionid.untagged
+
+    // Login POST request
+    val loginRequest = req("enterprise", "/login", ("username" -> "foo"))
+
+    // Execute
+    val output = (KeymasterTransformFilter(oAuth2CodeVerify) andThen testService)(
+      SessionIdRequest(ServiceRequest(loginRequest, one), sessionId))
+
+    // Validate
+    val caught = the [IdentityProviderError] thrownBy {
       Await.result(output)
     }
-    caught.getMessage should startWith ("An error occurred while talking to: " +
-      "http://localhost:9999/tokenUrl with java.net.ConnectException: Connection refused:")
-  }
-
-  it should "throw an Exception on receiving HTTP request with no host in it" in {
-
-    // Allocate and Session
-    val sessionId = sessionid.untagged
-
-    // Login POST request
-    val loginRequest = Request("/signin", ("code" -> "XYZ123"))
-
-    // Execute
-    // Validate
-    val caught = the [Exception] thrownBy {
-      val output = two.loginManager.protoManager.transform[SessionIdRequest, OAuth2CodeCredential](
-        SessionIdRequest(ServiceRequest(loginRequest, two), sessionId))
-    }
-    caught.getMessage should be ("Host not found in HTTP Request")
-  }
-
-  it should "throw an exception if fails to parse OAuth Server response" in {
-    val server = com.twitter.finagle.Httpx.serve(
-      "localhost:4567", mkTestService[Request, Response] { req =>
-        assert(req.getParam("code") == "XYZ123")
-        tap(Response(Status.Ok))(res => {
-          res.contentString = """{"key":"value"}"""
-          res.contentType = "application/json"
-        }).toFuture
-      })
-    try {
-      // Allocate and Session
-      val sessionId = sessionid.untagged
-
-      // Login POST request
-      val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
-
-      // Execute
-      val output = two.loginManager.protoManager.transform[SessionIdRequest, OAuth2CodeCredential](
-        SessionIdRequest(ServiceRequest(loginRequest, two), sessionId))
-
-      // Validate
-      val caught = the [IdentityProviderError] thrownBy {
-        Await.result(output)
-      }
-      caught.getMessage should be ("Failed to parse the AadToken received from OAuth2 Server: ulm")
-      caught.status should be (Status.InternalServerError)
-    } finally {
-      server.close()
-    }
-  }
-
-  it should "throw an exception if OAuth Server returns an failure status" in {
-    val server = com.twitter.finagle.Httpx.serve(
-      "localhost:4567", mkTestService[Request, Response] { req =>
-        assert(req.getParam("code") == "XYZ123")
-        Response(Status.NotAcceptable).toFuture
-      })
-    try {
-      // Allocate and Session
-      val sessionId = sessionid.untagged
-
-      // Login POST request
-      val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
-
-      // Execute
-      val output = two.loginManager.protoManager.transform[SessionIdRequest, OAuth2CodeCredential](
-        SessionIdRequest(ServiceRequest(loginRequest, two), sessionId))
-
-      // Validate
-      val caught = the [IdentityProviderError] thrownBy {
-        Await.result(output)
-      }
-      caught.getMessage should be ("Failed to receive the AadToken from OAuth2 Server: ulm")
-      caught.status should be (Status.NotAcceptable)
-    } finally {
-      server.close()
-    }
-  }
-
-  it should "throw an IdentityProviderError if it fails to parse ID token" in {
-    val accessToken = new PlainJWT(new JWTClaimsSet.Builder().subject("SomethingAccess").build)
-    val idToken = "stuff" //"""{"key":"value"}"""
-    val aadToken = AadToken(accessToken.serialize(), idToken)
-    val server = com.twitter.finagle.Httpx.serve(
-      "localhost:4567", mkTestService[Request, Response] { req =>
-        assert(req.getParam("code") == "XYZ123")
-        tap(Response(Status.Ok))(res => {
-          res.contentString = AadTokenEncoder(aadToken).toString()
-          res.contentType = "application/json"
-        }).toFuture
-      })
-    try {
-      // Allocate and Session
-      val sessionId = sessionid.untagged
-
-      // Login POST request
-      val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
-
-      // Execute
-      val output = two.loginManager.protoManager.transform[SessionIdRequest, OAuth2CodeCredential](
-        SessionIdRequest(ServiceRequest(loginRequest, two), sessionId))
-
-      // Validate
-      val caught = the [TokenParsingError] thrownBy {
-        Await.result(output)
-      }
-      caught.getMessage should startWith ("Failed to parse token with: Invalid serialized")
-    } finally {
-      server.close()
-    }
+    caught.getMessage should equal ("transformBasic: Failed to parse the Request")
   }
 
   behavior of "KeymasterPostLoginFilter"
 
   it should "succeed and saves tokens for internal auth, sends redirect with tokens returned by keymaster IDP" in {
     val testService = mkTestService[IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
-      request => Future(KeymasterIdentifyRes(tokens))
+      request =>
+        assert(request.credential.uniqueId == "test@example.com")
+        Future(KeymasterIdentifyRes(tokens))
     }
 
     // Allocate and Session
     val sessionId = sessionid.untagged
 
     // Login POST request
-    val loginRequest = req("enterprise", "/login", ("username" -> "foo"), ("password" -> "bar"))
+    val loginRequest = req("enterprise", "/login")
 
     // Original request
     val origReq = req("enterprise", "/dang", ("fake" -> "drake"))
     sessionStore.update[Request](Session(sessionId, origReq))
 
+    // Credential
+    val credential = InternalAuthCredential("test@example.com", "password", one)
+
     // Execute
     val output = (KeymasterPostLoginFilter(sessionStore) andThen testService)(
-      SessionIdRequest(ServiceRequest(loginRequest, one), sessionId))
+      KeymasterSessionIdRequest(SessionIdRequest(ServiceRequest(loginRequest, one), sessionId), credential))
 
     // Validate
     Await.result(output).status should be (Status.Found)
@@ -348,67 +282,37 @@ class KeymasterSpec extends BorderPatrolSuite  {
   }
 
   it should "succeed and saves tokens for AAD auth, sends redirect with tokens returned by keymaster IDP" in {
-    val accessToken = new PlainJWT(new JWTClaimsSet.Builder().subject("SomethingAccess").build)
-    val idToken = new PlainJWT(new JWTClaimsSet.Builder().subject("abc123").claim("upn", "test@example.com").build)
-    val aadToken = AadToken(accessToken.serialize, idToken.serialize())
-    val server = com.twitter.finagle.Httpx.serve(
-      "localhost:4567", mkTestService[Request, Response] { req =>
-        assert(req.getParam("code") == "XYZ123")
-        tap(Response(Status.Ok))(res => {
-          res.contentString = AadTokenEncoder(aadToken).toString()
-          res.contentType = "application/json"
-        }).toFuture
-      })
-    try {
-      val testService = mkTestService[IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
-        request =>
-          assert(request.credential.uniqueId == "test@example.com")
-          Future.value(KeymasterIdentifyRes(tokens))
-      }
-
-      // Allocate and Session
-      val sessionId = sessionid.untagged
-
-      // Login POST request
-      val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
-
-      // Original request
-      val origReq = req("umbrella", "/umb", ("fake" -> "drake"))
-      sessionStore.update[Request](Session(sessionId, origReq))
-
-      // Execute
-      val output = (KeymasterPostLoginFilter(sessionStore) andThen testService)(
-        SessionIdRequest(ServiceRequest(loginRequest, two), sessionId))
-
-      // Validate
-      Await.result(output).status should be(Status.Found)
-      Await.result(output).location should be equals ("/umb")
-      val returnedSessionId = SessionId.fromResponse(Await.result(output)).toFuture
-      returnedSessionId should not be sessionId
-      val session_d = sessionStore.get[Tokens](Await.result(returnedSessionId))
-      val tokensz = sessionDataFromResponse(Await.result(output))
-      Await.result(tokensz) should be(tokens)
-    } finally {
-      server.close()
+    val testService = mkTestService[IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
+      request =>
+        assert(request.credential.uniqueId == "test@example.com")
+        Future.value(KeymasterIdentifyRes(tokens))
     }
-  }
 
-  it should "return BadRequest Status if credentials are not present in the request" in {
     // Allocate and Session
     val sessionId = sessionid.untagged
 
     // Login POST request
-    val loginRequest = req("enterprise", "/login", ("username" -> "foo"))
+    val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
+
+    // Original request
+    val origReq = req("umbrella", "/umb", ("fake" -> "drake"))
+    sessionStore.update[Request](Session(sessionId, origReq))
+
+    // Credential
+    val credential = OAuth2CodeCredential("test@example.com", "password", two)
 
     // Execute
-    val output = (KeymasterPostLoginFilter(sessionStore) andThen keymasterLoginFilterTestService)(
-      SessionIdRequest(ServiceRequest(loginRequest, one), sessionId))
+    val output = (KeymasterPostLoginFilter(sessionStore) andThen testService)(
+      KeymasterSessionIdRequest(SessionIdRequest(ServiceRequest(loginRequest, two), sessionId), credential))
 
     // Validate
-    val caught = the [IdentityProviderError] thrownBy {
-      Await.result(output)
-    }
-    caught.getMessage should equal ("transformBasic: Failed to parse the Request")
+    Await.result(output).status should be(Status.Found)
+    Await.result(output).location should be equals ("/umb")
+    val returnedSessionId = SessionId.fromResponse(Await.result(output)).toFuture
+    returnedSessionId should not be sessionId
+    val session_d = sessionStore.get[Tokens](Await.result(returnedSessionId))
+    val tokensz = sessionDataFromResponse(Await.result(output))
+    Await.result(tokensz) should be(tokens)
   }
 
   it should "return OriginalRequestNotFound if it fails find the original request from sessionStore" in {
@@ -418,9 +322,12 @@ class KeymasterSpec extends BorderPatrolSuite  {
     // Login POST request
     val loginRequest = req("enterprise", "/login", ("username" -> "foo"), ("password" -> "bar"))
 
+    // Credential
+    val credential = InternalAuthCredential("test@example.com", "password", one)
+
     // Execute
     val output = (KeymasterPostLoginFilter(sessionStore) andThen keymasterLoginFilterTestService)(
-      SessionIdRequest(ServiceRequest(loginRequest, one), sessionId))
+      KeymasterSessionIdRequest(SessionIdRequest(ServiceRequest(loginRequest, one), sessionId), credential))
 
     // Validate
     val caught = the [OriginalRequestNotFound] thrownBy {
@@ -445,9 +352,12 @@ class KeymasterSpec extends BorderPatrolSuite  {
     // Login POST request
     val loginRequest = req("enterprise", "/login", ("username" -> "foo"), ("password" -> "bar"))
 
+    // Credential
+    val credential = InternalAuthCredential("test@example.com", "password", one)
+
     // Execute
     val output = (KeymasterPostLoginFilter(mockSessionStore) andThen keymasterLoginFilterTestService)(
-      SessionIdRequest(ServiceRequest(loginRequest, one), sessionId))
+      KeymasterSessionIdRequest(SessionIdRequest(ServiceRequest(loginRequest, one), sessionId), credential))
 
     // Validate
     val caught = the [Exception] thrownBy {

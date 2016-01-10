@@ -14,8 +14,6 @@ class TokensSpec extends BorderPatrolSuite  {
   val serviceTokens = new ServiceTokens().add("service1", serviceToken1).add("service2", serviceToken2)
   val tokens = Tokens(MasterToken("masterT"), serviceTokens)
   val emptyTokens = Tokens(MasterToken(""), ServiceTokens())
-  val aadToken = AadToken("TestAccessToken", "TestIdToken")
-  val emptyAadToken = AadToken("", "")
 
   behavior of "ServiceTokens"
 
@@ -36,16 +34,6 @@ class TokensSpec extends BorderPatrolSuite  {
     def encodeDecode(toks: Tokens) : Tokens =
       TokensDecoder.decodeJson(TokensEncoder(toks)).fold[Tokens](e => emptyTokens, t => t)
     encodeDecode(tokens) should be (tokens)
-  }
-
-  behavior of "AadToken"
-
-  it should "uphold encoding/decoding AadToken" in {
-    def encodeDecode(toks: AadToken) : AadToken = {
-      val encoded = AadTokenEncoder(toks)
-      AadTokenDecoder.decodeJson(encoded).fold[AadToken](e => emptyAadToken, t => t)
-    }
-    encodeDecode(aadToken) should be (aadToken)
   }
 
   behavior of "SessionDataTokenEncoder"

@@ -29,10 +29,12 @@ lazy val finagleVersion = "6.28.0"
 lazy val finchVersion = "0.8.0"
 lazy val circeVersion = "0.1.1"
 lazy val twitterServerVersion = "1.14.0"
+lazy val nimbusVersion = "4.7"
 
 val testDependencies = Seq(
   "org.scalacheck" %% "scalacheck" % "1.12.4",
-  "org.scalatest" %% "scalatest" % "2.2.5"
+  "org.scalatest" %% "scalatest" % "2.2.5",
+  "org.mockito" % "mockito-core" % "1.10.19"
 )
 
 val baseSettings = Seq(
@@ -151,6 +153,14 @@ lazy val root = project.in(file("."))
 lazy val core = project
   .settings(moduleName := "borderpatrol-core")
   .settings(allSettings)
+  .settings(
+    libraryDependencies ++= Seq(
+      "io.circe" %% "circe-core" % circeVersion,
+      "io.circe" %% "circe-generic" % circeVersion,
+      "io.circe" %% "circe-jawn" % circeVersion,
+      "com.nimbusds" % "nimbus-jose-jwt" % nimbusVersion
+    )
+  )
 
 lazy val test = project
   .settings(moduleName := "borderpatrol-test")
@@ -184,14 +194,6 @@ lazy val security = project
 lazy val auth = project
   .settings(moduleName := "borderpatrol-auth")
   .settings(allSettings)
-  .settings(
-    libraryDependencies ++= Seq(
-      "io.circe" %% "circe-core" % circeVersion,
-      "io.circe" %% "circe-generic" % circeVersion,
-      "io.circe" %% "circe-jawn" % circeVersion,
-      "com.nimbusds" % "nimbus-jose-jwt" % "4.7"
-    )
-  )
   .dependsOn(core % "test->test;compile->compile")
 
 lazy val server = project
@@ -199,9 +201,6 @@ lazy val server = project
   .settings(allSettings)
   .settings(
     libraryDependencies ++= Seq(
-      "io.circe" %% "circe-core" % circeVersion,
-      "io.circe" %% "circe-generic" % circeVersion,
-      "io.circe" %% "circe-jawn" % circeVersion,
       "com.twitter" %% "finagle-stats" % finagleVersion
     )
   )

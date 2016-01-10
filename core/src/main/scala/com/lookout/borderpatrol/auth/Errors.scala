@@ -30,7 +30,13 @@ case class IdentityProviderError(status: Status, msg: String) extends AuthError(
 case class AccessIssuerError(status: Status, msg: String) extends AuthError(msg, null)
 
 /**
- * Parsing error
+ * Token Parsing error
  */
-case class TokenParsingError(e: Throwable)
-    extends AuthError(s"Failed to parse token with: ${e.getMessage}", e)
+case class BpTokenParsingError(msg: String)
+    extends AuthError(s"Failed to parse token with: ${msg}", null)
+
+/**
+ * Certificate processing error
+ */
+case class BpCertificateError(msg: String)
+    extends AuthError(s"Failed to process Certificate with: ${msg}}", null)
