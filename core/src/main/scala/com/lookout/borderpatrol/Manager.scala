@@ -32,10 +32,8 @@ case class OAuth2CodeProtoManager(loginConfirm: Path, authorizeUrl: URL, tokenUr
     extends ProtoManager{
   def redirectLocation(host: Option[String]): String = {
     val hostStr = host.getOrElse(throw new Exception("Host not found in HTTP Request"))
-    val str = Request.queryString(authorizeUrl.toString, ("response_type", "code"), ("state", "foo"),
+    Request.queryString(authorizeUrl.toString, ("response_type", "code"), ("state", "foo"),
       ("client_id", clientId), ("redirect_uri", "http://" + hostStr + loginConfirm.toString))
-    println("***MVK: redirect = " + str)
-    str
   }
   def hosts: Set[URL] = Set(authorizeUrl)
   def isMatchingPath(p: Path): Boolean = p.startsWith(loginConfirm)

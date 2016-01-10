@@ -154,44 +154,20 @@ class OAuth2Spec extends BorderPatrolSuite {
 
   behavior of "codeToClaimsSet"
 
-  it should "RSA Certificate generate" in {
-
-    println("Custom RSA certificate = " + testRsaCertificate)
-    println("Custom RSA certificate string = " + testRsaCertificateEncoded)
-    println("Custom RSA thumb: " + testRsaCertificateThumb)
-
-    val stuff1Dec = DatatypeConverter.parseBase64Binary(testRsaCertificateEncoded)
-    val certAgain = X509CertUtils.parse(stuff1Dec)
-    //println("Custom certificate again = " + certAgain)
-
+  it should "generate RSA Certificate" in {
+    val certAgain = X509CertUtils.parse(DatatypeConverter.parseBase64Binary(testRsaCertificateEncoded))
     val certAgainStr = DatatypeConverter.printBase64Binary(certAgain.getEncoded)
-    println("Custom RSA certificate again string = " + certAgainStr)
-
-    println("Compare RSA Certificates = " + (testRsaCertificateEncoded == certAgainStr))
-
     val againKey = certAgain.getPublicKey.asInstanceOf[RSAPublicKey]
     val againVerifier = new RSASSAVerifier(againKey)
-    println("VERIFIED RSA = " + testRsaAccessToken.verify(againVerifier))
+    testRsaAccessToken.verify(againVerifier) should be (true)
   }
 
-  it should "EC Certificate generate" in {
-
-    println("Custom EC certificate = " + testEcCertificate)
-    println("Custom EC certificate string = " + testEcCertificateEncoded)
-    println("Custom EC thumb: " + testEcCertificateThumb)
-
-    val stuff1Dec = DatatypeConverter.parseBase64Binary(testEcCertificateEncoded)
-    val certAgain = X509CertUtils.parse(stuff1Dec)
-    //println("Custom certificate again = " + certAgain)
-
+  it should "generate EC Certificate" in {
+    val certAgain = X509CertUtils.parse(DatatypeConverter.parseBase64Binary(testEcCertificateEncoded))
     val certAgainStr = DatatypeConverter.printBase64Binary(certAgain.getEncoded)
-    println("Custom EC certificate again string = " + certAgainStr)
-
-    println("Compare EC certificates= " + (testEcCertificateEncoded == certAgainStr))
-
     val againKey = certAgain.getPublicKey.asInstanceOf[ECPublicKey]
     val againVerifier = new ECDSAVerifier(againKey)
-    println("VERIFIED EC = " + testEcAccessToken.verify(againVerifier))
+    testEcAccessToken.verify(againVerifier) should be (true)
   }
 
   it should "succeed and transform the Request with OAuth2 code to JWT ClaimsSet using RSA certificates" in {
