@@ -19,14 +19,13 @@ import com.twitter.util.Future
 object Keymaster {
   import Tokens._
 
-  case class KeymasterIdentifyReq(credential: Credential) extends IdentifyRequest[Credential]
+  case class KeymasterIdentifyReq(req: SessionIdRequest, credential: Credential) extends IdentifyRequest[Credential]
   case class KeymasterIdentifyRes(tokens: Tokens) extends IdentifyResponse[Tokens] {
     val identity = Identity(tokens)
   }
   case class KeymasterAccessReq(identity: Id[Tokens],
                                 serviceId: ServiceIdentifier, sessionId: SessionId) extends AccessRequest[Tokens]
   case class KeymasterAccessRes(access: Access[ServiceToken]) extends AccessResponse[ServiceToken]
-  case class KeymasterSessionIdRequest(req: SessionIdRequest, credential: Credential)
 
   /**
    * The identity provider for Keymaster, will connect to the remote keymaster server to authenticate and get an
@@ -83,7 +82,7 @@ object Keymaster {
    * Handles Keymaster transforms for internal and OAuth2
    */
   case class KeymasterTransformFilter(oAuth2CodeVerify: OAuth2CodeVerify)(implicit statsReceiver: StatsReceiver)
-      extends Filter[SessionIdRequest, Response, KeymasterSessionIdRequest, Response] {
+      extends Filter[SessionIdRequest, Response, KeymasterIdentifyReq, Response] {
     private[this] val log = Logger.getLogger(getClass.getSimpleName)
 
     def transformInternal(req: SessionIdRequest): Future[InternalAuthCredential] =
@@ -103,13 +102,13 @@ object Keymaster {
     }
 
     def apply(req: SessionIdRequest,
-              service: Service[KeymasterSessionIdRequest, Response]): Future[Response] = {
+              service: Service[KeymasterIdentifyReq, Response]): Future[Response] = {
       for {
         transformed: Credential <- req.req.serviceId.loginManager.protoManager match {
           case a: InternalAuthProtoManager => transformInternal(req)
           case b: OAuth2CodeProtoManager => transformOAuth2(req, b)
         }
-        resp <- service(KeymasterSessionIdRequest(req, transformed))
+        resp <- service(KeymasterIdentifyReq(req, transformed))
       } yield resp
     }
   }
@@ -124,7 +123,7 @@ object Keymaster {
    */
   case class KeymasterPostLoginFilter(store: SessionStore)
                                      (implicit secretStoreApi: SecretStoreApi, statsReceiver: StatsReceiver)
-      extends Filter[KeymasterSessionIdRequest, Response, IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
+      extends Filter[KeymasterIdentifyReq, Response, IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
     private[this] val log = Logger.getLogger(getClass.getSimpleName)
     private[this] val sessionAuthenticated = statsReceiver.counter("keymaster.session.authenticated")
 
@@ -137,10 +136,10 @@ object Keymaster {
         case None => Future.exception(OriginalRequestNotFound(s"no request stored for $id"))
       }
 
-    def apply(req: KeymasterSessionIdRequest,
+    def apply(req: KeymasterIdentifyReq,
               service: Service[IdentifyRequest[Credential], IdentifyResponse[Tokens]]): Future[Response] = {
       for {
-          tokenResponse <- service(KeymasterIdentifyReq(req.credential))
+          tokenResponse <- service(req)
           session <- Session(tokenResponse.identity.id, AuthenticatedTag)
           _ <- store.update[Tokens](session)
           originReq <- requestFromSessionStore(req.req.sessionId)

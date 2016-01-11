@@ -118,9 +118,18 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
       }).toFuture
     }}
 
+    // Allocate and Session
+    val sessionId = sessionid.untagged
+
+    // Login POST request
+    val loginRequest = req("enterprise", "/loginConfirm", "username" -> "foo", "password" -> "bar")
+
+    //  Request
+    val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, one), sessionId)
+
     // Execute
     val output = KeymasterIdentityProvider(testIdentityManagerBinder).apply(
-      KeymasterIdentifyReq(InternalAuthCredential("foo", "bar", one)))
+      KeymasterIdentifyReq(sessionIdRequest, InternalAuthCredential("foo", "bar", one)))
 
     // Validate
     Await.result(output).identity should be (Id(tokens))
@@ -129,9 +138,18 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
   it should "propagate the error Status code from Keymaster service in the IdentityProviderError exception" in {
     val testIdentityManagerBinder = mkTestManagerBinder { request => Response(Status.NotFound).toFuture }
 
+    // Allocate and Session
+    val sessionId = sessionid.untagged
+
+    // Login POST request
+    val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
+
+    //  Request
+    val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+
     // Execute
     val output = KeymasterIdentityProvider(testIdentityManagerBinder).apply(
-      KeymasterIdentifyReq(OAuth2CodeCredential("foo", "bar", two)))
+      KeymasterIdentifyReq(sessionIdRequest, OAuth2CodeCredential("foo", "bar", two)))
 
     // Validate
     val caught = the [IdentityProviderError] thrownBy {
@@ -149,9 +167,18 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
       }).toFuture
     }
 
+    // Allocate and Session
+    val sessionId = sessionid.untagged
+
+    // Login POST request
+    val loginRequest = req("enterprise", "/loginConfirm", "username" -> "foo", "password" -> "bar")
+
+    //  Request
+    val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, one), sessionId)
+
     // Execute
     val output = KeymasterIdentityProvider(testIdentityManagerBinder).apply(
-      KeymasterIdentifyReq(InternalAuthCredential("foo", "bar", one)))
+      KeymasterIdentifyReq(sessionIdRequest, InternalAuthCredential("foo", "bar", one)))
 
     // Validate
     val caught = the [IdentityProviderError] thrownBy {
@@ -164,7 +191,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
   behavior of "KeymasterTransformFilter"
 
   it should "succeed and transform the username and password to Keymaster Credential" in {
-    val testService = mkTestService[KeymasterSessionIdRequest, Response] {
+    val testService = mkTestService[KeymasterIdentifyReq, Response] {
       request =>
         assert(request.credential.serviceId == one)
         assert(request.req.req.serviceId == one)
@@ -190,7 +217,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
   }
 
   it should "succeed and transform the oAuth2 code to Keymaster Credential" in {
-    val testService = mkTestService[KeymasterSessionIdRequest, Response] {
+    val testService = mkTestService[KeymasterIdentifyReq, Response] {
       request =>
         assert(request.credential.serviceId == two)
         assert(request.req.req.serviceId == two)
@@ -226,7 +253,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
   }
 
   it should "return BadRequest Status if username or password is not present in the Request" in {
-    val testService = mkTestService[KeymasterSessionIdRequest, Response] { request => Future(Response(Status.Ok)) }
+    val testService = mkTestService[KeymasterIdentifyReq, Response] { request => Future(Response(Status.Ok)) }
 
     // Allocate and Session
     val sessionId = sessionid.untagged
@@ -269,7 +296,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
 
     // Execute
     val output = (KeymasterPostLoginFilter(sessionStore) andThen testService)(
-      KeymasterSessionIdRequest(SessionIdRequest(ServiceRequest(loginRequest, one), sessionId), credential))
+      KeymasterIdentifyReq(SessionIdRequest(ServiceRequest(loginRequest, one), sessionId), credential))
 
     // Validate
     Await.result(output).status should be (Status.Found)
@@ -303,7 +330,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
 
     // Execute
     val output = (KeymasterPostLoginFilter(sessionStore) andThen testService)(
-      KeymasterSessionIdRequest(SessionIdRequest(ServiceRequest(loginRequest, two), sessionId), credential))
+      KeymasterIdentifyReq(SessionIdRequest(ServiceRequest(loginRequest, two), sessionId), credential))
 
     // Validate
     Await.result(output).status should be(Status.Found)
@@ -327,7 +354,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
 
     // Execute
     val output = (KeymasterPostLoginFilter(sessionStore) andThen keymasterLoginFilterTestService)(
-      KeymasterSessionIdRequest(SessionIdRequest(ServiceRequest(loginRequest, one), sessionId), credential))
+      KeymasterIdentifyReq(SessionIdRequest(ServiceRequest(loginRequest, one), sessionId), credential))
 
     // Validate
     val caught = the [OriginalRequestNotFound] thrownBy {
@@ -357,7 +384,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
 
     // Execute
     val output = (KeymasterPostLoginFilter(mockSessionStore) andThen keymasterLoginFilterTestService)(
-      KeymasterSessionIdRequest(SessionIdRequest(ServiceRequest(loginRequest, one), sessionId), credential))
+      KeymasterIdentifyReq(SessionIdRequest(ServiceRequest(loginRequest, one), sessionId), credential))
 
     // Validate
     val caught = the [Exception] thrownBy {

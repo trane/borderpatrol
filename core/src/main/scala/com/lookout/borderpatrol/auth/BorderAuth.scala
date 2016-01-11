@@ -119,8 +119,8 @@ case class BorderService(identityProviderMap: Map[String, Service[SessionIdReque
     }
   }
 
-  def redirectTo(pathStr: String): Response =
-    tap(Response(Status.Found))(res => res.location = pathStr)
+  def redirectTo(location: String): Response =
+    tap(Response(Status.Found))(res => res.location = location)
 
   def redirectToService(req: SessionIdRequest): Future[Response] = {
     log.log(Level.DEBUG, s"Redirecting the ${req.req.req} for Authenticated Session: ${req.sessionId} " +
