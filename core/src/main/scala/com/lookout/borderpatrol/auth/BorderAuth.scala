@@ -21,7 +21,8 @@ case class ServiceRequest(req: Request, customerId: CustomerIdentifier, serviceI
 case class SessionIdRequest(req: Request, customerId: CustomerIdentifier, serviceId: ServiceIdentifier,
                             sessionId: SessionId)
 object SessionIdRequest {
-  def apply(sr: ServiceRequest, sid: SessionId): SessionIdRequest = SessionIdRequest(sr.req, sr.customerId, sr.serviceId, sid)
+  def apply(sr: ServiceRequest, sid: SessionId): SessionIdRequest =
+    SessionIdRequest(sr.req, sr.customerId, sr.serviceId, sid)
 }
 case class AccessIdRequest[A](req: Request, customerId: CustomerIdentifier, serviceId: ServiceIdentifier,
                               sessionId: SessionId, id: Id[A])

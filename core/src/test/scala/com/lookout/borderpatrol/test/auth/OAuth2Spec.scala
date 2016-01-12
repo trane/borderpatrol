@@ -590,7 +590,7 @@ class OAuth2Spec extends BorderPatrolSuite {
     }
   }
 
-  it should "throw  an exception if it fails to decode Certificate returned by OAuth2 Server" in {
+  it should "throw an exception if it fails to decode Certificate returned by OAuth2 Server" in {
 
     //Launch a server for fetching token from a code
     val server = com.twitter.finagle.Httpx.serve(
