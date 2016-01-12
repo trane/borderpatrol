@@ -153,18 +153,18 @@ object OAuth2 {
     def codeToClaimsSet(req: SessionIdRequest, protoManager: OAuth2CodeProtoManager): Future[JWTClaimsSet] = {
       for {
         aadToken <- protoManager.codeToToken(
-          req.req.req.host, req.req.req.getParam("code")).flatMap(res => res.status match {
+          req.req.host, req.req.getParam("code")).flatMap(res => res.status match {
           //  Parse for Tokens if Status.Ok
           case Status.Ok =>
             OAuth2.derive[AadToken](res.contentString).fold[Future[AadToken]](
               err => Future.exception(IdentityProviderError(Status.InternalServerError,
                 "Failed to parse the AadToken received from OAuth2 Server: " +
-                  s"${req.req.customerId.loginManager.name}")),
+                  s"${req.customerId.loginManager.name}")),
               t => Future.value(t)
             )
           //  Preserve Response Status code by throwing AccessDenied exceptions
           case _ => Future.exception(IdentityProviderError(res.status,
-            s"Failed to receive the AadToken from OAuth2 Server: ${req.req.customerId.loginManager.name}"))
+            s"Failed to receive the AadToken from OAuth2 Server: ${req.customerId.loginManager.name}"))
         })
         idClaimSet <- wrapFuture({() => PlainJWT.parse(aadToken.idToken).getJWTClaimsSet}, BpTokenParsingError.apply)
         accessClaimSet <- getClaimsSet(protoManager.certificateUrl, aadToken.accessToken)

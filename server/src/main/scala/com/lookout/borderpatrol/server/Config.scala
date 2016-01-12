@@ -349,7 +349,7 @@ object Config {
     decode[ServerConfig](Source.fromFile(filename).mkString) match {
       case Xor.Right(a) => validate(a); a
       case Xor.Left(b) => throw ConfigError("Failed to decode following fields: " +
-        (serverConfigFields.filter(b.getMessage contains _).reduceOption((a, b) => s"$a, $b") getOrElse "unknown"))a
+        (serverConfigFields.filter(b.getMessage contains _).reduceOption((a, b) => s"$a, $b") getOrElse "unknown"))
     }
   }
 }

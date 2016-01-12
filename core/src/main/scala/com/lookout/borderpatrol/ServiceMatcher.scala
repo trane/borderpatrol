@@ -78,11 +78,15 @@ case class ServiceMatcher(customerIds: Set[CustomerIdentifier], serviceIds: Set[
 
   /**
    * Derive a CustomerIdentifier and ServiceIdentifier from an `httpx.Request`
+   * - Find CustomerIdentifier from `subdomain` from `req.host`
+   * - Find ServiceIdentifier from `req.path`.
+   *   If it fails to find, then check if it matches with paths in LoginManager. If it does,
+   *   then use default ServiceIdentifier
    */
-  def get(req: Request): Option[Tuple2[CustomerIdentifier, ServiceIdentifier]] =
+  def get(req: Request): Option[(CustomerIdentifier, ServiceIdentifier)] =
     (req.host.flatMap(subdomain), path(Path(req.path))) match {
-      case (Some(cid), Some(sid)) => Some(Tuple2(cid, sid))
-      case (Some(cid), None) if (cid.isLoginManagerPath(Path(req.path))) => Some(Tuple2(cid, cid.defaultServiceId))
+      case (Some(cid), Some(sid)) => Some((cid, sid))
+      case (Some(cid), None) if (cid.isLoginManagerPath(Path(req.path))) => Some((cid, cid.defaultServiceId))
       case _ => None
     }
 }

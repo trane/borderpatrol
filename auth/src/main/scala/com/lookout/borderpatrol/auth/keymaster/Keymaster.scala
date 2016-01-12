@@ -86,9 +86,9 @@ object Keymaster {
 
     def transformInternal(req: SessionIdRequest): Future[InternalAuthCredential] =
       (for {
-        u <- req.req.req.params.get("username")
-        p <- req.req.req.params.get("password")
-      } yield InternalAuthCredential(u, p, req.req.customerId, req.req.serviceId)) match {
+        u <- req.req.params.get("username")
+        p <- req.req.params.get("password")
+      } yield InternalAuthCredential(u, p, req.customerId, req.serviceId)) match {
         case Some(c) => Future.value(c)
         case None => Future.exception(IdentityProviderError(Status.InternalServerError,
           "transformBasic: Failed to parse the Request"))
@@ -98,13 +98,13 @@ object Keymaster {
       for {
           accessClaimSet <- oAuth2CodeVerify.codeToClaimsSet(req, protoManager)
       } yield OAuth2CodeCredential(accessClaimSet.getStringClaim("upn"), accessClaimSet.getSubject,
-        req.req.customerId, req.req.serviceId)
+        req.customerId, req.serviceId)
     }
 
     def apply(req: SessionIdRequest,
               service: Service[KeymasterIdentifyReq, Response]): Future[Response] = {
       for {
-        transformed: Credential <- req.req.customerId.loginManager.protoManager match {
+        transformed: Credential <- req.customerId.loginManager.protoManager match {
           case a: InternalAuthProtoManager => transformInternal(req)
           case b: OAuth2CodeProtoManager => transformOAuth2(req, b)
         }

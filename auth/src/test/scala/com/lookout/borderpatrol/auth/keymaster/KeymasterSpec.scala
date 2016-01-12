@@ -130,10 +130,10 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
 
   it should "succeed and transform the username and password to Keymaster Credential" in {
     val testService = mkTestService[KeymasterIdentifyReq, Response] {
-      request =>
-        assert(request.credential.serviceId == one)
-        assert(request.req.req.serviceId == one)
-        request.credential match {
+      req =>
+        assert(req.credential.serviceId == one)
+        assert(req.req.serviceId == one)
+        req.credential match {
           case a: InternalAuthCredential => assert(a.uniqueId == "test@example.com")
           case _ => assert(false)
         }
@@ -156,10 +156,10 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
 
   it should "succeed and transform the oAuth2 code to Keymaster Credential" in {
     val testService = mkTestService[KeymasterIdentifyReq, Response] {
-      request =>
-        assert(request.credential.serviceId == two)
-        assert(request.req.req.serviceId == two)
-        request.credential match {
+      req =>
+        assert(req.credential.serviceId == two)
+        assert(req.req.serviceId == two)
+        req.credential match {
           case a: OAuth2CodeCredential => assert(a.uniqueId == "test@example.com")
           case _ => assert(false)
         }

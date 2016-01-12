@@ -306,8 +306,6 @@ class ConfigSpec extends BorderPatrolSuite {
     val tempFile = File.makeTemp("ServerConfigTest", ".tmp")
     tempFile.writeAll(partialContents.toString)
 
-    println(partialContents.toString)
-
     val caught = the [DuplicateConfigError] thrownBy {
       readServerConfig(tempFile.toCanonical.toString)
     }

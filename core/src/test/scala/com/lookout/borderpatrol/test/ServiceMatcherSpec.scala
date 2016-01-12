@@ -47,13 +47,13 @@ class ServiceMatcherSpec extends BorderPatrolSuite {
 
   it should "match the longest get" in {
     testServiceMatcher.get(req("enterprise", "/")) should be(None)
-    testServiceMatcher.get(req("enterprise", "/ent2")).value should be(Tuple2(cOne, sOneTwo))
-    testServiceMatcher.get(req("enterprise", "/check")).value should be(Tuple2(cOne, sOneOne))
-    testServiceMatcher.get(req("enterprise", "/loginConfirm")).value should be(Tuple2(cOne, sOneOne))
+    testServiceMatcher.get(req("enterprise", "/ent2")).value should be((cOne, sOneTwo))
+    testServiceMatcher.get(req("enterprise", "/check")).value should be((cOne, sOneOne))
+    testServiceMatcher.get(req("enterprise", "/loginConfirm")).value should be((cOne, sOneOne))
     testServiceMatcher.get(req("api", "/check")) should be(None)
     testServiceMatcher.get(req("api", "/loginConfirm")) should be(None)
-    testServiceMatcher.get(req("api.testdomain", "/apis/test")).value should be(Tuple2(cFour, sFour))
-    testServiceMatcher.get(req("api.testdomain", "/signin")).value should be(Tuple2(cFour, sFour))
+    testServiceMatcher.get(req("api.testdomain", "/apis/test")).value should be((cFour, sFour))
+    testServiceMatcher.get(req("api.testdomain", "/signin")).value should be((cFour, sFour))
     testServiceMatcher.get(req("api.testdomain", "/login")) should be(None)
   }
 

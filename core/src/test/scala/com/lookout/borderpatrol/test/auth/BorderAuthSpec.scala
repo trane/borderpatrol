@@ -62,9 +62,9 @@ class BorderAuthSpec extends BorderPatrolSuite  {
 
   it should "succeed and return output of upstream Service if ServiceRequest contains SessionId" in {
     val testService = mkTestService[SessionIdRequest, Response] {
-      request => {
-        assert(request.req.req.path == "/ent")
-        assert(request.req.serviceId == one)
+      req => {
+        assert(req.req.path == "/ent")
+        assert(req.serviceId == one)
         Future.value(Response(Status.Ok))
       }
     }
@@ -436,7 +436,8 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val request = req("enterprise", "/ent/dothis")
 
     //  Execute
-    val output = BorderService(workingMap, workingMap)(SessionIdRequest(ServiceRequest(request, cust1, one), sessionId))
+    val output = BorderService(workingMap, workingMap)(
+      SessionIdRequest(ServiceRequest(request, cust1, one), sessionId))
 
     //  Verify
     Await.result(output).status should be (Status.Found)
@@ -452,7 +453,8 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val request = req("enterprise", "/loginConfirm")
 
     //  Execute
-    val output = BorderService(workingMap, workingMap)(SessionIdRequest(ServiceRequest(request, cust1, one), sessionId))
+    val output = BorderService(workingMap, workingMap)(
+      SessionIdRequest(ServiceRequest(request, cust1, one), sessionId))
 
     //  Verify
     Await.result(output).status should be (Status.Found)
@@ -469,7 +471,8 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val request = req("enterprise", "/check/something")
 
     //  Execute
-    val output = BorderService(workingMap, workingMap)(SessionIdRequest(ServiceRequest(request, cust1, one), sessionId))
+    val output = BorderService(workingMap, workingMap)(
+      SessionIdRequest(ServiceRequest(request, cust1, one), sessionId))
 
     //  Verify
     Await.result(output).status should be (Status.Found)
@@ -605,7 +608,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val testService = mkTestService[SessionIdRequest, Response] {
       req => {
         // Verify path is unchanged in the request
-        assert(req.req.req.uri.startsWith(one.path.toString))
+        assert(req.req.uri.startsWith(one.path.toString))
         Response(Status.Ok).toFuture
       }
     }
@@ -628,7 +631,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     val testService = mkTestService[SessionIdRequest, Response] {
       req => {
         // Verify path is rewritten in the request
-        assert(req.req.req.uri.startsWith(two.rewritePath.get.toString))
+        assert(req.req.uri.startsWith(two.rewritePath.get.toString))
         Response(Status.Ok).toFuture
       }
     }
