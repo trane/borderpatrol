@@ -8,7 +8,7 @@ import com.lookout.borderpatrol.test.{sessionx, BorderPatrolSuite}
 import com.twitter.finagle.httpx.path.Path
 
 class ServicesSpec extends BorderPatrolSuite {
-  import sessionx.helpers.{secretStore => store, _}
+  import sessionx.helpers._
   import services._
 
   val urls = Set(new URL("http://localhost:5678"))
@@ -21,16 +21,18 @@ class ServicesSpec extends BorderPatrolSuite {
     internalProtoManager)
 
   // sids
-  val one = ServiceIdentifier("one", urls, Path("/ent"), None, "enterprise", checkpointLoginManager)
+  val one = ServiceIdentifier("one", urls, Path("/ent"), None)
+  val cid = CustomerIdentifier("enterprise", one, checkpointLoginManager)
   val sids = Set(one)
-  val serviceMatcher = ServiceMatcher(sids)
+  val cids = Set(cid)
+  val serviceMatcher = ServiceMatcher(cids, sids)
 
   //  Config helpers
   val defaultStatsdExporterConfig = StatsdExporterConfig("host", 300, "prefix")
   val defaultSecretStore = SecretStores.InMemorySecretStore(Secrets(Secret(), Secret()))
   val defaultSessionStore = SessionStores.InMemoryStore
   val serverConfig = ServerConfig(defaultSecretStore, defaultSessionStore, defaultStatsdExporterConfig,
-    sids, Set(checkpointLoginManager), Set(keymasterIdManager), Set(keymasterAccessManager))
+    cids, sids, Set(checkpointLoginManager), Set(keymasterIdManager), Set(keymasterAccessManager))
 
   /***FIXME: use this write integration test-suite */
   behavior of "MainServiceChain"

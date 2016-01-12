@@ -20,6 +20,7 @@ import scala.io.Source
 case class ServerConfig(secretStore: SecretStoreApi,
                         sessionStore: SessionStore,
                         statsdExporterConfig: StatsdExporterConfig,
+                        customerIdentifiers: Set[CustomerIdentifier],
                         serviceIdentifiers: Set[ServiceIdentifier],
                         loginManagers: Set[LoginManager],
                         identityManagers: Set[Manager],
@@ -45,9 +46,8 @@ object Config {
   val defaultConfigFile = "bpConfig.json"
   val defaultSecretStore = SecretStores.InMemorySecretStore(Secrets(Secret(), Secret()))
   val defaultSessionStore = SessionStores.InMemoryStore
-  val defaultServiceIdsFile = "bpConfig.json"
-  val serverConfigFields = Set("secretStore", "sessionStore", "serviceIdentifiers", "loginManagers",
-    "identityManagers", "accessManager", "statsdReporter")
+  val serverConfigFields = Set("secretStore", "sessionStore", "customerIdentifiers", "serviceIdentifiers",
+    "loginManagers", "identityManagers", "accessManager", "statsdReporter")
 
   // Encoder/Decoder for Path
   implicit val encodePath: Encoder[Path] = Encoder[String].contramap(_.toString)
@@ -162,23 +162,39 @@ object Config {
       ("name", sid.name.asJson),
       ("hosts", sid.hosts.asJson),
       ("path", sid.path.asJson),
-      ("rewritePath", sid.rewritePath.asJson),
-      ("subdomain", sid.subdomain.asJson),
-      ("loginManager", sid.loginManager.name.asJson)))
+      ("rewritePath", sid.rewritePath.asJson)))
   }
-  def decodeServiceIdentifier(lms: Map[String, LoginManager]): Decoder[ServiceIdentifier] =
+  implicit val decodeServiceIdentifier: Decoder[ServiceIdentifier] =
     Decoder.instance { c =>
       for {
         name <- c.downField("name").as[String]
         hosts <- c.downField("hosts").as[Set[URL]]
         path <- c.downField("path").as[Path]
-        rewritePathOpt <- c.downField("rewritePath").as[Option[Path]]
+        rewritePathOption <- c.downField("rewritePath").as[Option[Path]]
+      } yield ServiceIdentifier(name, hosts, path, rewritePathOption)
+    }
+
+  // Encoder/Decoder for CustomerIdentifier
+  implicit val encodeCustomerIdentifier: Encoder[CustomerIdentifier] = Encoder.instance { cid =>
+    Json.fromFields(Seq(
+      ("subdomain", cid.subdomain.asJson),
+      ("defaultServiceIdentifier", cid.defaultServiceId.name.asJson),
+      ("loginManager", cid.loginManager.name.asJson)))
+  }
+  def decodeCustomerIdentifier(sids: Map[String, ServiceIdentifier], lms: Map[String, LoginManager]):
+      Decoder[CustomerIdentifier] =
+    Decoder.instance { c =>
+      for {
         subdomain <- c.downField("subdomain").as[String]
+        sidName <- c.downField("defaultServiceIdentifier").as[String]
+        sid <- Xor.fromOption(sids.get(sidName),
+          DecodingFailure(s"No ServiceIdentifier $sidName found: ", c.history)
+        )
         lmName <- c.downField("loginManager").as[String]
         lm <- Xor.fromOption(lms.get(lmName),
           DecodingFailure(s"No LoginManager $lmName found: ", c.history)
         )
-      } yield ServiceIdentifier(name, hosts, path, rewritePathOpt, subdomain, lm)
+      } yield CustomerIdentifier(subdomain, sid, lm)
     }
 
   /**
@@ -192,7 +208,8 @@ object Config {
       ("identityManagers", serverConfig.identityManagers.asJson),
       ("accessManagers", serverConfig.accessManagers.asJson),
       ("loginManagers", serverConfig.loginManagers.asJson),
-      ("serviceIdentifiers", serverConfig.serviceIdentifiers.asJson)))
+      ("serviceIdentifiers", serverConfig.serviceIdentifiers.asJson),
+      ("customerIdentifiers", serverConfig.customerIdentifiers.asJson)))
   }
   implicit val serverConfigDecoder: Decoder[ServerConfig] = Decoder.instance { c =>
     for {
@@ -203,9 +220,10 @@ object Config {
       ams <- c.downField("accessManagers").as[Set[Manager]]
       lms <- c.downField("loginManagers").as(Decoder.decodeSet(
         decodeLoginManager(ims.map(im => im.name -> im).toMap, ams.map(am => am.name -> am).toMap)))
-      sids <- c.downField("serviceIdentifiers").as(Decoder.decodeSet(
-        decodeServiceIdentifier(lms.map(lm => lm.name -> lm).toMap)))
-    } yield ServerConfig(secretStore, sessionStore, statsdExporterConfig, sids, lms, ims, ams)
+      sids <- c.downField("serviceIdentifiers").as[Set[ServiceIdentifier]]
+      cids <- c.downField("customerIdentifiers").as(Decoder.decodeSet(
+        decodeCustomerIdentifier(sids.map(sid => sid.name -> sid).toMap, lms.map(lm => lm.name -> lm).toMap)))
+    } yield ServerConfig(secretStore, sessionStore, statsdExporterConfig, cids, sids, lms, ims, ams)
   }
 
   /**
@@ -274,12 +292,27 @@ object Config {
    * @param sids
    */
   def validateServiceIdentifierConfig(field: String, sids: Set[ServiceIdentifier]): Unit = {
-    // Find if ServiceIdentifiers have duplicate entries
-    if (sids.size > sids.map(sid => (sid.path, sid.subdomain)).size)
-    throw new DuplicateConfigError("path and subdomain", "serviceIdentifiers")
+    // Find if ServiceIdentifiers have duplicate entries (same name)
+    if (sids.size > sids.map(sid => sid.name).size)
+    throw new DuplicateConfigError("name", "serviceIdentifiers")
+
+    // Find if ServiceIdentifiers have duplicate entries (same path)
+    if (sids.size > sids.map(sid => sid.path).size)
+      throw new DuplicateConfigError("path", "serviceIdentifiers")
 
     // Make sure hosts in Serviceidentifier have http or https protocol
     sids.map(sid => validateHostsConfig(field, sid.name, sid.hosts))
+  }
+
+  /**
+   * Validate customerIdentifier configuration
+   * @param field
+   * @param cids
+   */
+  def validateCustomerIdentifierConfig(field: String, cids: Set[CustomerIdentifier]): Unit = {
+    // Find if CustomerIdentifiers have duplicate entries
+    if (cids.size > cids.map(cid => cid.subdomain).size)
+      throw new DuplicateConfigError("subdomain", "customerIdentifiers")
   }
 
   /**
@@ -301,6 +334,9 @@ object Config {
 
     //  Validate serviceIdentifiers config
     validateServiceIdentifierConfig("serviceIdentifiers", serverConfig.serviceIdentifiers)
+
+    //  Validate customerIdentifiers config
+    validateCustomerIdentifierConfig("customerIdentifiers", serverConfig.customerIdentifiers)
   }
 
   /**
@@ -312,9 +348,8 @@ object Config {
   def readServerConfig(filename: String) : ServerConfig = {
     decode[ServerConfig](Source.fromFile(filename).mkString) match {
       case Xor.Right(a) => validate(a); a
-      case Xor.Left(b) =>
-        throw ConfigError("Failed to decode following fields: " +
-        (serverConfigFields.filter(b.getMessage contains _).reduceOption((a, b) => s"$a, $b") getOrElse "unknown"))
+      case Xor.Left(b) => throw ConfigError("Failed to decode following fields: " +
+        (serverConfigFields.filter(b.getMessage contains _).reduceOption((a, b) => s"$a, $b") getOrElse "unknown"))a
     }
   }
 }

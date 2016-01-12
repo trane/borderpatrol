@@ -1,15 +1,13 @@
 package com.lookout.borderpatrol.auth
 
 import java.math.BigInteger
-import java.net.URL
 import java.security.{PublicKey, KeyPairGenerator, KeyPair}
 import java.security.interfaces.{ECPublicKey, ECPrivateKey, RSAPublicKey, RSAPrivateKey}
 import java.util.Date
 import javax.security.auth.x500.X500Principal
 import javax.xml.bind.DatatypeConverter
 
-import com.lookout.borderpatrol.{OAuth2CodeProtoManager, InternalAuthProtoManager, CommunicationError}
-import com.lookout.borderpatrol.{Manager, LoginManager, ServiceIdentifier, ServiceMatcher}
+import com.lookout.borderpatrol.CommunicationError
 import com.lookout.borderpatrol.sessionx._
 import com.lookout.borderpatrol.test.{sessionx, BorderPatrolSuite}
 import com.lookout.borderpatrol.util.Combinators.tap
@@ -17,55 +15,15 @@ import com.nimbusds.jose.{JWSVerifier, JWSSigner, JWSHeader, JWSAlgorithm}
 import com.nimbusds.jose.crypto.{ECDSAVerifier, ECDSASigner, RSASSAVerifier, RSASSASigner}
 import com.nimbusds.jose.util.{X509CertUtils, Base64URL}
 import com.nimbusds.jwt.{PlainJWT, SignedJWT, JWTClaimsSet}
-import com.twitter.finagle.Service
 import com.twitter.finagle.httpx._
-import com.twitter.finagle.httpx.path.Path
 import com.twitter.finagle.httpx.service.RoutingService
-import com.twitter.util.{Await, Future}
+import com.twitter.util.Await
 import org.bouncycastle.x509.X509V1CertificateGenerator
 
 
 class OAuth2Spec extends BorderPatrolSuite {
   import sessionx.helpers._
   import OAuth2._
-
-  val urls = Set(new URL("http://localhost:8081"))
-
-  //  Managers
-  val keymasterIdManager = Manager("keymaster", Path("/identityProvider"), urls)
-  val keymasterAccessManager = Manager("keymaster", Path("/accessIssuer"), urls)
-  val internalProtoManager = InternalAuthProtoManager(Path("/loginConfirm"), Path("/check"), urls)
-  val checkpointLoginManager = LoginManager("checkpoint", keymasterIdManager, keymasterAccessManager,
-    internalProtoManager)
-  val oauth2CodeProtoManager = OAuth2CodeProtoManager(Path("/loginConfirm"),
-    new URL("http://example.com/authorizeUrl"),
-    new URL("http://localhost:4567/tokenUrl"),
-    new URL("http://localhost:4567/certificateUrl"), "clientId", "clientSecret")
-  val umbrellaLoginManager = LoginManager("umbrella", keymasterIdManager, keymasterAccessManager,
-    oauth2CodeProtoManager)
-  val oauth2CodeBadProtoManager = OAuth2CodeProtoManager(Path("/signblew"),
-    new URL("http://localhost:9999/authorizeUrl"),
-    new URL("http://localhost:9999/tokenUrl"),
-    new URL("http://localhost:9999/certificateUrl"),
-    "clientId", "clientSecret")
-  val rainyLoginManager = LoginManager("rlm", keymasterIdManager, keymasterAccessManager,
-    oauth2CodeBadProtoManager)
-
-  // sids
-  val one = ServiceIdentifier("one", urls, Path("/ent"), None, "enterprise", checkpointLoginManager)
-  val two = ServiceIdentifier("two", urls, Path("/umb"), Some(Path("/broken/umb")), "sky", umbrellaLoginManager)
-  val three = ServiceIdentifier("three", urls, Path("/rain"), None, "rainy", rainyLoginManager)
-  val serviceMatcher = ServiceMatcher(Set(one, two, three))
-  val sessionStore = SessionStores.InMemoryStore
-
-  // Request helper
-  def req(subdomain: String, path: String, params: Tuple2[String, String]*): Request =
-    RequestBuilder().url(s"http://${subdomain + "."}example.com${Request.queryString(path, params: _*)}").buildGet()
-
-  //  Test Services
-  def mkTestService[A, B](f: (A) => Future[B]): Service[A, B] = new Service[A, B] {
-    def apply(request: A) = f(request)
-  }
 
   // Mock
   class MockOAuth2CodeVerify extends OAuth2CodeVerify {
@@ -87,21 +45,21 @@ class OAuth2Spec extends BorderPatrolSuite {
   }
 
   def generateTestCertificate(kp: KeyPair, algorithm: String) = {
-    val startDate: Date = new Date(2010, 1, 1);
+    val startDate: Date = new Date(2010, 1, 1)
     // time from which certificate is valid
-    val expiryDate: Date = new Date(2020, 1, 1);
+    val expiryDate: Date = new Date(2020, 1, 1)
     // time after which certificate is not valid
-    val serialNumber: BigInteger = BigInteger.TEN;
+    val serialNumber: BigInteger = BigInteger.TEN
     // serial number for certificate
-    val certGen: X509V1CertificateGenerator = new X509V1CertificateGenerator();
-    val dnName: X500Principal = new X500Principal("CN=Test CA Certificate");
-    certGen.setSerialNumber(serialNumber);
-    certGen.setIssuerDN(dnName);
-    certGen.setNotBefore(startDate);
-    certGen.setNotAfter(expiryDate);
-    certGen.setSubjectDN(dnName); // note: same as issuer
-    certGen.setPublicKey(kp.getPublic());
-    certGen.setSignatureAlgorithm(algorithm);
+    val certGen: X509V1CertificateGenerator = new X509V1CertificateGenerator()
+    val dnName: X500Principal = new X500Principal("CN=Test CA Certificate")
+    certGen.setSerialNumber(serialNumber)
+    certGen.setIssuerDN(dnName)
+    certGen.setNotBefore(startDate)
+    certGen.setNotAfter(expiryDate)
+    certGen.setSubjectDN(dnName) // note: same as issuer
+    certGen.setPublicKey(kp.getPublic())
+    certGen.setSignatureAlgorithm(algorithm)
     certGen.generate(kp.getPrivate())
   }
 
@@ -140,8 +98,7 @@ class OAuth2Spec extends BorderPatrolSuite {
   val testEcIdToken = new PlainJWT(new JWTClaimsSet.Builder().subject("SomeIdToken")
     .claim("upn", "test@example.com").build)
   val testEcAadToken = AadToken(testEcAccessToken.serialize(), testEcIdToken.serialize())
-
-
+  
   behavior of "AadToken"
 
   it should "uphold encoding/decoding AadToken" in {
@@ -209,7 +166,7 @@ class OAuth2Spec extends BorderPatrolSuite {
       val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
 
       // SessionIdRequest
-      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, cust2, two), sessionId)
 
       // Execute
       val output = new OAuth2CodeVerify().codeToClaimsSet(sessionIdRequest, oauth2CodeProtoManager)
@@ -261,7 +218,7 @@ class OAuth2Spec extends BorderPatrolSuite {
       val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
 
       // SessionIdRequest
-      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, cust2, two), sessionId)
 
       // Execute
       val output = new OAuth2CodeVerify().codeToClaimsSet(sessionIdRequest, oauth2CodeProtoManager)
@@ -300,7 +257,7 @@ class OAuth2Spec extends BorderPatrolSuite {
       val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
 
       // SessionIdRequest
-      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, cust2, two), sessionId)
 
       // Add certificate
       val oAuth2CodeVerify = new MockOAuth2CodeVerify()
@@ -326,7 +283,7 @@ class OAuth2Spec extends BorderPatrolSuite {
     val loginRequest = req("rainy", "/signblew", ("code" -> "XYZ123"))
 
     // SessionIdRequest
-    val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, three), sessionId)
+    val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, cust3, three), sessionId)
 
     // Execute
     val output = new OAuth2CodeVerify().codeToClaimsSet(sessionIdRequest, oauth2CodeBadProtoManager)
@@ -348,7 +305,7 @@ class OAuth2Spec extends BorderPatrolSuite {
     val loginRequest = Request("/signin", ("code" -> "XYZ123"))
 
     // SessionIdRequest
-    val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+    val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, cust2, two), sessionId)
 
     // Validate
     val caught = the[Exception] thrownBy {
@@ -376,7 +333,7 @@ class OAuth2Spec extends BorderPatrolSuite {
       val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
 
       // SessionIdRequest
-      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, cust2, two), sessionId)
 
       // Execute
       val output = new OAuth2CodeVerify().codeToClaimsSet(sessionIdRequest, oauth2CodeProtoManager)
@@ -385,7 +342,7 @@ class OAuth2Spec extends BorderPatrolSuite {
       val caught = the[IdentityProviderError] thrownBy {
         Await.result(output)
       }
-      caught.getMessage should be("Failed to parse the AadToken received from OAuth2 Server: umbrella")
+      caught.getMessage should be("Failed to parse the AadToken received from OAuth2 Server: ulm")
       caught.status should be(Status.InternalServerError)
     } finally {
       server.close()
@@ -406,7 +363,7 @@ class OAuth2Spec extends BorderPatrolSuite {
       val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
 
       // SessionIdRequest
-      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, cust2, two), sessionId)
 
       // Execute
       val output = new OAuth2CodeVerify().codeToClaimsSet(sessionIdRequest, oauth2CodeProtoManager)
@@ -415,7 +372,7 @@ class OAuth2Spec extends BorderPatrolSuite {
       val caught = the[IdentityProviderError] thrownBy {
         Await.result(output)
       }
-      caught.getMessage should be("Failed to receive the AadToken from OAuth2 Server: umbrella")
+      caught.getMessage should be("Failed to receive the AadToken from OAuth2 Server: ulm")
       caught.status should be(Status.NotAcceptable)
     } finally {
       server.close()
@@ -441,7 +398,7 @@ class OAuth2Spec extends BorderPatrolSuite {
       val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
 
       // SessionIdRequest
-      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, cust2, two), sessionId)
 
       // Execute
       val output = new OAuth2CodeVerify().codeToClaimsSet(sessionIdRequest, oauth2CodeProtoManager)
@@ -475,7 +432,7 @@ class OAuth2Spec extends BorderPatrolSuite {
       val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
 
       // SessionIdRequest
-      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, cust2, two), sessionId)
 
       // Execute
       val output = new OAuth2CodeVerify().codeToClaimsSet(sessionIdRequest, oauth2CodeProtoManager)
@@ -513,7 +470,7 @@ class OAuth2Spec extends BorderPatrolSuite {
       val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
 
       // SessionIdRequest
-      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, cust2, two), sessionId)
 
       // Execute
       val output = new OAuth2CodeVerify().codeToClaimsSet(sessionIdRequest, oauth2CodeProtoManager)
@@ -566,7 +523,7 @@ class OAuth2Spec extends BorderPatrolSuite {
       val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
 
       // SessionIdRequest
-      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, cust2, two), sessionId)
 
       // Execute
       val output = new OAuth2CodeVerify().codeToClaimsSet(sessionIdRequest, oauth2CodeProtoManager)
@@ -618,7 +575,7 @@ class OAuth2Spec extends BorderPatrolSuite {
       val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
 
       // SessionIdRequest
-      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, cust2, two), sessionId)
 
       // Execute
       val output = new OAuth2CodeVerify().codeToClaimsSet(sessionIdRequest, oauth2CodeProtoManager)
@@ -656,7 +613,7 @@ class OAuth2Spec extends BorderPatrolSuite {
       val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
 
       // SessionIdRequest
-      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+      val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, cust2, two), sessionId)
 
       // Add certificate
       val oAuth2CodeVerify = new MockOAuth2CodeVerify()

@@ -5,8 +5,7 @@ import java.util.logging.Logger
 import com.lookout.borderpatrol.auth.OAuth2.OAuth2CodeVerify
 import com.lookout.borderpatrol.util.Combinators.tap
 import com.lookout.borderpatrol.sessionx._
-import com.lookout.borderpatrol.ServiceIdentifier
-import com.lookout.borderpatrol.{InternalAuthProtoManager, Manager, OAuth2CodeProtoManager}
+import com.lookout.borderpatrol._
 import com.lookout.borderpatrol.Binder._
 import com.lookout.borderpatrol.auth._
 import com.twitter.finagle.stats.StatsReceiver
@@ -23,7 +22,7 @@ object Keymaster {
   case class KeymasterIdentifyRes(tokens: Tokens) extends IdentifyResponse[Tokens] {
     val identity = Identity(tokens)
   }
-  case class KeymasterAccessReq(identity: Id[Tokens],
+  case class KeymasterAccessReq(identity: Id[Tokens], customerId: CustomerIdentifier,
                                 serviceId: ServiceIdentifier, sessionId: SessionId) extends AccessRequest[Tokens]
   case class KeymasterAccessRes(access: Access[ServiceToken]) extends AccessResponse[ServiceToken]
 
@@ -51,7 +50,7 @@ object Keymaster {
       requestSends.incr
 
       //  Authenticate user by the Keymaster
-      binder(BindRequest(req.credential.serviceId.loginManager.identityManager, req.credential.toRequest))
+      binder(BindRequest(req.credential.customerId.loginManager.identityManager, req.credential.toRequest))
         .flatMap(res => res.status match {
         //  Parse for Tokens if Status.Ok
         case Status.Ok =>
@@ -89,7 +88,7 @@ object Keymaster {
       (for {
         u <- req.req.req.params.get("username")
         p <- req.req.req.params.get("password")
-      } yield InternalAuthCredential(u, p, req.req.serviceId)) match {
+      } yield InternalAuthCredential(u, p, req.req.customerId, req.req.serviceId)) match {
         case Some(c) => Future.value(c)
         case None => Future.exception(IdentityProviderError(Status.InternalServerError,
           "transformBasic: Failed to parse the Request"))
@@ -98,13 +97,14 @@ object Keymaster {
     def transformOAuth2(req: SessionIdRequest, protoManager: OAuth2CodeProtoManager): Future[OAuth2CodeCredential] = {
       for {
           accessClaimSet <- oAuth2CodeVerify.codeToClaimsSet(req, protoManager)
-      } yield OAuth2CodeCredential(accessClaimSet.getStringClaim("upn"), accessClaimSet.getSubject, req.req.serviceId)
+      } yield OAuth2CodeCredential(accessClaimSet.getStringClaim("upn"), accessClaimSet.getSubject,
+        req.req.customerId, req.req.serviceId)
     }
 
     def apply(req: SessionIdRequest,
               service: Service[KeymasterIdentifyReq, Response]): Future[Response] = {
       for {
-        transformed: Credential <- req.req.serviceId.loginManager.protoManager match {
+        transformed: Credential <- req.req.customerId.loginManager.protoManager match {
           case a: InternalAuthProtoManager => transformInternal(req)
           case b: OAuth2CodeProtoManager => transformOAuth2(req, b)
         }
@@ -173,7 +173,7 @@ object Keymaster {
     private[this] val cacheHits = statsReceiver.counter("keymaster.access.issuer.cache.hits")
 
     def api(accessRequest: AccessRequest[Tokens]): Request =
-      tap(Request(Method.Post, accessRequest.serviceId.loginManager.accessManager.path.toString))(req => {
+      tap(Request(Method.Post, accessRequest.customerId.loginManager.accessManager.path.toString))(req => {
         req.contentType = "application/x-www-form-urlencoded"
         req.contentString = Request.queryString("services" -> accessRequest.serviceId.name)
           .drop(1) /* Drop '?' */
@@ -189,7 +189,7 @@ object Keymaster {
         requestSends.incr
 
         //  Fetch ServiceToken from the Keymaster
-        binder(BindRequest(req.serviceId.loginManager.accessManager, api(req))).flatMap(res => res.status match {
+        binder(BindRequest(req.customerId.loginManager.accessManager, api(req))).flatMap(res => res.status match {
           //  Parse for Tokens if Status.Ok
           case Status.Ok =>
             Tokens.derive[Tokens](res.contentString).fold[Future[ServiceToken]](

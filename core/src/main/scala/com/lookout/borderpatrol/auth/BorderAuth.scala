@@ -4,7 +4,7 @@ import java.util.logging.Logger
 
 import com.lookout.borderpatrol.Binder.{BindRequest, MBinder}
 import com.lookout.borderpatrol.util.Combinators._
-import com.lookout.borderpatrol.{LoginManager, ServiceIdentifier, ServiceMatcher}
+import com.lookout.borderpatrol.{CustomerIdentifier, LoginManager, ServiceIdentifier, ServiceMatcher}
 import com.lookout.borderpatrol.sessionx._
 import com.twitter.finagle.httpx.path.Path
 import com.twitter.finagle.httpx.{Status, Request, Response}
@@ -17,10 +17,10 @@ import scala.util.{Failure, Success}
 /**
  * PODs
  */
-case class ServiceRequest(req: Request, serviceId: ServiceIdentifier)
+case class ServiceRequest(req: Request, customerId: CustomerIdentifier, serviceId: ServiceIdentifier)
 case class SessionIdRequest(req: ServiceRequest, sessionId: SessionId) {
-  def this(serviceId: ServiceIdentifier, sessionId: SessionId, req: Request) =
-    this(ServiceRequest(req, serviceId), sessionId)
+  def this(customerId: CustomerIdentifier, serviceId: ServiceIdentifier, sessionId: SessionId, req: Request) =
+    this(ServiceRequest(req, customerId, serviceId), sessionId)
 }
 case class AccessIdRequest[A](req: SessionIdRequest, id: Id[A])
 
@@ -36,9 +36,15 @@ case class ServiceFilter(matchers: ServiceMatcher)
 
   def apply(req: Request, service: Service[ServiceRequest, Response]): Future[Response] = {
     matchers.get(req) match {
-      case Some(id) => service(ServiceRequest(req, id))
+      case Some((cid, sid)) => {
+        log.log(Level.DEBUG, s"Processing: Request(${req.method} " +
+          s"${req.host.fold("null-hostname")(h => s"${h}${req.path}")}) " +
+          s"with CustomerIdentifier: ${cid.subdomain}, ServiceIdentifier: ${sid.name}")
+        service(ServiceRequest(req, cid, sid))
+      }
       case None => tap(Response(Status.NotFound))(r => {
-        log.log(Level.DEBUG, s"Failed to find ServiceIdentifier for Request: ${req}")
+        log.log(Level.DEBUG, "Failed to find CustomerIdentifier and ServiceIdentifier for " +
+          s"Request(${req.method}, ${req.host.fold("null-hostname")(h => s"${h}${req.path}")})")
         r.contentString = s"${req.path}: Unknown Path/Service(${Status.NotFound.code})"
         r.contentType = "text/plain"
       }).toFuture
@@ -67,7 +73,7 @@ case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStor
           session <- Session(req.req)
           _ <- store.update(session)
         } yield tap(Response(Status.Found)) { res =>
-          res.location = req.serviceId.loginManager.protoManager.redirectLocation(req.req.host)
+          res.location = req.customerId.loginManager.protoManager.redirectLocation(req.req.host)
           res.addCookie(session.id.asCookie)
           log.log(Level.DEBUG, s"Untagged: ${req.req}, allocating a new session: " +
             s"${session.id.toLogIdString}, redirecting to location: ${res.location}")
@@ -97,25 +103,25 @@ case class BorderService(identityProviderMap: Map[String, Service[SessionIdReque
     req.req.serviceId.isServicePath(Path(req.req.req.path))
 
   def loginManagerPath(req: SessionIdRequest): Boolean =
-    req.req.serviceId.isLoginManagerPath(Path(req.req.req.path))
+    req.req.customerId.isLoginManagerPath(Path(req.req.req.path))
 
   def sendToIdentityProvider(req: SessionIdRequest): Future[Response] = {
     log.log(Level.DEBUG, s"Send: ${req.req.req} for Session: ${req.sessionId.toLogIdString} " +
       s"to identity provider chain for service: ${req.req.serviceId.name}")
-    identityProviderMap.get(req.req.serviceId.loginManager.identityManager.name) match {
+    identityProviderMap.get(req.req.customerId.loginManager.identityManager.name) match {
       case Some(ip) => ip(req)
       case None => throw IdentityProviderError(Status.NotFound, "Failed to find IdentityProvider Service Chain for " +
-        req.req.serviceId.loginManager.identityManager.name)
+        req.req.customerId.loginManager.identityManager.name)
     }
   }
 
   def sendToAccessIssuer(req: SessionIdRequest): Future[Response] = {
     log.log(Level.DEBUG, s"Send: ${req.req.req} for Session: ${req.sessionId.toLogIdString} " +
       s"to access issuer chain for service: ${req.req.serviceId.name}")
-    accessIssuerMap.get(req.req.serviceId.loginManager.accessManager.name) match {
+    accessIssuerMap.get(req.req.customerId.loginManager.accessManager.name) match {
       case Some(ip) => ip(req)
       case None => throw AccessIssuerError(Status.NotFound, "Failed to find AccessIssuer Service Chain for " +
-        req.req.serviceId.loginManager.accessManager.name)
+        req.req.customerId.loginManager.accessManager.name)
     }
   }
 
@@ -129,7 +135,7 @@ case class BorderService(identityProviderMap: Map[String, Service[SessionIdReque
   }
 
   def redirectToLogin(req: SessionIdRequest): Future[Response] = {
-    val path = req.req.serviceId.loginManager.protoManager.redirectLocation(req.req.req.host)
+    val path = req.req.customerId.loginManager.protoManager.redirectLocation(req.req.req.host)
     log.log(Level.DEBUG, s"Redirecting the ${req.req.req} for Untagged Session: ${req.sessionId.toLogIdString} " +
       s"to login service, location: ${path}")
     redirectTo(path).toFuture
@@ -169,7 +175,7 @@ case class IdentityFilter[A : SessionDataEncoder](store: SessionStore)(implicit 
         s <- Session(req.req.req)
         _ <- store.update(s)
       } yield tap(Response(Status.Found)) { res =>
-          res.location = req.req.serviceId.loginManager.protoManager.redirectLocation(req.req.req.host)
+          res.location = req.req.customerId.loginManager.protoManager.redirectLocation(req.req.req.host)
           res.addCookie(s.id.asCookie) // add SessionId value as a Cookie
           log.info(s"Failed to find Session: ${req.sessionId.toLogIdString} for Request: ${req.req}, " +
             s"allocating a new session: ${s.id.toLogIdString}, redirecting to location: ${res.location}")
@@ -192,12 +198,12 @@ case class LoginManagerFilter(binder: MBinder[LoginManager])(implicit statsRecei
   def apply(req: SessionIdRequest,
             service: Service[SessionIdRequest, Response]): Future[Response] =
     Path(req.req.req.path) match {
-      case req.req.serviceId.loginManager.protoManager.loginConfirm => service(req)
+      case req.req.customerId.loginManager.protoManager.loginConfirm => service(req)
       case _ => {
         requestSends.incr
         log.log(Level.DEBUG, s"Send: ${req.req.req} for Session: ${req.sessionId.toLogIdString} " +
-          s"to the Login Manager: ${req.req.serviceId.loginManager.name}")
-        binder(BindRequest(req.req.serviceId.loginManager, req.req.req))
+          s"to the Login Manager: ${req.req.customerId.loginManager.name}")
+        binder(BindRequest(req.req.customerId.loginManager, req.req.req))
       }
     }
 }
@@ -214,15 +220,15 @@ case class AccessFilter[A, B](binder: MBinder[ServiceIdentifier])(implicit stats
 
   def apply(req: AccessIdRequest[A],
             accessService: Service[AccessRequest[A], AccessResponse[B]]): Future[Response] =
-    accessService(AccessRequest(req.id, req.req.req.serviceId, req.req.sessionId)).flatMap(accessResp =>
-      binder(BindRequest(req.req.req.serviceId,
+    accessService(AccessRequest(req.id, req.req.req.customerId, req.req.req.serviceId, req.req.sessionId)).flatMap(
+      accessResp => binder(BindRequest(req.req.req.serviceId,
         tap(req.req.req.req) { r => {
           requestSends.incr
           log.log(Level.DEBUG, s"Send: ${req.req.req.req} for Session: ${req.req.sessionId.toLogIdString} " +
-            s"to the upstream service: ${req.req.req.serviceId.name}, " +
-            s"with serviceToken = ${accessResp.access.access.toString}")
+            s"to the upstream service: ${req.req.req.serviceId.name}")
           r.headerMap.add("Auth-Token", accessResp.access.access.toString)
-        }}))
+        }})
+      )
     )
 }
 
@@ -232,7 +238,7 @@ case class AccessFilter[A, B](binder: MBinder[ServiceIdentifier])(implicit stats
 case class RewriteFilter() extends SimpleFilter[SessionIdRequest, Response] {
   def apply(req: SessionIdRequest,
             service: Service[SessionIdRequest, Response]): Future[Response] = {
-    service(new SessionIdRequest(req.req.serviceId, req.sessionId, tap(req.req.req) { r =>
+    service(new SessionIdRequest(req.req.customerId, req.req.serviceId, req.sessionId, tap(req.req.req) { r =>
       // Rewrite the URI (i.e. path)
       r.uri = req.req.serviceId.rewritePath.fold(r.uri)(p =>
         r.uri.replaceFirst(req.req.serviceId.path.toString, p.toString))
