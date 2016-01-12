@@ -1,7 +1,7 @@
 package com.lookout.borderpatrol
 
 import java.net.URL
-import com.twitter.finagle.httpx.{Method, Status, Response, Request}
+import com.twitter.finagle.httpx.{Method, Response, Request}
 import com.twitter.finagle.httpx.path.Path
 import com.twitter.util.Future
 
@@ -16,8 +16,6 @@ trait ProtoManager {
   def hosts: Set[URL]
   def isMatchingPath(p: Path): Boolean
   def getOwnedPaths: Set[Path]
-  def codeToToken(host: Option[String], code: String): Future[Response]
-  def transform[A, B](a: A)(implicit tr: Transform[A, Future[B]]): Future[B] = tr(a)
 }
 
 case class InternalAuthProtoManager(loginConfirm: Path, path: Path, hsts: Set[URL])
@@ -27,10 +25,9 @@ case class InternalAuthProtoManager(loginConfirm: Path, path: Path, hsts: Set[UR
   def isMatchingPath(p: Path): Boolean =
     Set(path, loginConfirm).filter(p.startsWith(_)).nonEmpty
   def getOwnedPaths: Set[Path] = Set(path)
-  def codeToToken(host: Option[String], code: String): Future[Response] =  Response(Status.NotAcceptable).toFuture
 }
 
-case class OAuth2CodeProtoManager(loginConfirm: Path, authorizeUrl: URL, tokenUrl: URL,
+case class OAuth2CodeProtoManager(loginConfirm: Path, authorizeUrl: URL, tokenUrl: URL, certificateUrl: URL,
                                   clientId: String, clientSecret: String)
     extends ProtoManager{
   def redirectLocation(host: Option[String]): String = {

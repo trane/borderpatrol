@@ -2,6 +2,7 @@ package com.lookout.borderpatrol.auth.keymaster
 
 import java.util.logging.Logger
 
+import com.lookout.borderpatrol.auth.OAuth2.OAuth2CodeVerify
 import com.lookout.borderpatrol.util.Combinators.tap
 import com.lookout.borderpatrol.sessionx._
 import com.lookout.borderpatrol.ServiceIdentifier
@@ -17,9 +18,8 @@ import com.twitter.util.Future
 
 object Keymaster {
   import Tokens._
-  import KeymasterTransform._
 
-  case class KeymasterIdentifyReq(credential: Credential) extends IdentifyRequest[Credential]
+  case class KeymasterIdentifyReq(req: SessionIdRequest, credential: Credential) extends IdentifyRequest[Credential]
   case class KeymasterIdentifyRes(tokens: Tokens) extends IdentifyResponse[Tokens] {
     val identity = Identity(tokens)
   }
@@ -79,6 +79,41 @@ object Keymaster {
   }
 
   /**
+   * Handles Keymaster transforms for internal and OAuth2
+   */
+  case class KeymasterTransformFilter(oAuth2CodeVerify: OAuth2CodeVerify)(implicit statsReceiver: StatsReceiver)
+      extends Filter[SessionIdRequest, Response, KeymasterIdentifyReq, Response] {
+    private[this] val log = Logger.getLogger(getClass.getSimpleName)
+
+    def transformInternal(req: SessionIdRequest): Future[InternalAuthCredential] =
+      (for {
+        u <- req.req.req.params.get("username")
+        p <- req.req.req.params.get("password")
+      } yield InternalAuthCredential(u, p, req.req.serviceId)) match {
+        case Some(c) => Future.value(c)
+        case None => Future.exception(IdentityProviderError(Status.InternalServerError,
+          "transformBasic: Failed to parse the Request"))
+      }
+
+    def transformOAuth2(req: SessionIdRequest, protoManager: OAuth2CodeProtoManager): Future[OAuth2CodeCredential] = {
+      for {
+          accessClaimSet <- oAuth2CodeVerify.codeToClaimsSet(req, protoManager)
+      } yield OAuth2CodeCredential(accessClaimSet.getStringClaim("upn"), accessClaimSet.getSubject, req.req.serviceId)
+    }
+
+    def apply(req: SessionIdRequest,
+              service: Service[KeymasterIdentifyReq, Response]): Future[Response] = {
+      for {
+        transformed: Credential <- req.req.serviceId.loginManager.protoManager match {
+          case a: InternalAuthProtoManager => transformInternal(req)
+          case b: OAuth2CodeProtoManager => transformOAuth2(req, b)
+        }
+        resp <- service(KeymasterIdentifyReq(req, transformed))
+      } yield resp
+    }
+  }
+
+  /**
    * Handles logins to the KeymasterIdentityProvider:
    * - saves the Tokens after a successful login
    * - sends the User to their original request location from before they logged in or the default location based on
@@ -88,7 +123,7 @@ object Keymaster {
    */
   case class KeymasterPostLoginFilter(store: SessionStore)
                                      (implicit secretStoreApi: SecretStoreApi, statsReceiver: StatsReceiver)
-      extends Filter[SessionIdRequest, Response, IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
+      extends Filter[KeymasterIdentifyReq, Response, IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
     private[this] val log = Logger.getLogger(getClass.getSimpleName)
     private[this] val sessionAuthenticated = statsReceiver.counter("keymaster.session.authenticated")
 
@@ -101,23 +136,19 @@ object Keymaster {
         case None => Future.exception(OriginalRequestNotFound(s"no request stored for $id"))
       }
 
-    def apply(req: SessionIdRequest,
+    def apply(req: KeymasterIdentifyReq,
               service: Service[IdentifyRequest[Credential], IdentifyResponse[Tokens]]): Future[Response] = {
       for {
-          transformed: Credential <- req.req.serviceId.loginManager.protoManager match {
-            case a: InternalAuthProtoManager => a.transform[SessionIdRequest, InternalAuthCredential](req)
-            case b: OAuth2CodeProtoManager => b.transform[SessionIdRequest, OAuth2CodeCredential](req)
-          }
-          tokenResponse <- service(KeymasterIdentifyReq(transformed))
+          tokenResponse <- service(req)
           session <- Session(tokenResponse.identity.id, AuthenticatedTag)
           _ <- store.update[Tokens](session)
-          originReq <- requestFromSessionStore(req.sessionId)
-          _ <- store.delete(req.sessionId)
+          originReq <- requestFromSessionStore(req.req.sessionId)
+          _ <- store.delete(req.req.sessionId)
         } yield tap(Response(Status.Found))(res => {
           sessionAuthenticated.incr
           res.location = originReq.uri
           res.addCookie(session.id.asCookie)
-          log.log(Level.DEBUG, s"Session: ${req.sessionId.toLogIdString}} is authenticated, " +
+          log.log(Level.DEBUG, s"Session: ${req.req.sessionId.toLogIdString}} is authenticated, " +
             s"allocated new Session: ${session.id.toLogIdString} and redirecting to location: ${res.location}")
         })
     }
@@ -199,6 +230,7 @@ object Keymaster {
   def keymasterIdentityProviderChain(store: SessionStore)(
     implicit secretStoreApi: SecretStoreApi, statsReceiver: StatsReceiver): Service[SessionIdRequest, Response] =
       LoginManagerFilter(LoginManagerBinder) andThen
+        KeymasterTransformFilter(new OAuth2CodeVerify) andThen
         KeymasterPostLoginFilter(store) andThen
         KeymasterIdentityProvider(ManagerBinder)
 

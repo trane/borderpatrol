@@ -18,8 +18,8 @@ class ServiceMatcherSpec extends BorderPatrolSuite {
   val basicIdManager = Manager("basic", Path("/signin"), urls)
   val basicAccessManager = Manager("basic", Path("/accessin"), urls)
   val oauth2CodeProtoManager = OAuth2CodeProtoManager(Path("/loginIt"),
-    new URL("http://example.com/authorizeUrl"),
-    new URL("http://example.com/tokenUrl"), "clientId", "clientSecret")
+    new URL("http://example.com/authorizeUrl"), new URL("http://example.com/tokenUrl"),
+    new URL("http://example.com/certificateUrl"), "clientId", "clientSecret")
   val umbrellaLoginManager = LoginManager("umbrella", keymasterIdManager, keymasterAccessManager,
     oauth2CodeProtoManager)
 

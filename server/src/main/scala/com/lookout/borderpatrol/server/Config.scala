@@ -104,6 +104,7 @@ object Config {
       ("loginConfirm", opm.loginConfirm.asJson),
       ("authorizeUrl", opm.authorizeUrl.asJson),
       ("tokenUrl", opm.tokenUrl.asJson),
+      ("certificateUrl", opm.certificateUrl.asJson),
       ("clientId", opm.clientId.asJson),
       ("clientSecret", opm.clientSecret.asJson)))
   }
@@ -120,9 +121,10 @@ object Config {
           loginConfirm <- c.downField("loginConfirm").as[Path]
           authorizeUrl <- c.downField("authorizeUrl").as[URL]
           tokenUrl <- c.downField("tokenUrl").as[URL]
+          certificateUrl <- c.downField("certificateUrl").as[URL]
           clientId <- c.downField("clientId").as[String]
           clientSecret <- c.downField("clientSecret").as[String]
-        } yield OAuth2CodeProtoManager(loginConfirm, authorizeUrl, tokenUrl, clientId, clientSecret)
+        } yield OAuth2CodeProtoManager(loginConfirm, authorizeUrl, tokenUrl, certificateUrl, clientId, clientSecret)
     }
   }
 
