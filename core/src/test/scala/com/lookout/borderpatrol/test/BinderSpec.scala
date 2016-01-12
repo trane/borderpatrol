@@ -12,6 +12,10 @@ import com.twitter.util.{Await, Future}
 class BinderSpec extends BorderPatrolSuite {
   val urls = Set(new URL("http://localhost:5679"))
 
+  override def afterEach(): Unit = {
+    BinderBase.clear
+  }
+
   //  Managers
   val keymasterIdManager = Manager("keymaster", Path("/identityProvider"), urls)
   val keymasterAccessManager = Manager("keymaster", Path("/accessIssuer"), urls)

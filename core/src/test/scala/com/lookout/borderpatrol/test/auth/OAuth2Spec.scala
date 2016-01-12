@@ -7,7 +7,7 @@ import java.util.Date
 import javax.security.auth.x500.X500Principal
 import javax.xml.bind.DatatypeConverter
 
-import com.lookout.borderpatrol.CommunicationError
+import com.lookout.borderpatrol.{BinderBase, CommunicationError}
 import com.lookout.borderpatrol.sessionx._
 import com.lookout.borderpatrol.test.{sessionx, BorderPatrolSuite}
 import com.lookout.borderpatrol.util.Combinators.tap
@@ -24,6 +24,10 @@ import org.bouncycastle.x509.X509V1CertificateGenerator
 class OAuth2Spec extends BorderPatrolSuite {
   import sessionx.helpers._
   import OAuth2._
+
+  override def afterEach(): Unit = {
+    BinderBase.clear
+  }
 
   // Mock
   class MockOAuth2CodeVerify extends OAuth2CodeVerify {

@@ -1,5 +1,6 @@
 package com.lookout.borderpatrol.auth.keymaster
 
+import com.lookout.borderpatrol.BinderBase
 import com.lookout.borderpatrol.auth.OAuth2.OAuth2CodeVerify
 import com.lookout.borderpatrol.auth.keymaster.Keymaster._
 import com.lookout.borderpatrol.auth._
@@ -19,6 +20,10 @@ import org.mockito.Mockito._
 class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
   import sessionx.helpers.{secretStore => store, _}
   import Tokens._
+
+  override def afterEach(): Unit = {
+    BinderBase.clear
+  }
 
   //  Tokens
   val serviceToken2 = ServiceToken("SomeServiceTokenData2")

@@ -8,6 +8,8 @@ import com.twitter.finagle.{Httpx, Service}
 import com.twitter.finagle.httpx.{Response, Request}
 import com.twitter.util.Future
 import scala.collection.JavaConverters._
+import scala.language.postfixOps
+
 
 /**
  * Binder object defines methods and shells used to bind to upstream endpoints
@@ -112,4 +114,6 @@ object BinderBase {
   }
 
   def get(name: String): Option[Service[Request, Response]] = cache.get(name)
+
+  def clear(): Unit = cache.clear()
 }
