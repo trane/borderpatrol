@@ -1,21 +1,16 @@
 package com.lookout.borderpatrol.auth.keymaster
 
-import java.net.URL
-
-import com.lookout.borderpatrol.Binder._
+import com.lookout.borderpatrol.BinderBase
 import com.lookout.borderpatrol.auth.OAuth2.OAuth2CodeVerify
 import com.lookout.borderpatrol.auth.keymaster.Keymaster._
 import com.lookout.borderpatrol.auth._
 import com.lookout.borderpatrol.sessionx.SessionStores.MemcachedStore
 import com.lookout.borderpatrol.sessionx._
-import com.lookout.borderpatrol.{ServiceIdentifier, ServiceMatcher}
-import com.lookout.borderpatrol.{LoginManager, InternalAuthProtoManager, Manager, OAuth2CodeProtoManager}
 import com.lookout.borderpatrol.test._
 import com.lookout.borderpatrol.util.Combinators.tap
 import com.nimbusds.jwt.{PlainJWT, JWTClaimsSet}
 import com.twitter.finagle.memcached.GetResult
-import com.twitter.finagle.{memcached, Service}
-import com.twitter.finagle.httpx.path.Path
+import com.twitter.finagle.memcached
 import com.twitter.finagle.httpx._
 import com.twitter.util.{Await, Future}
 
@@ -26,62 +21,15 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
   import sessionx.helpers.{secretStore => store, _}
   import Tokens._
 
-  val urls = Set(new URL("http://localhost:5678"))
-
-  //  Managers
-  val keymasterIdManager = Manager("keymaster", Path("/identityProvider"), urls)
-  val keymasterAccessManager = Manager("keymaster", Path("/accessIssuer"), urls)
-  val internalProtoManager = InternalAuthProtoManager(Path("/loginConfirm"), Path("/check"), urls)
-  val checkpointLoginManager = LoginManager("checkpoint", keymasterIdManager, keymasterAccessManager,
-    internalProtoManager)
-  val oauth2CodeProtoManager = OAuth2CodeProtoManager(Path("/signin"),
-    new URL("http://example.com/authorizeUrl"),
-    new URL("http://localhost:4567/tokenUrl"),
-    new URL("http://localhost:4567/certificateUrl"),
-    "clientId", "clientSecret")
-  val umbrellaLoginManager = LoginManager("ulm", keymasterIdManager, keymasterAccessManager,
-    oauth2CodeProtoManager)
-  val oauth2CodeBadProtoManager = OAuth2CodeProtoManager(Path("/signblew"),
-    new URL("http://localhost:9999/authorizeUrl"),
-    new URL("http://localhost:9999/tokenUrl"),
-    new URL("http://localhost:9999/certificateUrl"),
-    "clientId", "clientSecret")
-  val rainyLoginManager = LoginManager("rlm", keymasterIdManager, keymasterAccessManager,
-    oauth2CodeBadProtoManager)
-  val oAuth2CodeVerify = new OAuth2CodeVerify
-
-  // sids
-  val one = ServiceIdentifier("one", urls, Path("/ent"), None, "enterprise", checkpointLoginManager)
-  val two = ServiceIdentifier("two", urls, Path("/umb"), Some(Path("/broken/umb")), "umbrella", umbrellaLoginManager)
-  val three = ServiceIdentifier("three", urls, Path("/rain"), None, "rainy", rainyLoginManager)
-  val serviceMatcher = ServiceMatcher(Set(one, two, three))
-  val sessionStore = SessionStores.InMemoryStore
-
-  // Request helper
-  def req(subdomain: String, path: String, params: Tuple2[String, String]*): Request =
-    RequestBuilder().url(s"http://${subdomain + "."}example.com${Request.queryString(path, params:_*)}").buildGet()
+  override def afterEach(): Unit = {
+    BinderBase.clear
+  }
 
   //  Tokens
   val serviceToken2 = ServiceToken("SomeServiceTokenData2")
   val serviceTokens = ServiceTokens().add("service1", ServiceToken("SomeServiceTokenData1"))
   val tokens = Tokens(MasterToken("masterT"), serviceTokens)
   val tokens2 = tokens.add("one", serviceToken2)
-
-  // Binders
-  case class TestManagerBinder() extends MBinder[Manager]
-  def mkTestManagerBinder(f: (BindRequest[Manager]) => Future[Response]): TestManagerBinder = new TestManagerBinder {
-    override def apply(request: BindRequest[Manager]) = f(request)
-  }
-  case class TestLoginManagerBinder() extends MBinder[LoginManager]
-  def mkTestLoginManagerBinder(f: (BindRequest[LoginManager]) => Future[Response]): TestLoginManagerBinder =
-    new TestLoginManagerBinder {
-      override def apply(request: BindRequest[LoginManager]) = f(request)
-    }
-  case class TestServiceIdentifierBinder() extends MBinder[ServiceIdentifier]
-  def mkTestSidBinder(f: (BindRequest[ServiceIdentifier]) => Future[Response]): TestServiceIdentifierBinder =
-    new TestServiceIdentifierBinder {
-      override def apply(request: BindRequest[ServiceIdentifier]) = f(request)
-  }
 
   // Method to decode SessionData from the sessionId
   def getTokensFromSessionId(sid: SessionId): Future[Tokens] =
@@ -99,19 +47,14 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
       toks <- getTokensFromSessionId(sessionId)
     } yield toks
 
-  // Test services
-  def mkTestService[A, B](f: (A) => Future[B]) : Service[A, B] = new Service[A, B] {
-    def apply(request: A) = f(request)
-  }
   val keymasterLoginFilterTestService = mkTestService[IdentifyRequest[Credential], IdentifyResponse[Tokens]] {
     req => Future(KeymasterIdentifyRes(tokens)) }
-  val keymasterTestService = mkTestService[Request, Response] { req => Response(Status.Ok).toFuture }
 
   behavior of "KeymasterIdentityProvider"
 
   it should "succeed and return IdentityResponse with tokens received from upstream Keymaster Service" in {
     val testIdentityManagerBinder = mkTestManagerBinder { request => {
-      assert(request.req.path == one.loginManager.identityManager.path.toString)
+      assert(request.req.path == cust1.loginManager.identityManager.path.toString)
       tap(Response(Status.Ok))(res => {
         res.contentString = TokensEncoder(tokens).toString()
         res.contentType = "application/json"
@@ -125,11 +68,11 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
     val loginRequest = req("enterprise", "/loginConfirm", "username" -> "foo", "password" -> "bar")
 
     //  Request
-    val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, one), sessionId)
+    val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, cust1, one), sessionId)
 
     // Execute
     val output = KeymasterIdentityProvider(testIdentityManagerBinder).apply(
-      KeymasterIdentifyReq(sessionIdRequest, InternalAuthCredential("foo", "bar", one)))
+      KeymasterIdentifyReq(sessionIdRequest, InternalAuthCredential("foo", "bar", cust1, one)))
 
     // Validate
     Await.result(output).identity should be (Id(tokens))
@@ -145,11 +88,11 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
     val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
 
     //  Request
-    val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+    val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, cust2, two), sessionId)
 
     // Execute
     val output = KeymasterIdentityProvider(testIdentityManagerBinder).apply(
-      KeymasterIdentifyReq(sessionIdRequest, OAuth2CodeCredential("foo", "bar", two)))
+      KeymasterIdentifyReq(sessionIdRequest, OAuth2CodeCredential("foo", "bar", cust2, two)))
 
     // Validate
     val caught = the [IdentityProviderError] thrownBy {
@@ -174,11 +117,11 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
     val loginRequest = req("enterprise", "/loginConfirm", "username" -> "foo", "password" -> "bar")
 
     //  Request
-    val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, one), sessionId)
+    val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, cust1, one), sessionId)
 
     // Execute
     val output = KeymasterIdentityProvider(testIdentityManagerBinder).apply(
-      KeymasterIdentifyReq(sessionIdRequest, InternalAuthCredential("foo", "bar", one)))
+      KeymasterIdentifyReq(sessionIdRequest, InternalAuthCredential("foo", "bar", cust1, one)))
 
     // Validate
     val caught = the [IdentityProviderError] thrownBy {
@@ -192,10 +135,10 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
 
   it should "succeed and transform the username and password to Keymaster Credential" in {
     val testService = mkTestService[KeymasterIdentifyReq, Response] {
-      request =>
-        assert(request.credential.serviceId == one)
-        assert(request.req.req.serviceId == one)
-        request.credential match {
+      req =>
+        assert(req.credential.serviceId == one)
+        assert(req.req.serviceId == one)
+        req.credential match {
           case a: InternalAuthCredential => assert(a.uniqueId == "test@example.com")
           case _ => assert(false)
         }
@@ -210,7 +153,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
 
     // Execute
     val output = (KeymasterTransformFilter(oAuth2CodeVerify) andThen testService)(
-      SessionIdRequest(ServiceRequest(loginRequest, one), sessionId))
+      SessionIdRequest(ServiceRequest(loginRequest, cust1, one), sessionId))
 
     // Validate
     Await.result(output).status should be(Status.Ok)
@@ -218,10 +161,10 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
 
   it should "succeed and transform the oAuth2 code to Keymaster Credential" in {
     val testService = mkTestService[KeymasterIdentifyReq, Response] {
-      request =>
-        assert(request.credential.serviceId == two)
-        assert(request.req.req.serviceId == two)
-        request.credential match {
+      req =>
+        assert(req.credential.serviceId == two)
+        assert(req.req.serviceId == two)
+        req.credential match {
           case a: OAuth2CodeCredential => assert(a.uniqueId == "test@example.com")
           case _ => assert(false)
         }
@@ -238,7 +181,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
     val loginRequest = req("umbrella", "/signin", ("code" -> "XYZ123"))
 
     //  Request
-    val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, two), sessionId)
+    val sessionIdRequest = SessionIdRequest(ServiceRequest(loginRequest, cust2, two), sessionId)
 
     // Mock the oAuth2 verifier
     val mockVerify = mock[OAuth2CodeVerify]
@@ -263,7 +206,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
 
     // Execute
     val output = (KeymasterTransformFilter(oAuth2CodeVerify) andThen testService)(
-      SessionIdRequest(ServiceRequest(loginRequest, one), sessionId))
+      SessionIdRequest(ServiceRequest(loginRequest, cust1, one), sessionId))
 
     // Validate
     val caught = the [IdentityProviderError] thrownBy {
@@ -292,11 +235,11 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
     sessionStore.update[Request](Session(sessionId, origReq))
 
     // Credential
-    val credential = InternalAuthCredential("test@example.com", "password", one)
+    val credential = InternalAuthCredential("test@example.com", "password", cust1, one)
 
     // Execute
     val output = (KeymasterPostLoginFilter(sessionStore) andThen testService)(
-      KeymasterIdentifyReq(SessionIdRequest(ServiceRequest(loginRequest, one), sessionId), credential))
+      KeymasterIdentifyReq(SessionIdRequest(ServiceRequest(loginRequest, cust1, one), sessionId), credential))
 
     // Validate
     Await.result(output).status should be (Status.Found)
@@ -326,11 +269,11 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
     sessionStore.update[Request](Session(sessionId, origReq))
 
     // Credential
-    val credential = OAuth2CodeCredential("test@example.com", "password", two)
+    val credential = OAuth2CodeCredential("test@example.com", "password", cust2, two)
 
     // Execute
     val output = (KeymasterPostLoginFilter(sessionStore) andThen testService)(
-      KeymasterIdentifyReq(SessionIdRequest(ServiceRequest(loginRequest, two), sessionId), credential))
+      KeymasterIdentifyReq(SessionIdRequest(ServiceRequest(loginRequest, cust2, two), sessionId), credential))
 
     // Validate
     Await.result(output).status should be(Status.Found)
@@ -350,11 +293,11 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
     val loginRequest = req("enterprise", "/login", ("username" -> "foo"), ("password" -> "bar"))
 
     // Credential
-    val credential = InternalAuthCredential("test@example.com", "password", one)
+    val credential = InternalAuthCredential("test@example.com", "password", cust1, one)
 
     // Execute
     val output = (KeymasterPostLoginFilter(sessionStore) andThen keymasterLoginFilterTestService)(
-      KeymasterIdentifyReq(SessionIdRequest(ServiceRequest(loginRequest, one), sessionId), credential))
+      KeymasterIdentifyReq(SessionIdRequest(ServiceRequest(loginRequest, cust1, one), sessionId), credential))
 
     // Validate
     val caught = the [OriginalRequestNotFound] thrownBy {
@@ -380,11 +323,11 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
     val loginRequest = req("enterprise", "/login", ("username" -> "foo"), ("password" -> "bar"))
 
     // Credential
-    val credential = InternalAuthCredential("test@example.com", "password", one)
+    val credential = InternalAuthCredential("test@example.com", "password", cust1, one)
 
     // Execute
     val output = (KeymasterPostLoginFilter(mockSessionStore) andThen keymasterLoginFilterTestService)(
-      KeymasterIdentifyReq(SessionIdRequest(ServiceRequest(loginRequest, one), sessionId), credential))
+      KeymasterIdentifyReq(SessionIdRequest(ServiceRequest(loginRequest, cust1, one), sessionId), credential))
 
     // Validate
     val caught = the [Exception] thrownBy {
@@ -403,7 +346,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
 
     // Execute
     val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore).apply(
-      KeymasterAccessReq(Id(tokens2), one, sessionId))
+      KeymasterAccessReq(Id(tokens2), cust1, one, sessionId))
 
     // Validate
     Await.result(output).access.access should be (serviceToken2)
@@ -411,7 +354,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
 
   it should "succeed, save in SessionStore and return the ServiceToken received from the Keymaster Service" in {
     val testAccessManagerBinder = mkTestManagerBinder { request => {
-      assert(request.req.path == one.loginManager.accessManager.path.toString)
+      assert(request.req.path == cust1.loginManager.accessManager.path.toString)
       tap(Response(Status.Ok))(res => {
         res.contentString = TokensEncoder(tokens2).toString()
         res.contentType = "application/json"
@@ -422,7 +365,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
 
     // Execute
     val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore).apply(
-      KeymasterAccessReq(Id(tokens), one, sessionId))
+      KeymasterAccessReq(Id(tokens), cust1, one, sessionId))
 
     // Validate
     Await.result(output).access.access should be (serviceToken2)
@@ -436,7 +379,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
 
     // Execute
     val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore).apply(
-      KeymasterAccessReq(Id(tokens), one, sessionId))
+      KeymasterAccessReq(Id(tokens), cust1, one, sessionId))
 
     // Validate
     val caught = the [AccessIssuerError] thrownBy {
@@ -457,7 +400,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
 
     // Execute
     val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore).apply(
-      KeymasterAccessReq(Id(tokens), one, sessionId))
+      KeymasterAccessReq(Id(tokens), cust1, one, sessionId))
 
     // Validate
     val caught = the [AccessIssuerError] thrownBy {
@@ -477,7 +420,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
 
     // Execute
     val output = KeymasterAccessIssuer(testAccessManagerBinder, sessionStore).apply(
-      KeymasterAccessReq(Id(tokens), one, sessionId))
+      KeymasterAccessReq(Id(tokens), cust1, one, sessionId))
 
     // Validate
     val caught = the [AccessDenied] thrownBy {
@@ -509,7 +452,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
 
     // Execute
     val output = (AccessFilter[Tokens, ServiceToken](testSidBinder) andThen accessService)(
-      AccessIdRequest(SessionIdRequest(ServiceRequest(request, one), sessionId), Id(tokens)))
+      AccessIdRequest(SessionIdRequest(ServiceRequest(request, cust1, one), sessionId), Id(tokens)))
 
     // Validate
     Await.result(output).status should be (Status.Ok)
@@ -535,7 +478,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
 
     // Execute
     val output = (AccessFilter[Tokens, ServiceToken](testSidBinder) andThen accessService)(
-      AccessIdRequest(SessionIdRequest(ServiceRequest(request, one), sessionId), Id(tokens)))
+      AccessIdRequest(SessionIdRequest(ServiceRequest(request, cust1, one), sessionId), Id(tokens)))
 
     // Validate
     Await.result(output).status should be (Status.NotFound)
@@ -561,7 +504,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
 
     // Execute
     val output = (AccessFilter[Tokens, ServiceToken](testSidBinder) andThen accessService)(
-      AccessIdRequest(SessionIdRequest(ServiceRequest(request, one), sessionId), Id(tokens)))
+      AccessIdRequest(SessionIdRequest(ServiceRequest(request, cust1, one), sessionId), Id(tokens)))
 
     // Validate
     val caught = the [Exception] thrownBy {
@@ -592,7 +535,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
 
       // Execute
       val output = keymasterIdentityProviderChain(sessionStore).apply(
-        SessionIdRequest(ServiceRequest(loginRequest, one), sessionId))
+        SessionIdRequest(ServiceRequest(loginRequest, cust1, one), sessionId))
 
       // Validate
       Await.result(output).status should be(Status.Ok)
@@ -626,7 +569,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
 
       // Execute
       val output = keymasterIdentityProviderChain(sessionStore).apply(
-        SessionIdRequest(ServiceRequest(loginRequest, one), sessionId))
+        SessionIdRequest(ServiceRequest(loginRequest, cust1, one), sessionId))
 
       // Validate
       Await.result(output).status should be(Status.Found)
@@ -659,7 +602,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
 
       // Execute
       val output = keymasterAccessIssuerChain(sessionStore).apply(
-        SessionIdRequest(ServiceRequest(origReq, one), sessionId))
+        SessionIdRequest(ServiceRequest(origReq, cust1, one), sessionId))
 
       // Validate
       Await.result(output).status should be(Status.Ok)

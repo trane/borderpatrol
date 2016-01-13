@@ -1,78 +1,67 @@
 package com.lookout.borderpatrol.test
 
-import java.net.URL
-
 import com.lookout.borderpatrol._
-import com.twitter.finagle.httpx.{RequestBuilder, Request}
 import com.twitter.finagle.httpx.path.Path
 
 class ServiceMatcherSpec extends BorderPatrolSuite {
+  import sessionx.helpers._
 
-  val urls = Set(new URL("http://localhost:8081"))
-  val keymasterIdManager = Manager("keymaster", Path("/identityProvider"), urls)
-  val keymasterAccessManager = Manager("keymaster", Path("/accessIssuer"), urls)
-  val internalProtoManager = InternalAuthProtoManager(Path("/loginConfirm"), Path("/check"), urls)
-  val checkpointLoginManager = LoginManager("checkpoint", keymasterIdManager, keymasterAccessManager,
-    internalProtoManager)
+  val sOneOne = ServiceIdentifier("eOne", urls, Path("/ent1"), None)
+  val sOneTwo = ServiceIdentifier("eTwo", urls, Path("/ent2"), None)
+  val sTwo = ServiceIdentifier("two", urls, Path("/api"), None)
+  val sThree = ServiceIdentifier("three", urls, Path("/apis"), None)
+  val sFour = ServiceIdentifier("four", urls, Path("/apis/test"), None)
+  val serviceIds = Set(sOneOne, sOneTwo, sTwo, sThree, sFour)
+  val cOne = CustomerIdentifier("enterprise", sOneOne, checkpointLoginManager)
+  val cTwo = CustomerIdentifier("api", two, umbrellaLoginManager)
+  val cThree = CustomerIdentifier("api.subdomain", sThree, checkpointLoginManager)
+  val cFour = CustomerIdentifier("api.testdomain", sFour, umbrellaLoginManager)
+  val custIds = Set(cOne, cTwo, cThree, cFour)
+  val testServiceMatcher = ServiceMatcher(custIds, serviceIds)
 
-  val basicIdManager = Manager("basic", Path("/signin"), urls)
-  val basicAccessManager = Manager("basic", Path("/accessin"), urls)
-  val oauth2CodeProtoManager = OAuth2CodeProtoManager(Path("/loginIt"),
-    new URL("http://example.com/authorizeUrl"), new URL("http://example.com/tokenUrl"),
-    new URL("http://example.com/certificateUrl"), "clientId", "clientSecret")
-  val umbrellaLoginManager = LoginManager("umbrella", keymasterIdManager, keymasterAccessManager,
-    oauth2CodeProtoManager)
-
-  val one = ServiceIdentifier("one", urls, Path("/ent"), None, "enterprise", checkpointLoginManager)
-  val two = ServiceIdentifier("two", urls, Path("/api"), None, "api", umbrellaLoginManager)
-  val three = ServiceIdentifier("three", urls, Path("/apis"), None, "api.subdomain", checkpointLoginManager)
-  val four = ServiceIdentifier("four", urls, Path("/apis/test"), None, "api.testdomain", umbrellaLoginManager)
-  val sids = Set(one, two, three, four)
-  val serviceMatcher = ServiceMatcher(sids)
-
-  def req(subdomain: String = "nothing", path: String = "/"): Request =
-    RequestBuilder().url(s"http://${subdomain + "."}example.com${path.toString}").buildGet()
-
-  def getWinner(winner: ServiceIdentifier, loser: ServiceIdentifier): ServiceIdentifier =
-    serviceMatcher.get(req(winner.subdomain, winner.path.toString)).value
+  def getWinner(cid: CustomerIdentifier, sid: ServiceIdentifier): (CustomerIdentifier, ServiceIdentifier) =
+    testServiceMatcher.get(req(cid.subdomain, sid.path.toString)).value
 
   behavior of "ServiceMatchers"
 
+  it should "match the longest path" in {
+    testServiceMatcher.path(Path("/")) should be(None)
+    testServiceMatcher.path(Path("/e")) should be(None)
+    testServiceMatcher.path(Path("/ent")) should be(None)
+    testServiceMatcher.path(Path("/ent1/blah")).value should be(sOneOne)
+    testServiceMatcher.path(Path("/ent2")).value should be(sOneTwo)
+    testServiceMatcher.path(Path("/api")).value should be(sTwo)
+    testServiceMatcher.path(Path("/apis")).value should be(sThree)
+    testServiceMatcher.path(Path("/apis/testing")).value should be(sThree)
+    testServiceMatcher.path(Path("/apis/test")).value should be(sFour)
+  }
+
   it should "match the longest subdomain" in {
-    serviceMatcher.subdomain("www.example.com") should be(None)
-    serviceMatcher.subdomain("enterprise.api.example.com").value should be(one)
-    serviceMatcher.subdomain("enterprise.example.com").value should be(one)
-    serviceMatcher.subdomain("api.example.com").value should be(two)
-    serviceMatcher.subdomain("api.subdomains.example.com").value should be(two)
-    serviceMatcher.subdomain("api.subdomain.example.com").value should be(three)
+    testServiceMatcher.subdomain("www.example.com") should be(None)
+    testServiceMatcher.subdomain("enterprise.api.example.com").value should be(cOne)
+    testServiceMatcher.subdomain("enterprise.example.com").value should be(cOne)
+    testServiceMatcher.subdomain("api.example.com").value should be(cTwo)
+    testServiceMatcher.subdomain("api.subdomains.example.com").value should be(cTwo)
+    testServiceMatcher.subdomain("api.subdomain.example.com").value should be(cThree)
   }
 
   it should "match the longest get" in {
-    serviceMatcher.get(req("enterprise", "/")) should be(None)
-    serviceMatcher.get(req("enterprise", "/ent")).value should be(one)
-    serviceMatcher.get(req("enterprise", "/check")).value should be(one)
-    serviceMatcher.get(req("enterprise", "/loginConfirm")).value should be(one)
-    serviceMatcher.get(req("api", "/check")) should be(None)
-    serviceMatcher.get(req("api", "/loginConfirm")) should be(None)
-    serviceMatcher.get(req("api.testdomain", "/apis/test")).value should be(four)
-    serviceMatcher.get(req("api.testdomain", "/loginIt")).value should be(four)
-    serviceMatcher.get(req("api.testdomain", "/login")) should be(None)
+    testServiceMatcher.get(req("enterprise", "/")) should be(None)
+    testServiceMatcher.get(req("enterprise", "/ent2")).value should be((cOne, sOneTwo))
+    testServiceMatcher.get(req("enterprise", "/check")).value should be((cOne, sOneOne))
+    testServiceMatcher.get(req("enterprise", "/loginConfirm")).value should be((cOne, sOneOne))
+    testServiceMatcher.get(req("api", "/check")) should be(None)
+    testServiceMatcher.get(req("api", "/loginConfirm")) should be(None)
+    testServiceMatcher.get(req("api.testdomain", "/apis/test")).value should be((cFour, sFour))
+    testServiceMatcher.get(req("api.testdomain", "/signin")).value should be((cFour, sFour))
+    testServiceMatcher.get(req("api.testdomain", "/login")) should be(None)
   }
 
   it should "match the given ServiceIdentifier with itself" in {
     val permutations = for {
-      winner <- List(one, two, three, four)
-      loser <- List(one, two, three, four)
-      if winner != loser
-    } yield getWinner(winner, loser) == winner
+      cid <- custIds.toList
+      sid <- serviceIds.toList
+    } yield getWinner(cid, sid) == Tuple2(cid, sid)
     permutations.foreach(p => p should be(true))
-  }
-
-  it should "return None when neither matching" in {
-    serviceMatcher.get(req("www", "/applesauce")) should be(None)
-  }
-
-  it should "return None when subdomain matches, but path does not" in {
-    serviceMatcher.get(req("enterprise", "/apis")) should be(None)
   }
 }

@@ -54,18 +54,26 @@
   "serviceIdentifiers": [
     {
       "hosts": ["http://localhost:8081"],
-      "loginManager": "checkpoint",
-      "subdomain": "ent",
-      "path": "/ent",
+      "path": "/serv",
       "name": "one"
     },
     {
       "hosts": ["http://localhost:8081"],
-      "loginManager": "dilli",
-      "subdomain": "dilli",
       "path": "/top",
       "rewritePath": "/internal/top",
-      "name": "dilli"
+      "name": "two"
+    }
+  ],
+  "customerIdentifiers": [
+    {
+      "loginManager": "checkpoint",
+      "subdomain": "ent",
+      "defaultServiceIdentifier": "one"
+    },
+    {
+      "loginManager": "dilli",
+      "subdomain": "api",
+      "defaultServiceIdentifier": "two"
     }
   ]
 }

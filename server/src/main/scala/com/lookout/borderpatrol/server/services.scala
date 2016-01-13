@@ -36,7 +36,7 @@ object services {
    */
   def MainServiceChain(implicit config: ServerConfig, statsReceiver: StatsReceiver): Service[Request, Response] = {
     implicit val secretStore = config.secretStore
-    val serviceMatcher = ServiceMatcher(config.serviceIdentifiers)
+    val serviceMatcher = ServiceMatcher(config.customerIdentifiers, config.serviceIdentifiers)
 
     ExceptionFilter() andThen /* Convert exceptions to responses */
       ServiceFilter(serviceMatcher) andThen /* Validate that its our service */

@@ -1,6 +1,6 @@
 package com.lookout.borderpatrol.auth
 
-import com.lookout.borderpatrol.ServiceIdentifier
+import com.lookout.borderpatrol.{CustomerIdentifier, ServiceIdentifier}
 import com.lookout.borderpatrol.sessionx.SessionId
 import com.twitter.finagle.Service
 
@@ -58,14 +58,16 @@ object Access {
  */
 trait AccessRequest[A] {
   val identity: Id[A]
+  val customerId: CustomerIdentifier
   val serviceId: ServiceIdentifier
   val sessionId: SessionId
 }
 
 object AccessRequest {
-  def apply[A](id: Id[A], servId: ServiceIdentifier, sessId: SessionId): AccessRequest[A] =
+  def apply[A](id: Id[A], custId: CustomerIdentifier, servId: ServiceIdentifier, sessId: SessionId): AccessRequest[A] =
     new AccessRequest[A] {
       val identity = id
+      val customerId = custId
       val serviceId = servId
       val sessionId = sessId
     }
