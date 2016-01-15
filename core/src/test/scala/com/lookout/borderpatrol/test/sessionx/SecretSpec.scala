@@ -38,8 +38,7 @@ class SecretSpec extends BorderPatrolSuite {
   behavior of "Secrets"
 
   it should "give the current and previous Secret" in {
-    secrets.current shouldEqual current
-    secrets.previous shouldEqual previous
+    testSecrets.current shouldEqual current
+    testSecrets.previous shouldEqual previous
   }
-
 }

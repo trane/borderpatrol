@@ -76,13 +76,13 @@ object Config {
   implicit val encodeSecretStore: Encoder[SecretStoreApi] = Encoder.instance {
     case x: InMemorySecretStore => Json.obj(("type", Json.string(x.getClass.getSimpleName)))
     case y: ConsulSecretStore => Json.obj(("type", Json.string(y.getClass.getSimpleName)),
-      ("hosts", Json.string(s"${y.consul.host}:${y.consul.port}")))
+      ("hosts", Json.string(s"${y.consulUrl.getHost}:${y.consulUrl.getPort()}")))
   }
   implicit val decodeSecretStore: Decoder[SecretStoreApi] = Decoder.instance { c =>
     c.downField("type").as[String].flatMap {
       case "InMemorySecretStore" => Xor.right(defaultSecretStore)
       case "ConsulSecretStore" => c.downField("hosts").as[String].map(hosts =>
-        ConsulSecretStore(new URL("http://" + hosts)))
+        new ConsulSecretStore(new URL("http://" + hosts)))
       case other  => Xor.left(DecodingFailure(s"Invalid secretStore: $other", c.history))
     }
   }
