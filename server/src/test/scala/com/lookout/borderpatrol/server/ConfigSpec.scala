@@ -23,7 +23,7 @@ class ConfigSpec extends BorderPatrolSuite {
   val defaultSecretStore = SecretStores.InMemorySecretStore(Secrets(Secret(), Secret()))
   val defaultSessionStore = SessionStores.InMemoryStore
   val memcachedSessionStore = SessionStores.MemcachedStore(MemcachedClient.newRichClient("localhost:1234"))
-  val consulSecretStore = SecretStores.ConsulSecretStore(new URL("http://localhost:1234"))
+  val consulSecretStore = SecretStores.ConsulSecretStore("testBpKey", Set(new URL("http://localhost:1234")))
 
   // StatdExporter
   val defaultStatsdExporterConfig = StatsdExporterConfig("host", 300, "prefix")

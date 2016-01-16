@@ -49,7 +49,6 @@ object Secret {
    */
   def apply(expiry: Time = currentExpiry): Secret =
     Secret(id, expiry, entropy)
-
 }
 
 
@@ -60,3 +59,8 @@ object Secret {
  * @param previous the previous (and potentially expired) [[com.lookout.borderpatrol.sessionx.Secret Secret]]
  */
 case class Secrets(current: Secret, previous: Secret)
+
+object Secrets {
+  def fromCurrent(current: Secret): Secrets =
+    Secrets(Secret(current.expiry + Secret.lifetime), current)
+}

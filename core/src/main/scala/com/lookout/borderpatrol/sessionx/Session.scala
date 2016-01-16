@@ -1,5 +1,7 @@
 package com.lookout.borderpatrol.sessionx
 
+import com.twitter.finagle.stats.StatsReceiver
+import com.twitter.logging.Level
 import com.twitter.util.Future
 
 /**
@@ -80,10 +82,14 @@ object Session {
    * @tparam A
    * @return Session
    */
-  def apply[A](data: A, tag: Tag = Untagged)(implicit store: SecretStoreApi): Future[Session[A]] = tag match {
-    case AuthenticatedTag => SessionId.authenticated map (Session(_, data))
-    case Untagged => SessionId.untagged map (Session (_, data) )
-    case _ => new SessionError("Invalid SessionId Tag found").toFutureException
-  }
+  def apply[A](data: A, tag: Tag = Untagged)(implicit store: SecretStoreApi): Future[Session[A]] =
+    if (store.current.expired) new SessionCreateUnavailable("only expired secrets available").toFutureException
+    else {
+      tag match {
+        case AuthenticatedTag => SessionId.authenticated map (Session(_, data))
+        case Untagged => SessionId.untagged map (Session(_, data))
+        case _ => new SessionError("Invalid SessionId Tag found").toFutureException
+      }
+    }
 }
 

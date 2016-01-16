@@ -25,3 +25,6 @@ case class OriginalRequestNotFound(msg: String)
 
 case class ConsulError(msg: String)
   extends SessionError(s"An error occurred getting a value from Consul: $msg")
+
+case class SessionCreateUnavailable(msg: String)
+  extends SessionError(s"Session create failed: $msg")

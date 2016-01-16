@@ -42,7 +42,9 @@
     }
   ],
   "secretStore": {
-    "type": "InMemorySecretStore"
+    "type": "ConsulSecretStore",
+    "hosts": ["http://localhost:8500"],
+    "key": "BpSecrets"
   },
   "identityManagers": [
     {
