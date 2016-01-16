@@ -83,7 +83,7 @@ object Session {
    * @return Session
    */
   def apply[A](data: A, tag: Tag = Untagged)(implicit store: SecretStoreApi): Future[Session[A]] =
-    if (store.current.expired) new SessionCreateUnavailable().toFutureException
+    if (store.current.expired) new SessionCreateUnavailable("only expired secrets available").toFutureException
     else {
       tag match {
         case AuthenticatedTag => SessionId.authenticated map (Session(_, data))
