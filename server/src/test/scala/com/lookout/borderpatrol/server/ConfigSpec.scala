@@ -37,9 +37,7 @@ class ConfigSpec extends BorderPatrolSuite {
   // Verify
   def verifyServerConfig(a: ServerConfig, b: ServerConfig): Unit = {
     a.secretStore.getClass should be (b.secretStore.getClass)
-    a.sessionStore.getClass should be (b.session
-
-      Store.getClass)
+    a.sessionStore.getClass should be (b.sessionStore.getClass)
     assert(a.customerIdentifiers == b.customerIdentifiers)
     assert(a.serviceIdentifiers == b.serviceIdentifiers)
     assert(a.loginManagers == b.loginManagers)
