@@ -94,11 +94,12 @@ object SessionId {
   def toBase64(sessionId: SessionId): String =
     Base64StringEncoder.encode(toArray(sessionId))
 
-  def toCookie(sessionId: SessionId): Cookie =
+  def toCookie(sessionId: SessionId, expired: Boolean = false): Cookie =
     tap(new Cookie("border_session", toBase64(sessionId))) { cookie =>
       cookie.path = "/"
       cookie.httpOnly = true
-      cookie.maxAge = Time.now.until(sessionId.expires)
+      cookie.isDiscard = expired
+      cookie.maxAge = if (expired) Duration(0, TimeUnit.SECONDS) else Time.now.until(sessionId.expires)
     }
 
   def fromCookie(cooki: Option[Cookie])(implicit ev: SecretStoreApi): Try[SessionId] =

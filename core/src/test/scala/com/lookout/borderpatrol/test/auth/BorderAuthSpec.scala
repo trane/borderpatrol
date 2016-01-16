@@ -649,4 +649,42 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     // Validate
     Await.result(output).status should be (Status.Ok)
   }
+
+  behavior of "LogoutService"
+
+  it should "succeed to logout by deleting session from store and redirecting to default service" in {
+    // Allocate and Session
+    val sessionId = sessionid.authenticated
+    val cooki = sessionId.asCookie
+
+    // Session data
+    val sessionData = 999
+    sessionStore.update[Int](Session(sessionId, sessionData))
+
+    // Create request
+    val request = req("enterprise", "/logout")
+    request.addCookie(cooki)
+
+    // Execute
+    val output = LogoutService(sessionStore).apply(ServiceRequest(request, cust1, one))
+
+    // Validate
+    Await.result(output).status should be (Status.Found)
+    Await.result(output).location.get should be (cust1.defaultServiceId.path.toString)
+    Await.result(output).cookies.get("border_session").get.isDiscard should be (true)
+    Await.result(sessionStore.get[Int](sessionId)) should be (None)
+  }
+
+  it should "succeed to logout the requests w/o sessionId by simply redirecting to default service" in {
+    // Create request
+    val request = req("enterprise", "/logout")
+
+    // Execute
+    val output = LogoutService(sessionStore).apply(ServiceRequest(request, cust1, one))
+
+    // Validate
+    Await.result(output).status should be (Status.Found)
+    Await.result(output).location.get should be (cust1.defaultServiceId.path.toString)
+    Await.result(output).cookies.get("border_session") should be (None)
+  }
 }

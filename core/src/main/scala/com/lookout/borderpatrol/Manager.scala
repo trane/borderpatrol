@@ -22,8 +22,7 @@ case class InternalAuthProtoManager(loginConfirm: Path, path: Path, hsts: Set[UR
     extends ProtoManager {
   def redirectLocation(host: Option[String]): String = path.toString
   def hosts: Set[URL] = hsts
-  def isMatchingPath(p: Path): Boolean =
-    Set(path, loginConfirm).filter(p.startsWith(_)).nonEmpty
+  def isMatchingPath(p: Path): Boolean = Set(path, loginConfirm, Path("/logout")).filter(p.startsWith(_)).nonEmpty
   def getOwnedPaths: Set[Path] = Set(path)
 }
 
@@ -36,7 +35,7 @@ case class OAuth2CodeProtoManager(loginConfirm: Path, authorizeUrl: URL, tokenUr
       ("client_id", clientId), ("redirect_uri", "http://" + hostStr + loginConfirm.toString))
   }
   def hosts: Set[URL] = Set(authorizeUrl)
-  def isMatchingPath(p: Path): Boolean = p.startsWith(loginConfirm)
+  def isMatchingPath(p: Path): Boolean = Set(loginConfirm, Path("/logout")).filter(p.startsWith(_)).nonEmpty
   def getOwnedPaths: Set[Path] = Set.empty
   def codeToToken(host: Option[String], code: String): Future[Response] = {
     val hostStr = host.getOrElse(throw new Exception("Host not found in HTTP Request"))
