@@ -75,14 +75,19 @@ object Config {
   // Encoder/Decoder for SecretStore
   implicit val encodeSecretStore: Encoder[SecretStoreApi] = Encoder.instance {
     case x: InMemorySecretStore => Json.obj(("type", Json.string(x.getClass.getSimpleName)))
-    case y: ConsulSecretStore => Json.obj(("type", Json.string(y.getClass.getSimpleName)),
-      ("hosts", Json.string(s"${y.consulUrl.getHost}:${y.consulUrl.getPort()}")))
+    case y: ConsulSecretStore => Json.fromFields(Seq(
+      ("type", y.getClass.getSimpleName.asJson),
+      ("hosts", y.consulUrls.asJson),
+      ("key", y.key.asJson)))
   }
   implicit val decodeSecretStore: Decoder[SecretStoreApi] = Decoder.instance { c =>
     c.downField("type").as[String].flatMap {
       case "InMemorySecretStore" => Xor.right(defaultSecretStore)
-      case "ConsulSecretStore" => c.downField("hosts").as[String].map(hosts =>
-        new ConsulSecretStore(new URL("http://" + hosts)))
+      case "ConsulSecretStore" =>
+        for {
+          hosts <- c.downField("hosts").as[Set[URL]]
+          key <- c.downField("key").as[String]
+        } yield ConsulSecretStore(key, hosts)
       case other  => Xor.left(DecodingFailure(s"Invalid secretStore: $other", c.history))
     }
   }
@@ -247,6 +252,18 @@ object Config {
   }
 
   /**
+   * Validate SecretStore configuration
+   * @param field
+   * @param secretStores
+   */
+  def validateSecretStoreConfig(field: String, secretStores: SecretStoreApi): Unit = {
+    secretStores match {
+      case x: ConsulSecretStore => validateHostsConfig(field, "consulSecretStore", x.consulUrls)
+      case _ =>
+    }
+  }
+
+  /**
    * Validate Manager configuration
    * @param field
    * @param managers
@@ -322,6 +339,8 @@ object Config {
    * @param serverConfig
    */
   def validate(serverConfig: ServerConfig): Unit = {
+    //  Validate Secret Store config
+    validateSecretStoreConfig("secretStore", serverConfig.secretStore)
 
     //  Validate identityManagers config
     validateManagerConfig("identityManagers", serverConfig.identityManagers)

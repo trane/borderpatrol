@@ -43,7 +43,8 @@
   ],
   "secretStore": {
     "type": "ConsulSecretStore",
-    "hosts": "localhost:8500"
+    "hosts": ["http://localhost:8500"],
+    "key": "BpSecrets"
   },
   "identityManagers": [
     {

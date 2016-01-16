@@ -26,7 +26,8 @@ class SecretStoresSpec extends BorderPatrolSuite {
   val consulResponse = ConsulResponse(5, 0x11, "SomeKey", 5, 5, testSecrets)
   //val expiredSecretsJsonString = SecretsEncoder.EncodeJson.encode(testExpiredSecrets).nospaces
   val expiredConsulResponse = ConsulResponse(0, 0, "failed", 0, 0, testExpiredSecrets)
-  val consulUrl = new URL("http://localhost:6789")
+  val consulUrls = Set(new URL("http://localhost:6789"))
+  val consulKey = "TestBpKey"
 
   behavior of "SecretStoreApi"
 
@@ -107,7 +108,7 @@ class SecretStoresSpec extends BorderPatrolSuite {
     )
     try {
       /* Create secret store */
-      val consulSecretStore = ConsulSecretStore(consulUrl, testExpiredSecrets)
+      val consulSecretStore = ConsulSecretStore(consulKey, consulUrls, testExpiredSecrets)
 
       /* Lets have pollSecrets completed before the validation */
       Thread.sleep(1000)
@@ -152,7 +153,7 @@ class SecretStoresSpec extends BorderPatrolSuite {
     )
     try {
       /* Create secret store (we dont care about init secret in this test) */
-      val consulSecretStore = new ConsulSecretStore(consulUrl)
+      val consulSecretStore = ConsulSecretStore(consulKey, consulUrls)
 
       /* Lets have pollSecrets completed before the validation */
       Thread.sleep(1000)
@@ -192,7 +193,7 @@ class SecretStoresSpec extends BorderPatrolSuite {
     )
     try {
       /* Create secret store (we dont care about init secret in this test) */
-      val consulSecretStore = new ConsulSecretStore(consulUrl, testSecrets)
+      val consulSecretStore = ConsulSecretStore(consulKey, consulUrls, testSecrets)
 
       /* Lets have pollSecrets completed before the validation */
       Thread.sleep(1000)
@@ -235,7 +236,7 @@ class SecretStoresSpec extends BorderPatrolSuite {
     )
     try {
       /* Create secret store */
-      val consulSecretStore = ConsulSecretStore(consulUrl, testExpiredSecrets)
+      val consulSecretStore = ConsulSecretStore(consulKey, consulUrls, testExpiredSecrets)
 
       /* Lets have pollSecrets completed before the validation */
       Thread.sleep(1000)
@@ -278,7 +279,7 @@ class SecretStoresSpec extends BorderPatrolSuite {
     )
     try {
       /* Create secret store */
-      val consulSecretStore = ConsulSecretStore(consulUrl, testSecrets)
+      val consulSecretStore = ConsulSecretStore(consulKey, consulUrls, testSecrets)
 
       /* Lets have pollSecrets completed before the validation */
       Thread.sleep(1000)
@@ -318,7 +319,7 @@ class SecretStoresSpec extends BorderPatrolSuite {
     )
     try {
       /* Create secret store */
-      val consulSecretStore = ConsulSecretStore(consulUrl, testSecrets)
+      val consulSecretStore = ConsulSecretStore(consulKey, consulUrls, testSecrets)
 
       /* Lets have pollSecrets completed before the validation */
       Thread.sleep(1000)
@@ -359,7 +360,7 @@ class SecretStoresSpec extends BorderPatrolSuite {
     )
     try {
       /* Create secret store */
-      val consulSecretStore = ConsulSecretStore(consulUrl, testSecrets)
+      val consulSecretStore = ConsulSecretStore(consulKey, consulUrls, testSecrets)
 
       /* Lets have pollSecrets completed before the validation */
       Thread.sleep(1000)
@@ -403,7 +404,7 @@ class SecretStoresSpec extends BorderPatrolSuite {
     )
     try {
       /* Create secret store */
-      val consulSecretStore = ConsulSecretStore(consulUrl, testSecrets)
+      val consulSecretStore = ConsulSecretStore(consulKey, consulUrls, testSecrets)
 
       /* Lets have pollSecrets completed before the validation */
       Thread.sleep(1000)
@@ -449,7 +450,7 @@ class SecretStoresSpec extends BorderPatrolSuite {
     )
     try {
       /* Create secret store */
-      val consulSecretStore = ConsulSecretStore(consulUrl, testSecrets)
+      val consulSecretStore = ConsulSecretStore(consulKey, consulUrls, testSecrets)
 
       /* Lets have pollSecrets completed before the validation */
       Thread.sleep(1000)

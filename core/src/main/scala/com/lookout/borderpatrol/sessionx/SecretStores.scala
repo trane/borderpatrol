@@ -43,7 +43,6 @@ trait SecretStoreApi {
  * Default implementations of [[com.lookout.borderpatrol.sessionx.SecretStoreApi SecretStoreApi]]
  */
 object SecretStores {
-  val ConsulSecretsKey = "secretStore/secrets"
 
   /**
    * A useful [[com.lookout.borderpatrol.sessionx.Secrets Secrets]] mock store for quickly testing and prototyping
@@ -77,16 +76,12 @@ object SecretStores {
    * A store to access the current and previous [[com.lookout.borderpatrol.sessionx.Secrets]] stored in the consul
    * server.
    *
-   * @param consulUrl
+   * @param consulUrls
    * @param _secrets
    */
-  case class ConsulSecretStore(consulUrl: URL, var _secrets: Secrets)
+  case class ConsulSecretStore(key: String, consulUrls: Set[URL], var _secrets: Secrets)
       extends SecretStoreApi {
     private[this] val log = Logger.getLogger(getClass.getName)
-    private[this] val ConsulSecretsKey = "/v1/kv/BpSecrets"
-
-    /* Alt constructor: this is the commonly used constructor. The main constructor is merely used for unit testing */
-    def this(consulUrl: URL) = this(consulUrl, Secrets(Secret(Time.now), Secret(Time.now)))
 
     /* Kick off a poll timer */
     DefaultTimer.twitter.schedule(Time.now)(pollSecrets)
@@ -111,6 +106,25 @@ object SecretStores {
       else if (f(previous)) Some(previous)
       else None
 
+    /**
+     * Helper: Process polled secrets
+     *
+     * @param secrets
+     * @param result
+     * @return
+     */
+    private[this] def processPolledSecrets(secrets: Option[Secrets], result: Boolean): Unit =
+      (secrets, result) match {
+        case (Some(s), true) =>
+          log.log(Level.DEBUG,
+            s"ConsulSecretStore: Received a new Secret from Consul with an expiry: ${s.current.expiry}")
+          _secrets = s
+          DefaultTimer.twitter.schedule(_secrets.current.expiry)(pollSecrets)
+
+        case _ =>
+          log.log(Level.DEBUG, "ConsulSecretStore: Failed to get Secrets from Consul, trying again soon in 1 minute")
+          DefaultTimer.twitter.schedule(Time.now + Duration(1, TimeUnit.MINUTES))(pollSecrets)
+      }
 
     /**
      * Poll worker that keep the in sync with the "secrets" in Consul. It uses 3 step process to do so:
@@ -122,120 +136,105 @@ object SecretStores {
      */
     def pollSecrets(): Unit =
       (for {
-        (consulResponse, secrets, result) <- getSecretsFromConsul(1, false, None)
-        (secrets, result) <- putSecretsOnConsul(2, result, consulResponse, secrets)
-        (_, secrets, result) <- getSecretsFromConsul(3, result, secrets)
-      } yield (secrets, result) match {
-          case (Some(s), true) =>
-            log.log(Level.DEBUG,
-              s"ConsulSecretStore: Received a new Secret from Consul with an expiry: ${s.current.expiry}")
-            _secrets = s
-            DefaultTimer.twitter.schedule(_secrets.current.expiry)(pollSecrets)
-
-          case _ =>
-            log.log(Level.DEBUG, "ConsulSecretStore: Failed to get Secrets from Consul, trying again soon in 1 minute")
-            DefaultTimer.twitter.schedule(Time.now + Duration(1, TimeUnit.MINUTES))(pollSecrets)
-
-        }) handle {
+        (consulResponse, secrets, result) <- fetchSecretsFromConsul(1, false, None)
+        (secrets, result) <- updateSecretsOnConsul(2, result, consulResponse, secrets)
+        (_, secrets, result) <- fetchSecretsFromConsul(3, result, secrets)
+      } yield processPolledSecrets(secrets, result)) handle {
         case e: Throwable =>
-          log.log(Level.ERROR, s"ConsulSecretStore: Failed to get Secrets from Consul with: ${e.getMessage}, " +
+          log.log(Level.ERROR, s"ConsulSecretStore: Failed to sync Secrets from Consul with: ${e.getMessage}, " +
             s"trying again soon in 1 minute")
           DefaultTimer.twitter.schedule(Time.now + Duration(1, TimeUnit.MINUTES))(pollSecrets)
       }
 
     /**
-     * GET the Secrets (i.e. value) for a pre-defined ConsulSecretsKey from a KV store on Consul,
-     * parse it and validate the contents
+     * Helper: GET value for a pre-defined key on Consul from a KV store on Consul and
+     * decode JSON response into list of ConsulResponse(s)
+     *
+     * @param step
+     */
+    private[this] def getConsulResponse(step: Int): Future[List[ConsulResponse]] =
+      BinderBase.connect(consulUrls.toString, consulUrls, Request(s"/v1/kv/${key}")).flatMap(res =>
+        res.status match {
+          case Status.Ok => jawn.decode[List[ConsulResponse]](res.contentString)
+            .fold[Future[List[ConsulResponse]]](
+              err => Future.exception(ConsulError(//Status.InternalServerError,
+                s"Step-${step}: Failed to parse the Consul response: ${err.getMessage}")),
+              t => Future.value(t)
+            )
+          case Status.NotFound => List.empty.toFuture
+          case _ => Future.exception(ConsulError(
+            s"Step-${step}: Failed with an error response from Consul: ${res.status}"))
+        })
+
+    /**
+     * Fetch the Secrets (i.e. value) from Consul
+     * - Skip this step, if result (input) is already successful
      *
      * @param step
      * @param result
      * @param inputSecrets
-     * @return
      */
-    private[this] def getSecretsFromConsul(step: Int, result: Boolean, inputSecrets: Option[Secrets]):
+    private[this] def fetchSecretsFromConsul(step: Int, result: Boolean, inputSecrets: Option[Secrets]):
         Future[(Option[ConsulResponse], Option[Secrets], Boolean)] =
-      /* Skip this step, if result is already successful */
-      if (result) {
-        (None, inputSecrets, true).toFuture
-      } else {
-
-        /* Get the secrets from Consul */
-        for {
-          consulResponseList <- BinderBase.connect(consulUrl.toString, Set(consulUrl),
-                                                   Request(ConsulSecretsKey)).flatMap(
-            res => res.status match {
-              case Status.Ok =>
-                jawn.decode[List[ConsulResponse]](res.contentString).fold[Future[List[ConsulResponse]]](
-                  err => Future.exception(ConsulError(//Status.InternalServerError,
-                    s"Step-${step}: Failed to parse the Consul response: ${err.getMessage}")),
-                  t => Future.value(t))
-
-              case Status.NotFound => List.empty.toFuture
-
-              case _ => Future.exception(ConsulError(
-                s"Step-${step}: Failed with an error response from Consul: ${res.status}"))
-
-            })
+      if (result) (None, inputSecrets, true).toFuture
+      else for {
+          consulResponseList <- getConsulResponse(step)
           consulResponse <- consulResponseList.headOption.toFuture
-          secrets <- consulResponse match {
-            case None => None.toFuture
-            case Some(cr) => Some(cr.secretsForValue()).toFuture
-          }
+          secrets <- consulResponse.map(cr => cr.secretsForValue()).toFuture
           result <- secrets.fold(false)(!_.current.expired).toFuture
         } yield (consulResponse, secrets, result)
-      }
 
     /**
-     * PUT or try to set the Secrets (i.e. value) in the KV store on Consul. If it succeeds, then this node will
+     * Helper: Try setting these secrets using the modifyIndex (i.e. cas value) on Consul
+     *
+     * @param step
+     * @param newSecrets
+     * @param modifyIndex
+     */
+    private[this] def setSecretsOnConsul(step: Int, newSecrets: Secrets, modifyIndex: Int):
+        Future[(Option[Secrets], Boolean)] =
+      BinderBase.connect(consulUrls.toString, consulUrls,
+        tap(Request(Method.Put, Request.queryString(s"/v1/kv/${key}", ("cas" -> modifyIndex.toString))))(req => {
+          req.contentString = SecretsEncoder.EncodeJson.encode(newSecrets).toString
+          req.contentType = "application/json"
+        })).flatMap(res => res.status match {
+            case Status.Ok =>
+              log.log(Level.DEBUG, "ConsulSecretStore: LEADER: Updated the new Secrets on Consul with an expiry: " +
+                newSecrets.current.expiry)
+              Future.value((Some(newSecrets), res.contentString == "true"))
+            case _ => Future.exception(ConsulError(s"Step-${step}: Failed to set Secrets with an error response " +
+              s"from Consul: ${res.status}"))
+          }
+        )
+
+    /**
+     * Update the Secrets (i.e. value) in the KV store on Consul. If it succeeds, then this node will
      * act as leader and take charge of setting the Secrets. If it fails, then it probably lost the race with other
      * node.
-     *
-     * It uses `cas` query parameter (i.e. modifyIndex) to make it an atomic opertion.
+     * - Skip this step, if result (input) is already successful
      *
      * @param step step number, mainly for debugging
      * @param result if earlier operations succeeded are not (do we already have a secret)
      * @param inputConsulResponse ConsulResponse fetched by earlier operations
-     * @param inputSecrets Input
-     * @return
+     * @param inputSecrets Input secrets
      */
-    private[this] def putSecretsOnConsul(step: Int, result: Boolean, inputConsulResponse: Option[ConsulResponse],
-                                         inputSecrets: Option[Secrets]):
+    private[this] def updateSecretsOnConsul(step: Int, result: Boolean, inputConsulResponse: Option[ConsulResponse],
+                                            inputSecrets: Option[Secrets]):
         Future[(Option[Secrets], Boolean)] =
       /* Skip this step, if result is already successful */
-      if (result) {
-        (inputSecrets, true).toFuture
-      } else {
-
-        /* Generate next secrets */
-        val newSecrets = inputSecrets match {
-          case None => Secrets(Secret(), _secrets.current)
-          case Some(s) => Secrets(Secret(), s.current)
-        }
-
-        /* Find out new modifyIndex */
-        val modifyIndex = inputConsulResponse match {
-          case None => 0
-          case Some(oc) => oc.modifyIndex
-        }
-
+      if (result) (inputSecrets, true).toFuture
+      else {
         /* Try setting the next secrets */
-        BinderBase.connect(consulUrl.toString, Set(consulUrl),
-          tap(Request(Method.Put, Request.queryString(ConsulSecretsKey, ("cas" -> modifyIndex.toString))))(req => {
-            req.contentString = SecretsEncoder.EncodeJson.encode(newSecrets).toString
-            req.contentType = "text/plain"
-          })).flatMap(
-            res => res.status match {
-              case Status.Ok =>
-                log.log(Level.DEBUG, "ConsulSecretStore: LEADER: Updated the new Secrets on Consul with an expiry: " +
-                  newSecrets.current.expiry)
-                Future.value((Some(newSecrets), res.contentString == "true"))
-
-              case _ =>
-                Future.exception(ConsulError(
-                  s"Step-${step}: Failed with an error response from Consul: ${res.status}"))
-            }
-          )
+        setSecretsOnConsul(step,
+          inputSecrets.fold(Secrets.fromCurrent(_secrets.current))(s => Secrets.fromCurrent(s.current)),
+          inputConsulResponse.fold(0)(oc => oc.modifyIndex))
       }
+  }
+
+  object ConsulSecretStore {
+    /* Alt constructor: this is the commonly used constructor. The main constructor is merely used for unit testing */
+    def apply(key: String, consulUrls: Set[URL]): ConsulSecretStore =
+      ConsulSecretStore(key, consulUrls, Secrets(Secret(Time.now), Secret(Time.now)))
   }
 }
 

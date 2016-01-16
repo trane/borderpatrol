@@ -23,7 +23,7 @@ class ConfigSpec extends BorderPatrolSuite {
   val defaultSecretStore = SecretStores.InMemorySecretStore(Secrets(Secret(), Secret()))
   val defaultSessionStore = SessionStores.InMemoryStore
   val memcachedSessionStore = SessionStores.MemcachedStore(MemcachedClient.newRichClient("localhost:1234"))
-  val consulSecretStore = new SecretStores.ConsulSecretStore(new URL("http://localhost:1234"))
+  val consulSecretStore = SecretStores.ConsulSecretStore("testBpKey", Set(new URL("http://localhost:1234")))
 
   // StatdExporter
   val defaultStatsdExporterConfig = StatsdExporterConfig("host", 300, "prefix")
@@ -37,7 +37,9 @@ class ConfigSpec extends BorderPatrolSuite {
   // Verify
   def verifyServerConfig(a: ServerConfig, b: ServerConfig): Unit = {
     a.secretStore.getClass should be (b.secretStore.getClass)
-    a.sessionStore.getClass should be (b.sessionStore.getClass)
+    a.sessionStore.getClass should be (b.session
+
+      Store.getClass)
     assert(a.customerIdentifiers == b.customerIdentifiers)
     assert(a.serviceIdentifiers == b.serviceIdentifiers)
     assert(a.loginManagers == b.loginManagers)
