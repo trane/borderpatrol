@@ -168,22 +168,15 @@ case class LogoutService(store: SessionStore)(implicit secretStore: SecretStoreA
   private[this] val log = Logger.getLogger(getClass.getSimpleName)
 
   def apply(req: ServiceRequest): Future[Response] = {
-    SessionId.fromRequest(req.req) match {
-      case Success(sid) => {
-        log.log(Level.DEBUG, s"Logging out Session: ${sid.toLogIdString}")
-        store.delete(sid)
-        tap(Response(Status.Found)) { res =>
-          res.location = req.customerId.defaultServiceId.path.toString
-          res.addCookie(SessionId.toCookie(sid, true))
-          log.log(Level.DEBUG, s"W/ Session: Redirecting to default service path: ${res.location}")
-        }.toFuture
-      }
-      case Failure(e) =>
-        tap(Response(Status.Found)) { res =>
-          res.location = req.customerId.defaultServiceId.path.toString
-          log.log(Level.DEBUG, s"W/O Session: Redirecting to default service path: ${res.location}")
-        }.toFuture
-    }
+    SessionId.fromRequest(req.req).foreach(sid => {
+      log.log(Level.DEBUG, s"Logging out Session: ${sid.toLogIdString}")
+      store.delete(sid)
+    })
+    tap(Response(Status.Found)) { res =>
+      res.location = req.customerId.defaultServiceId.path.toString
+      res.addCookie(SessionId.toExpiredCookie())
+      log.log(Level.DEBUG, s"W/ Session: Redirecting to default service path: ${res.location}")
+    }.toFuture
   }
 }
 

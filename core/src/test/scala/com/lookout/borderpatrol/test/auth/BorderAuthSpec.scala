@@ -671,6 +671,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     // Validate
     Await.result(output).status should be (Status.Found)
     Await.result(output).location.get should be (cust1.defaultServiceId.path.toString)
+    Await.result(output).cookies.get("border_session").get.value should be ("")
     Await.result(output).cookies.get("border_session").get.isDiscard should be (true)
     Await.result(sessionStore.get[Int](sessionId)) should be (None)
   }
@@ -685,6 +686,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     // Validate
     Await.result(output).status should be (Status.Found)
     Await.result(output).location.get should be (cust1.defaultServiceId.path.toString)
-    Await.result(output).cookies.get("border_session") should be (None)
+    Await.result(output).cookies.get("border_session").get.value should be ("")
+    Await.result(output).cookies.get("border_session").get.isDiscard should be (true)
   }
 }
