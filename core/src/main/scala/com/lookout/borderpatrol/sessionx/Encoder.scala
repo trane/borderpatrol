@@ -166,7 +166,7 @@ object SessionIdEncoder {
    * [[com.twitter.finagle.httpx.Cookie Cookie]]
    */
   implicit def encodeCookie(implicit secretStoreApi: SecretStoreApi): SessionIdEncoder[Cookie] = SessionIdEncoder(
-    id => new Cookie("border_session", SessionId.toBase64(id)),
+    id => id.asCookie,
     cookie => SessionIdInjections.str2SessionId(cookie.value)
   )
 

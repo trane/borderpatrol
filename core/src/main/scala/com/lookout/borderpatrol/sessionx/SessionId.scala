@@ -35,6 +35,7 @@ object SessionId {
 
   val entropySize: Size = 16
   val lifetime = Duration(1, TimeUnit.DAYS)
+  val cookieName: String = "border_session"
 
   private[this] def currentExpiry: Time =
     Time.now + lifetime
@@ -95,14 +96,14 @@ object SessionId {
     Base64StringEncoder.encode(toArray(sessionId))
 
   def toCookie(sessionId: SessionId): Cookie =
-    tap(new Cookie("border_session", toBase64(sessionId))) { cookie =>
+    tap(new Cookie(cookieName, toBase64(sessionId))) { cookie =>
       cookie.path = "/"
       cookie.httpOnly = true
       cookie.maxAge = Time.now.until(sessionId.expires)
     }
 
   def toExpiredCookie(): Cookie =
-    tap(new Cookie("border_session", "")) { cookie =>
+    tap(new Cookie(cookieName, "")) { cookie =>
       cookie.path = "/"
       cookie.httpOnly = true
       cookie.isDiscard = true
@@ -112,14 +113,14 @@ object SessionId {
   def fromCookie(cooki: Option[Cookie])(implicit ev: SecretStoreApi): Try[SessionId] =
     cooki match {
       case Some(cookie) => SessionId.from[Cookie](cookie)
-      case None => Failure(SessionIdError("no border_session cookie"))
+      case None => Failure(SessionIdError(s"no ${cookieName} cookie"))
     }
 
   def fromRequest(req: Request)(implicit ev: SecretStoreApi): Try[SessionId] =
-    fromCookie(req.cookies.get("border_session"))
+    fromCookie(req.cookies.get(cookieName))
 
   def fromResponse(rep: Response)(implicit ev: SecretStoreApi): Try[SessionId] =
-    fromCookie(rep.cookies.get("border_session"))
+    fromCookie(rep.cookies.get(cookieName))
 
   object SessionIdInjections {
 
