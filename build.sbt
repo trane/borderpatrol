@@ -1,7 +1,7 @@
 import sbtunidoc.Plugin.UnidocKeys._
 import scoverage.ScoverageSbtPlugin.ScoverageKeys.coverageExcludedPackages
 
-lazy val Version = "0.1.4-SNAPSHOT"
+lazy val Version = "0.1.5-SNAPSHOT"
 
 lazy val buildSettings = Seq(
   organization := "com.lookout",

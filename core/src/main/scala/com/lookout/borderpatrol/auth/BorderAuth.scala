@@ -158,6 +158,29 @@ case class BorderService(identityProviderMap: Map[String, Service[SessionIdReque
 }
 
 /**
+ * Logout Service
+ * - Deletes the session
+ * - sets the empty cookie in response
+ * - redirects to default service path
+ */
+case class LogoutService(store: SessionStore)(implicit secretStore: SecretStoreApi)
+  extends Service[ServiceRequest, Response] {
+  private[this] val log = Logger.getLogger(getClass.getSimpleName)
+
+  def apply(req: ServiceRequest): Future[Response] = {
+    SessionId.fromRequest(req.req).foreach(sid => {
+      log.log(Level.DEBUG, s"Logging out Session: ${sid.toLogIdString}")
+      store.delete(sid)
+    })
+    tap(Response(Status.Found)) { res =>
+      res.location = req.customerId.defaultServiceId.path.toString
+      res.addCookie(SessionId.toExpiredCookie())
+      log.log(Level.DEBUG, s"W/ Session: Redirecting to default service path: ${res.location}")
+    }.toFuture
+  }
+}
+
+/**
  * Determines the identity of the requester, if no identity it responds with a redirect to the login page for that
  * service
  */

@@ -5,6 +5,7 @@ import com.lookout.borderpatrol.auth._
 import com.lookout.borderpatrol._
 import com.lookout.borderpatrol.sessionx.{SessionStore, SecretStoreApi}
 import com.twitter.finagle.Service
+import com.twitter.finagle.httpx.service.RoutingService
 import com.twitter.finagle.httpx.{Request, Response}
 import com.twitter.finagle.stats.StatsReceiver
 
@@ -38,10 +39,17 @@ object services {
     implicit val secretStore = config.secretStore
     val serviceMatcher = ServiceMatcher(config.customerIdentifiers, config.serviceIdentifiers)
 
-    ExceptionFilter() andThen /* Convert exceptions to responses */
-      ServiceFilter(serviceMatcher) andThen /* Validate that its our service */
-      SessionIdFilter(config.sessionStore) andThen /* Get or allocate Session/SessionId */
-      BorderService(identityProviderChainMap(config.sessionStore),
-        accessIssuerChainMap(config.sessionStore)) /* Glue that connects to identity & access service */
+    RoutingService.byPath {
+      case "/logout" =>
+        ExceptionFilter() andThen /* Convert exceptions to responses */
+          ServiceFilter(serviceMatcher) andThen /* Validate that its our service */
+          LogoutService(config.sessionStore)
+      case _ =>
+        ExceptionFilter() andThen /* Convert exceptions to responses */
+          ServiceFilter(serviceMatcher) andThen /* Validate that its our service */
+          SessionIdFilter(config.sessionStore) andThen /* Get or allocate Session/SessionId */
+          BorderService(identityProviderChainMap(config.sessionStore),
+          accessIssuerChainMap(config.sessionStore)) /* Glue that connects to identity & access service */
+    }
   }
 }
