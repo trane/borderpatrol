@@ -147,7 +147,7 @@ object Keymaster {
         } yield tap(Response(Status.Found))(res => {
           sessionAuthenticated.incr
           res.location = originReq.uri
-          res.addCookie(session.id.asCookie)
+          res.addCookie(session.id.asCookie())
           log.log(Level.DEBUG, s"Session: ${req.req.sessionId.toLogIdString}} is authenticated, " +
             s"allocated new Session: ${session.id.toLogIdString} and redirecting to location: ${res.location}")
         })

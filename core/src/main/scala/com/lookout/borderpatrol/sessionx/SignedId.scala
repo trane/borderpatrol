@@ -35,7 +35,7 @@ object SignedId {
 
   val entropySize: Size = 16
   val lifetime = Duration(1, TimeUnit.DAYS)
-  val cookieName: String = "border_session"
+  val sessionIdCookieName: String = "border_session"
 
   private[this] def currentExpiry: Time =
     Time.now + lifetime
@@ -95,24 +95,34 @@ object SignedId {
   def toBase64(signedId: SignedId): String =
     Base64StringEncoder.encode(toArray(signedId))
 
-  def toCookie(signedId: SignedId): Cookie =
+  def toCookie(signedId: SignedId, cookieName: String): Cookie =
     tap(new Cookie(cookieName, toBase64(signedId))) { cookie =>
       cookie.path = "/"
       cookie.httpOnly = true
       cookie.maxAge = Time.now.until(signedId.expires)
     }
 
-  def fromCookie(cooki: Option[Cookie])(implicit ev: SecretStoreApi): Try[SignedId] =
-    cooki match {
-      case Some(cookie) => SignedId.from[Cookie](cookie)
-      case None => Failure(SignedIdError(s"no ${cookieName} cookie"))
+  def toExpiredCookie(cookieName: String): Cookie =
+    tap(new Cookie(cookieName, "")) { cookie =>
+      cookie.path = "/"
+      cookie.httpOnly = true
+      cookie.isDiscard = true
+      cookie.maxAge = Duration(0, TimeUnit.SECONDS)
     }
 
-  def fromRequest(req: Request)(implicit ev: SecretStoreApi): Try[SignedId] =
-    fromCookie(req.cookies.get(cookieName))
+  private[this] def fromCookie(cooki: Option[Cookie], cookieName: String)(implicit ev: SecretStoreApi): Try[SignedId] =
+    cooki match {
+      case Some(cookie) => SignedId.from[Cookie](cookie)
+      case None => Failure(SignedIdError(s"no ${cookieName} cookie found"))
+    }
 
-  def fromResponse(rep: Response)(implicit ev: SecretStoreApi): Try[SignedId] =
-    fromCookie(rep.cookies.get(cookieName))
+  def fromRequest(req: Request, cookieName: String = SignedId.sessionIdCookieName)(implicit ev: SecretStoreApi):
+      Try[SignedId] =
+    fromCookie(req.cookies.get(cookieName), cookieName)
+
+  def fromResponse(rep: Response, cookieName: String = SignedId.sessionIdCookieName)(implicit ev: SecretStoreApi):
+      Try[SignedId] =
+    fromCookie(rep.cookies.get(cookieName), cookieName)
 
   object SignedIdInjections {
 

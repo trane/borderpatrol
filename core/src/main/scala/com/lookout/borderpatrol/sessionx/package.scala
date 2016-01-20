@@ -152,8 +152,8 @@ package object sessionx extends Types {
     def asBase64: String =
       SignedId.toBase64(id)
 
-    def asCookie: Cookie =
-      SignedId.toCookie(id)
+    def asCookie(cookieName: String = SignedId.sessionIdCookieName): Cookie =
+      SignedId.toCookie(id, cookieName)
   }
 
   /**

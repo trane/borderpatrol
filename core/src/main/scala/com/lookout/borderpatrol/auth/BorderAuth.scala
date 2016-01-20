@@ -74,7 +74,7 @@ case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStor
    * @param service
    */
   def apply(req: ServiceRequest, service: Service[SessionIdRequest, Response]): Future[Response] =
-    SignedId.fromRequest(req.req) match {
+    SignedId.fromRequest(req.req, SignedId.sessionIdCookieName) match {
       case Success(sid) => service(SessionIdRequest(req, sid))
       case Failure(e) =>
         for {
@@ -82,7 +82,7 @@ case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStor
           _ <- store.update(session)
         } yield tap(Response(Status.Found)) { res =>
           res.location = req.customerId.loginManager.protoManager.redirectLocation(req.req.host)
-          res.addCookie(session.id.asCookie)
+          res.addCookie(session.id.asCookie())
           log.log(Level.DEBUG, s"${req.req}, allocating a new session: " +
             s"${session.id.toLogIdString}, redirecting to location: ${res.location}")
         }
@@ -169,20 +169,16 @@ case class LogoutService(store: SessionStore)(implicit secretStore: SecretStoreA
   private[this] val log = Logger.getLogger(getClass.getSimpleName)
 
   def apply(req: ServiceRequest): Future[Response] = {
-    SignedId.fromRequest(req.req).foreach(sid => {
+    SignedId.fromRequest(req.req, SignedId.sessionIdCookieName).foreach(sid => {
       log.log(Level.DEBUG, s"Logging out Session: ${sid.toLogIdString}")
       store.delete(sid)
     })
     tap(Response(Status.Found)) { res =>
       res.location = req.customerId.defaultServiceId.path.toString
+      // Expire all BP cookies present in the Request
       req.req.cookies.foreach[Unit] {
         case (name: String, cookie: Cookie) if name.startsWith("border_") =>
-          // Expire all BP cookies
-          res.addCookie(
-            tap(new Cookie(name, "")) { cookie =>
-            cookie.isDiscard = true
-            cookie.maxAge = Duration(0, TimeUnit.SECONDS)
-          })
+          res.addCookie(SignedId.toExpiredCookie(name))
         case _ =>
       }
       log.log(Level.DEBUG, s"W/ Session: Redirecting to default service path: ${res.location}")
@@ -216,7 +212,7 @@ case class IdentityFilter[A : SessionDataEncoder](store: SessionStore)(implicit 
         _ <- store.update(s)
       } yield tap(Response(Status.Found)) { res =>
           res.location = req.customerId.loginManager.protoManager.redirectLocation(req.req.host)
-          res.addCookie(s.id.asCookie) // add SignedId value as a Cookie
+          res.addCookie(s.id.asCookie()) // add SignedId value as a Cookie
           log.info(s"Failed to find Session: ${req.sessionId.toLogIdString} for Request: ${req.req}, " +
             s"allocating a new session: ${s.id.toLogIdString}, redirecting to location: ${res.location}")
         }

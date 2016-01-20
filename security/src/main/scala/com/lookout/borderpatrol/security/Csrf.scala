@@ -40,9 +40,8 @@ object Csrf {
     def verify(req: Request): Boolean =
       (for {
         str <- req.headerMap.get(header.header) orElse req.params.get(param.param)
-        ckv <- req.cookies.getValue(cookieName.name)
         uid <- SignedId.from(str).toOption
-        cid <- SignedId.from(ckv).toOption
+        cid <- SignedId.fromRequest(req, cookieName.name).toOption
       } yield uid == cid) getOrElse false
   }
 }
@@ -58,13 +57,8 @@ case class CsrfInsertFilter[A](cookieName: Csrf.CookieName)(implicit secretStore
   def apply(req: A, service: Service[A, Response]): Future[Response] =
     service(req).flatMap(res =>
       for {
-        csrfSessionId <- SignedId.authenticated
-        cookie <- tap(new Cookie(cookieName.name, csrfSessionId.asBase64)) { cooki => {
-          cooki.path = "/"
-          cooki.httpOnly = true
-          cooki.maxAge = Time.now.until(csrfSessionId.expires)
-        }}.toFuture
-        _ <- res.addCookie(cookie).toFuture
+        csrfId <- SignedId.authenticated
+        _ <- res.addCookie(csrfId.asCookie(cookieName.name)).toFuture
       } yield res
     )
 }

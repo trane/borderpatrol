@@ -71,7 +71,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
 
     //  Allocate and Session
     val sessionId = sessionid.untagged
-    val cooki = sessionId.asCookie
+    val cooki = sessionId.asCookie()
 
     //  Create request
     val request = req("enterprise", "/ent")
@@ -136,7 +136,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
 
     // Allocate and Session
     val sessionId = sessionid.untagged
-    val cooki = sessionId.asCookie
+    val cooki = sessionId.asCookie()
 
     // Create request
     val request = req("enterprise", "/ent")
@@ -156,7 +156,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
 
     // Allocate and Session
     val sessionId = sessionid.untagged
-    val cooki = sessionId.asCookie
+    val cooki = sessionId.asCookie()
 
     // Create request
     val request = req("enterprise", "/ent")
@@ -200,7 +200,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
 
     //  Allocate and Session
     val sessionId = sessionid.untagged
-    val cooki = sessionId.asCookie
+    val cooki = sessionId.asCookie()
 
     //  Create request
     val request = req("enterprise", "/ent")
@@ -220,7 +220,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
 
     // Allocate and Session
     val sessionId = sessionid.untagged
-    val cooki = sessionId.asCookie
+    val cooki = sessionId.asCookie()
 
     // Create request
     val request = req("enterprise", "/ent")
@@ -243,7 +243,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
   it should "propagate the exception thrown by SessionStore.get operation" in {
     // Allocate and Session
     val sessionId = sessionid.untagged
-    val cooki = sessionId.asCookie
+    val cooki = sessionId.asCookie()
 
     // Create request
     val request = req("enterprise", "/ent")
@@ -273,7 +273,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
 
     // Allocate and Session
     val sessionId = sessionid.untagged
-    val cooki = sessionId.asCookie
+    val cooki = sessionId.asCookie()
 
     // Mock sessionStore
     val mockSessionStore = MemcachedStore(FailingUpdateMockClient)
@@ -655,7 +655,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
   it should "succeed to logout by deleting session from store and redirecting to default service" in {
     // Allocate and Session
     val sessionId = sessionid.authenticated
-    val cooki = sessionId.asCookie
+    val cooki = sessionId.asCookie()
 
     // Session data
     val sessionData = 999
@@ -671,8 +671,8 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     // Validate
     Await.result(output).status should be (Status.Found)
     Await.result(output).location.get should be (cust1.defaultServiceId.path.toString)
-    Await.result(output).cookies.get(SignedId.cookieName).get.value should be ("")
-    Await.result(output).cookies.get(SignedId.cookieName).get.isDiscard should be (true)
+    Await.result(output).cookies.get(SignedId.sessionIdCookieName).get.value should be ("")
+    Await.result(output).cookies.get(SignedId.sessionIdCookieName).get.isDiscard should be (true)
     Await.result(sessionStore.get[Int](sessionId)) should be (None)
   }
 
@@ -686,7 +686,6 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     // Validate
     Await.result(output).status should be (Status.Found)
     Await.result(output).location.get should be (cust1.defaultServiceId.path.toString)
-    Await.result(output).cookies.get(SignedId.cookieName).get.value should be ("")
-    Await.result(output).cookies.get(SignedId.cookieName).get.isDiscard should be (true)
+    Await.result(output).cookies.get(SignedId.sessionIdCookieName) should be (None)
   }
 }

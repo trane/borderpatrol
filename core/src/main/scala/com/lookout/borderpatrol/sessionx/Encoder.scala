@@ -166,7 +166,7 @@ object SignedIdEncoder {
    * [[com.twitter.finagle.httpx.Cookie Cookie]]
    */
   implicit def encodeCookie(implicit secretStoreApi: SecretStoreApi): SignedIdEncoder[Cookie] = SignedIdEncoder(
-    id => id.asCookie,
+    id => id.asCookie(),
     cookie => SignedIdInjections.str2SignedId(cookie.value)
   )
 
