@@ -12,8 +12,8 @@ import scala.util.{Success, Failure}
  */
 trait SessionStore {
   def update[A](session: Session[A])(implicit ev: SessionDataEncoder[A]): Future[Unit]
-  def get[A](key: SessionId)(implicit ev: SessionDataEncoder[A]): Future[Option[Session[A]]]
-  def delete(key: SessionId): Future[Unit]
+  def get[A](key: SignedId)(implicit ev: SessionDataEncoder[A]): Future[Option[Session[A]]]
+  def delete(key: SignedId): Future[Unit]
 }
 
 /**
@@ -47,7 +47,7 @@ object SessionStores {
      *
      * @return
      */
-    def get[A](key: SessionId)(implicit ev: SessionDataEncoder[A]): Future[Option[Session[A]]] =
+    def get[A](key: SignedId)(implicit ev: SessionDataEncoder[A]): Future[Option[Session[A]]] =
       store.get(key.asBase64).flatMap(_ match {
         case None => Future.value(None)
         case Some(buf) => ev.decode(buf) match {
@@ -69,7 +69,7 @@ object SessionStores {
     def update[A](session: Session[A])(implicit ev: SessionDataEncoder[A]): Future[Unit] =
       store.set(session.id.asBase64, flag, session.id.expires, ev.encode(session.data))
 
-    def delete(key: SessionId): Future[Unit] =
+    def delete(key: SignedId): Future[Unit] =
       store.delete(key.id.asBase64).map(_ => ())
   }
 
@@ -81,7 +81,7 @@ object SessionStores {
 
     val store: mutable.Set[Session[Buf]] = mutable.Set[Session[Buf]]()
 
-    def get[A](key: SessionId)(implicit ev: SessionDataEncoder[A]): Future[Option[Session[A]]] =
+    def get[A](key: SignedId)(implicit ev: SessionDataEncoder[A]): Future[Option[Session[A]]] =
       store.find(_.id == key) match {
         case Some(s) => ev.decode(s.data) match {
           case Failure(e) => e.toFutureException[Option[Session[A]]]
@@ -96,7 +96,7 @@ object SessionStores {
       else Future.exception[Unit](new SessionStoreError(s"update failed with $session"))
     }
 
-    def delete(key: SessionId): Future[Unit] =
+    def delete(key: SignedId): Future[Unit] =
       store.find(_.id == key) match {
         case Some(s) => Future.value(store.remove(s)).map(_ => ())
         case None => Future.value(())
@@ -104,13 +104,13 @@ object SessionStores {
   }
 
   /*
-  implicit object SessionEncryptor extends Encryptable[PSession, SessionId, Array[Byte]] {
-    def apply(a: PSession)(key: SessionId): Array[Byte] =
+  implicit object SessionEncryptor extends Encryptable[PSession, SignedId, Array[Byte]] {
+    def apply(a: PSession)(key: SignedId): Array[Byte] =
       CryptKey(key).encrypt[PSession](a)
   }
 
-  implicit object SessionDecryptor extends Decryptable[Array[Byte], SessionId, PSession] {
-    def apply(e: Array[Byte])(key: SessionId): PSession =
+  implicit object SessionDecryptor extends Decryptable[Array[Byte], SignedId, PSession] {
+    def apply(e: Array[Byte])(key: SignedId): PSession =
       CryptKey(key).decryptAs[PSession](e)
   }
 
@@ -118,15 +118,15 @@ object SessionStores {
 
   case class EncryptedInMemorySessionStore(
         store: mutable.Map[String, Encrypted] = mutable.Map[String, Encrypted]())(
-      implicit i2s: SessionId %> String)
+      implicit i2s: SignedId %> String)
       extends EncryptedSessionStore[Encrypted, mutable.Map[String, Encrypted]] {
 
-    def update(key: SessionId)(value: PSession) =
+    def update(key: SignedId)(value: PSession) =
       store.put(i2s(key), value.encrypt).
           fold(Future.exception[Unit](new
               UpdateStoreException(s"Unable to update store with $value")))(_ => Future.value[Unit](()))
 
-    def get(key: SessionId) =
+    def get(key: SignedId) =
       store.get(i2s(key)).flatMap(decrypt(_)).filterNot(session => session.id.expired).toFuture
   }
   */

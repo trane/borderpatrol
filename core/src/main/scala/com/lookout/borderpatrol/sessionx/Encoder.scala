@@ -2,7 +2,7 @@ package com.lookout.borderpatrol.sessionx
 
 import argonaut.Json
 import com.lookout.borderpatrol.crypto.{Decryptable, Encryptable}
-import com.lookout.borderpatrol.sessionx.SessionId.SessionIdInjections
+import com.lookout.borderpatrol.sessionx.SignedId.SignedIdInjections
 import com.twitter.finagle.httpx.Cookie
 import com.twitter.io.Buf
 import com.twitter.finagle.httpx
@@ -17,7 +17,7 @@ trait Encoder[A, B] {
   def decode(b: B): Try[A]
 }
 trait SessionDataEncoder[A] extends Encoder[A, Buf]
-trait SessionIdEncoder[A] extends Encoder[SessionId, A]
+trait SignedIdEncoder[A] extends Encoder[SignedId, A]
 trait SecretEncoder[A] extends Encoder[Secret, A]
 trait SecretsEncoder[A] extends Encoder[Secrets,A]
 
@@ -48,7 +48,7 @@ trait EncryptedDataEncoder[A] {
   /**
    * Wrap [[com.lookout.borderpatrol.sessionx.Encoder.encode]] with decryption
    */
-  def decrypted(id: SessionId, buf: Buf): Try[Session[A]] =
+  def decrypted(id: SignedId, buf: Buf): Try[Session[A]] =
     for {
       s <- decrypter.decrypt(id, toArr(buf))
       d <- encoder.decode(s.data)
@@ -139,35 +139,35 @@ object SessionDataEncoder {
 }
 
 /**
- * Instances of SessionIdEncoder for [[com.lookout.borderpatrol.sessionx.SessionId SessionId]] => A
+ * Instances of SignedIdEncoder for [[com.lookout.borderpatrol.sessionx.SignedId SignedId]] => A
  */
-object SessionIdEncoder {
+object SignedIdEncoder {
   /**
-   * Helper method for creating new [[com.lookout.borderpatrol.sessionx.SessionIdEncoder]] instances
+   * Helper method for creating new [[com.lookout.borderpatrol.sessionx.SignedIdEncoder]] instances
    */
-  def apply[A](f: SessionId => A, g: A => Try[SessionId])(implicit secretStoreApi: SecretStoreApi):
-      SessionIdEncoder[A] =
-    new SessionIdEncoder[A] {
-      def encode(id: SessionId): A = f(id)
-      def decode(a: A): Try[SessionId] = g(a)
+  def apply[A](f: SignedId => A, g: A => Try[SignedId])(implicit secretStoreApi: SecretStoreApi):
+      SignedIdEncoder[A] =
+    new SignedIdEncoder[A] {
+      def encode(id: SignedId): A = f(id)
+      def decode(a: A): Try[SignedId] = g(a)
     }
 
   /**
-   * A [[com.lookout.borderpatrol.sessionx.SessionIdEncoder SessionIdEncoder]] instance for
+   * A [[com.lookout.borderpatrol.sessionx.SignedIdEncoder SignedIdEncoder]] instance for
    * [[java.lang.String String]]
    */
-  implicit def encodeString(implicit secretStoreApi: SecretStoreApi): SessionIdEncoder[String] = SessionIdEncoder(
-    id => SessionId.toBase64(id),
-    str => SessionIdInjections.str2SessionId(str)
+  implicit def encodeString(implicit secretStoreApi: SecretStoreApi): SignedIdEncoder[String] = SignedIdEncoder(
+    id => SignedId.toBase64(id),
+    str => SignedIdInjections.str2SignedId(str)
   )
 
   /**
-   * A [[com.lookout.borderpatrol.sessionx.SessionIdEncoder SessionIdEncoder]] instance for
+   * A [[com.lookout.borderpatrol.sessionx.SignedIdEncoder SignedIdEncoder]] instance for
    * [[com.twitter.finagle.httpx.Cookie Cookie]]
    */
-  implicit def encodeCookie(implicit secretStoreApi: SecretStoreApi): SessionIdEncoder[Cookie] = SessionIdEncoder(
+  implicit def encodeCookie(implicit secretStoreApi: SecretStoreApi): SignedIdEncoder[Cookie] = SignedIdEncoder(
     id => id.asCookie,
-    cookie => SessionIdInjections.str2SessionId(cookie.value)
+    cookie => SignedIdInjections.str2SignedId(cookie.value)
   )
 
 }

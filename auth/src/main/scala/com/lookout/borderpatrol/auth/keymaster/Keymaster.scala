@@ -23,7 +23,7 @@ object Keymaster {
     val identity = Identity(tokens)
   }
   case class KeymasterAccessReq(identity: Id[Tokens], customerId: CustomerIdentifier,
-                                serviceId: ServiceIdentifier, sessionId: SessionId) extends AccessRequest[Tokens]
+                                serviceId: ServiceIdentifier, sessionId: SignedId) extends AccessRequest[Tokens]
   case class KeymasterAccessRes(access: Access[ServiceToken]) extends AccessResponse[ServiceToken]
 
   /**
@@ -130,7 +130,7 @@ object Keymaster {
     /**
      * Grab the original request from the session store, otherwise just send them to the default location of '/'
      */
-    def requestFromSessionStore(sessionId: SessionId): Future[Request] =
+    def requestFromSessionStore(sessionId: SignedId): Future[Request] =
       store.get[Request](sessionId).flatMap {
         case Some(session) => Future.value(session.data)
         case None => Future.exception(OriginalRequestNotFound(s"no request stored for ${sessionId.toLogIdString}"))

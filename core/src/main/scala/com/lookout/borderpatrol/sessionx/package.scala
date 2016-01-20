@@ -35,7 +35,7 @@ import scala.util.{Failure, Success}
  * is accomplished by a set of types that will be used by consumers of this library: `Session`, `Store`, and `Secret`.
  *
  * A [[com.lookout.borderpatrol.sessionx.Secret Secret]] is a cryptographically verifiable signing key used to sign a
- * [[com.lookout.borderpatrol.sessionx.SessionId SessionId]]. Creating a `Secret` is simple. It defaults to expire at
+ * [[com.lookout.borderpatrol.sessionx.SignedId SignedId]]. Creating a `Secret` is simple. It defaults to expire at
  * [[com.lookout.borderpatrol.sessionx.Secret.lifetime Secret.lifetime]]
  *
  * {{{
@@ -51,19 +51,19 @@ import scala.util.{Failure, Success}
  *   val signedMsg = secret.sign("message to by signed".getBytes)
  * }}}
  *
- * A [[com.lookout.borderpatrol.sessionx.SessionId SessionId]] is a cryptographically signed identifier for a
+ * A [[com.lookout.borderpatrol.sessionx.SignedId SignedId]] is a cryptographically signed identifier for a
  * [[com.lookout.borderpatrol.sessionx.Session Session]], it consists of entropy, expiry, secret,and signature of those
  * items. This is meant to be used as the [[com.twitter.finagle.httpx.Cookie]] value, so we provide serializing to
  * [[String]].
  *
  * {{{
- *   val id: SessionId = Await.result(SessionId.next)
+ *   val id: SignedId = Await.result(SignedId.next)
  *   val cookieValue: String = id.asBase64
- *   SessionId.from[String](cookieValue) == id
+ *   SignedId.from[String](cookieValue) == id
  * }}}
  *
  * A [[com.lookout.borderpatrol.sessionx.Session Session]] is product type of a cryptographically verifiable
- * identifier [[com.lookout.borderpatrol.sessionx.SessionId SessionId]] and an arbitrary data type
+ * identifier [[com.lookout.borderpatrol.sessionx.SignedId SignedId]] and an arbitrary data type
  * A`. The only requirement for a [[com.lookout.borderpatrol.sessionx.SessionStore SessionStore]][B,M] to store/fetch
  * a `Session[A]` is that there be some implicit injective views from `A => B` and `B => Try[A]`.
  *
@@ -78,7 +78,7 @@ import scala.util.{Failure, Success}
  *  val newSessionFuture = Session(Request("http://localhost/api/stuff")) // entropy is blocking on the JVM
  *  val newSession = Await.result(newSessionFuture)
  *
- *  // see if the session expired (checks the [[SessionId.expires]])
+ *  // see if the session expired (checks the [[SignedId.expires]])
  *  log(s"Session has expired? ${newSession.expired}")
  *
  *  // store the session and then fetch it
@@ -139,21 +139,21 @@ package object sessionx extends Types {
   }
 
   /**
-   * More object-style accessors on SessionId, implementation defined in
-   * [[com.lookout.borderpatrol.sessionx.SessionId SessionId]]
+   * More object-style accessors on SignedId, implementation defined in
+   * [[com.lookout.borderpatrol.sessionx.SignedId SignedId]]
    */
-  implicit class SessionIdOps(val id: SessionId) extends AnyVal {
+  implicit class SignedIdOps(val id: SignedId) extends AnyVal {
     def signWith(s: Secret): Signature =
-      SessionId.signWith(id, s)
+      SignedId.signWith(id, s)
 
     def expired: Boolean =
-      SessionId.expired(id)
+      SignedId.expired(id)
 
     def asBase64: String =
-      SessionId.toBase64(id)
+      SignedId.toBase64(id)
 
     def asCookie: Cookie =
-      SessionId.toCookie(id)
+      SignedId.toCookie(id)
   }
 
   /**

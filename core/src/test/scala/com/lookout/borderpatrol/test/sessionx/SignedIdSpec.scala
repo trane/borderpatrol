@@ -6,7 +6,7 @@ import com.twitter.finagle.httpx.Cookie
 class SessionIdSpec extends BorderPatrolSuite {
   import sessionx.helpers._
 
-  behavior of "SessionId"
+  behavior of "SignedId"
 
   it should "create a sessionId with expiry" in {
     val id = sessionid.untagged
@@ -20,31 +20,31 @@ class SessionIdSpec extends BorderPatrolSuite {
   it should "convert to and from a string, and cookie" in {
     val id = sessionid.untagged
 
-    SessionId.from[String](SessionId.as[String](id)).success.value should be(id)
-    SessionId.from[Cookie](SessionId.as[Cookie](id)).success.value should be(id)
+    SignedId.from[String](SignedId.as[String](id)).success.value should be(id)
+    SignedId.from[Cookie](SignedId.as[Cookie](id)).success.value should be(id)
   }
 
   it should "create the same signature using the same secret" in {
     val id = sessionid.untagged
     val newSecret = Secret()
 
-    id.signWith(newSecret) should be(SessionId.signWith(id, newSecret))
+    id.signWith(newSecret) should be(SignedId.signWith(id, newSecret))
     id.signWith(newSecret) should not be(id.signature)
   }
 
   it should "not be derivable from string value if signed with secret not in the store" in {
     val idWithoutValidSecret = sessionid.untagged.copy(secret = secrets.invalid)
 
-    SessionId.from[String](idWithoutValidSecret.asBase64).failure.exception should be(a [SessionIdError])
+    SignedId.from[String](idWithoutValidSecret.asBase64).failure.exception should be(a [SignedIdError])
   }
 
   it should "not be derivable from string value if signatures don't match" in {
     val badId = sessionid.invalid
-    SessionId.from[String](badId.asBase64).failure.exception should be(a [SessionIdError])
+    SignedId.from[String](badId.asBase64).failure.exception should be(a [SignedIdError])
   }
 
   it should "not be derivable from an invalid string" in {
-    SessionId.from[String]("hello world!").failure.exception should be(a [SessionIdError])
+    SignedId.from[String]("hello world!").failure.exception should be(a [SignedIdError])
   }
 
   it should "create a tagged sessionId" in {

@@ -37,10 +37,10 @@ class EncoderSpec extends BorderPatrolSuite {
     invalid[Json](Json.jNumber(1)).failure.exception should be(a[SecretDecodeError])
   }
 
-  behavior of "SessionIdEncoder"
+  behavior of "SignedIdEncoder"
 
   it should "uphold encoding/decoding identity" in {
-    def identity[A](id: SessionId)(implicit ev: SessionIdEncoder[A]): SessionId =
+    def identity[A](id: SignedId)(implicit ev: SignedIdEncoder[A]): SignedId =
       ev.decode(ev.encode(id)) getOrElse sessionid.untagged
 
     val id = sessionid.untagged
@@ -48,10 +48,10 @@ class EncoderSpec extends BorderPatrolSuite {
   }
 
   it should "not decode invalid data" in {
-    def invalid[A](input: A)(implicit ev: SessionIdEncoder[A]): Try[SessionId] =
+    def invalid[A](input: A)(implicit ev: SignedIdEncoder[A]): Try[SignedId] =
       ev.decode(input)
 
-    invalid[String]("forged secret session id").failure.exception should be(a[SessionIdError])
+    invalid[String]("forged secret session id").failure.exception should be(a[SignedIdError])
   }
 
   behavior of "SessionDataEncoder"

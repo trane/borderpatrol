@@ -4,7 +4,7 @@ import java.security.{Security, Provider}
 import javax.crypto.Cipher
 import javax.crypto.spec.{IvParameterSpec, SecretKeySpec}
 
-import com.lookout.borderpatrol.sessionx.{SessionId, Session}
+import com.lookout.borderpatrol.sessionx.{SignedId, Session}
 import com.twitter.io.Buf
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 
@@ -41,20 +41,20 @@ case class CryptKey(keyBytes: Array[Byte],
  *   - AES-GCM is an authenticated encryption mechanism that could be very useful here *
  *
  * Implementation Details:
- *   I have chosen to make the IV be the SessionId.Entropy, since it is unique but predictable and public. The key
+ *   I have chosen to make the IV be the SignedId.Entropy, since it is unique but predictable and public. The key
  *   then becomes the hashed SecretKey which is private.
  *
  *   CryptKey := AES-GCM( Key , Iv )
  *   Key := PBKDF2WithHmacSHA1( SecretKey )
- *   Iv := SessionId.Entropy
+ *   Iv := SignedId.Entropy
  *
  * This means that all sessions will be encrypted with the same secret, but they will have a unique IV based on the
  * entropy of the session id. Note: secrets are rotated daily.
  *
- * Alternatively, you could create a new SessionId every time Session data is stored
+ * Alternatively, you could create a new SignedId every time Session data is stored
  */
 object CryptKey {
-  def apply(sessionId: SessionId): CryptKey =
+  def apply(sessionId: SignedId): CryptKey =
     CryptKey(sessionId.entropy.toArray, sessionId.secret.entropy.toArray)
 
   def apply(session: Session[_]): CryptKey =

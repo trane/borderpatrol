@@ -5,10 +5,10 @@ import com.twitter.logging.Level
 import com.twitter.util.Future
 
 /**
- * A container for some type `A` with a unique identifier of `SessionId`
+ * A container for some type `A` with a unique identifier of `SignedId`
  */
 trait Session[+A] { self =>
-  val id: SessionId
+  val id: SignedId
   val data: A
 
   /**
@@ -21,12 +21,12 @@ trait Session[+A] { self =>
 object Session {
 
   /**
-   * Primary method of recreating `Session[A]` from a given `SessionId` and data type `A`
+   * Primary method of recreating `Session[A]` from a given `SignedId` and data type `A`
    *
    * {{{
    *   case class Foo(i: Int)
    *
-   *   val id = Await.result(SessionId.next)
+   *   val id = Await.result(SignedId.next)
    *   val data = Foo(42)
    *   val s = Session(id, data)
    *   val s2 = Session(id, data)
@@ -34,15 +34,15 @@ object Session {
    *   s === s2
    * }}}
    *
-   * @param i the SessionId
+   * @param i the SignedId
    * @param d an arbitrary data value
    * @tparam A
    * @return a Session
    */
   @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.Any"))
-  def apply[A](i: SessionId, d: A): Session[A] =
+  def apply[A](i: SignedId, d: A): Session[A] =
     new Session[A] {
-      override val id: SessionId = i
+      override val id: SignedId = i
       override val data: A = d
 
       @SuppressWarnings(Array("org.brianmckenna.wartremover.warts.AsInstanceOf"))
@@ -86,9 +86,9 @@ object Session {
     if (store.current.expired) new SessionCreateUnavailable("only expired secrets available").toFutureException
     else {
       tag match {
-        case AuthenticatedTag => SessionId.authenticated map (Session(_, data))
-        case Untagged => SessionId.untagged map (Session(_, data))
-        case _ => new SessionError("Invalid SessionId Tag found").toFutureException
+        case AuthenticatedTag => SignedId.authenticated map (Session(_, data))
+        case Untagged => SignedId.untagged map (Session(_, data))
+        case _ => new SessionError("Invalid SignedId Tag found").toFutureException
       }
     }
 }

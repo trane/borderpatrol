@@ -168,7 +168,7 @@ object service {
       case _ =>
         ExceptionFilter() andThen /* Convert exceptions to responses */
           ServiceFilter(serviceMatcher) andThen /* Validate that its our service */
-          SessionIdFilter(config.sessionStore) andThen /* Get or allocate Session/SessionId */
+          SessionIdFilter(config.sessionStore) andThen /* Get or allocate Session/SignedId */
           BorderService(identityProviderChainMap(config.sessionStore),
             accessIssuerChainMap(config.sessionStore)) /* Glue that connects to identity & access service */
     }

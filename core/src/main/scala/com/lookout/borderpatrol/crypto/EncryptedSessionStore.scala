@@ -1,6 +1,6 @@
 package com.lookout.borderpatrol.crypto
 
-import com.lookout.borderpatrol.sessionx.{EncryptedDataEncoder, SessionDataEncoder, SessionId, Session}
+import com.lookout.borderpatrol.sessionx.{EncryptedDataEncoder, SessionDataEncoder, SignedId, Session}
 import com.twitter.io.Buf
 import com.twitter.util.Future
 import com.twitter.finagle.memcached
@@ -14,7 +14,7 @@ import scala.util.{Success, Failure}
  */
 trait EncryptedSessionStore {
   def update[A](session: Session[A])(implicit ev: EncryptedDataEncoder[A]): Future[Unit]
-  def get[A](key: SessionId)(implicit ev: EncryptedDataEncoder[A]): Future[Option[Session[A]]]
+  def get[A](key: SignedId)(implicit ev: EncryptedDataEncoder[A]): Future[Option[Session[A]]]
 }
 
 /**
@@ -48,7 +48,7 @@ object EncryptedSessionStore {
      *
      * @return
      */
-    def get[A](key: SessionId)(implicit ev: EncryptedDataEncoder[A]): Future[Option[Session[A]]] =
+    def get[A](key: SignedId)(implicit ev: EncryptedDataEncoder[A]): Future[Option[Session[A]]] =
       store.get(key.asBase64).flatMap(_ match {
         case None => Future.value(None)
         case Some(buf) => ev.decrypted(key, buf) match {

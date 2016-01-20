@@ -16,7 +16,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
   // Method to decode SessionData from the sessionId in Response
   def sessionDataFromResponse(resp: Response): Future[Request] =
     (for {
-      sessionId <- SessionId.fromResponse(resp).toFuture
+      sessionId <- SignedId.fromResponse(resp).toFuture
       sessionMaybe <- sessionStore.get[Request](sessionId)
     } yield sessionMaybe.fold[Identity[Request]](EmptyIdentity)(s => Id(s.data))).map {
       case Id(req) => req
@@ -60,7 +60,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
 
   behavior of "SessionIdFilter"
 
-  it should "succeed and return output of upstream Service if ServiceRequest contains SessionId" in {
+  it should "succeed and return output of upstream Service if ServiceRequest contains SignedId" in {
     val testService = mkTestService[SessionIdRequest, Response] {
       req => {
         assert(req.req.path == "/ent")
@@ -84,7 +84,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     Await.result(output).status should be (Status.Ok)
   }
 
-  it should "return redirect to login URI, if no SessionId present in the SessionIdRequest" in {
+  it should "return redirect to login URI, if no SignedId present in the SessionIdRequest" in {
 
     // Create request
     val request = req("enterprise", "/ent")
@@ -100,7 +100,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     Await.result(sessionData).path should be equals(request.path)
   }
 
-  it should "return redirect to login URI, if no SessionId present in the SessionIdRequest for OAuth2Code" in {
+  it should "return redirect to login URI, if no SignedId present in the SessionIdRequest for OAuth2Code" in {
 
     // Create request
     val request = req("sky", "/umb")
@@ -116,7 +116,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     Await.result(sessionData).path should be equals(request.path)
   }
 
-  it should "throw an exception if SessionId and Host are not present in the HTTP Request for OAuth2Code" in {
+  it should "throw an exception if SignedId and Host are not present in the HTTP Request for OAuth2Code" in {
 
     // Create request
     val request = Request("/umb")
@@ -191,7 +191,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
 
   behavior of "IdentityFilter"
 
-  it should "succeed and return output of upstream Service, if Session is found for SessionId" in {
+  it should "succeed and return output of upstream Service, if Session is found for SignedId" in {
     val testService = mkTestService[AccessIdRequest[Int], Response] {
       request => {
         assert(request.id == Identity(999))
@@ -216,7 +216,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     Await.result(output).status should be (Status.Ok)
   }
 
-  it should "return a redirect to login UTI, if it fails Session lookup using SessionId" in {
+  it should "return a redirect to login UTI, if it fails Session lookup using SignedId" in {
 
     // Allocate and Session
     val sessionId = sessionid.untagged
@@ -234,7 +234,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     Await.result(output).status should be (Status.Found)
     Await.result(output).location should be equals(
       cust1.loginManager.protoManager.redirectLocation(None))
-    val returnedSessionId = SessionId.fromResponse(Await.result(output)).toFuture
+    val returnedSessionId = SignedId.fromResponse(Await.result(output)).toFuture
     Await.result(returnedSessionId) should not equals(sessionId)
     val sessionData = sessionDataFromResponse(Await.result(output))
     Await.result(sessionData).path should be equals(request.path)
@@ -671,8 +671,8 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     // Validate
     Await.result(output).status should be (Status.Found)
     Await.result(output).location.get should be (cust1.defaultServiceId.path.toString)
-    Await.result(output).cookies.get(SessionId.cookieName).get.value should be ("")
-    Await.result(output).cookies.get(SessionId.cookieName).get.isDiscard should be (true)
+    Await.result(output).cookies.get(SignedId.cookieName).get.value should be ("")
+    Await.result(output).cookies.get(SignedId.cookieName).get.isDiscard should be (true)
     Await.result(sessionStore.get[Int](sessionId)) should be (None)
   }
 
@@ -686,7 +686,7 @@ class BorderAuthSpec extends BorderPatrolSuite  {
     // Validate
     Await.result(output).status should be (Status.Found)
     Await.result(output).location.get should be (cust1.defaultServiceId.path.toString)
-    Await.result(output).cookies.get(SessionId.cookieName).get.value should be ("")
-    Await.result(output).cookies.get(SessionId.cookieName).get.isDiscard should be (true)
+    Await.result(output).cookies.get(SignedId.cookieName).get.value should be ("")
+    Await.result(output).cookies.get(SignedId.cookieName).get.isDiscard should be (true)
   }
 }

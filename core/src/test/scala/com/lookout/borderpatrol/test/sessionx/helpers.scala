@@ -43,14 +43,14 @@ object helpers {
    */
   object sessionid {
 
-    def untagged: SessionId = Await.result(SessionId.untagged)
+    def untagged: SignedId = Await.result(SignedId.untagged)
 
-    def authenticated: SessionId = Await.result(SessionId.authenticated)
+    def authenticated: SignedId = Await.result(SignedId.authenticated)
 
-    def expired: SessionId =
-      SessionId(Time.fromMilliseconds(0), Entropy(16), secrets.current, Untagged)
+    def expired: SignedId =
+      SignedId(Time.fromMilliseconds(0), Entropy(16), secrets.current, Untagged)
 
-    def invalid: SessionId = untagged.copy(entropy = Entropy(16))
+    def invalid: SignedId = untagged.copy(entropy = Entropy(16))
   }
 
   object sessions {
