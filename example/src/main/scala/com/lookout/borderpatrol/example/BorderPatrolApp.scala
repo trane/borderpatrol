@@ -6,7 +6,7 @@ import com.twitter.server.TwitterServer
 import com.twitter.util.Await
 
 object BorderPatrolApp extends TwitterServer with Config {
-  import services._
+  import service._
   import MockService._
   import Config._
 

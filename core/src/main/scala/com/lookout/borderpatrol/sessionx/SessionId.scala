@@ -102,14 +102,6 @@ object SessionId {
       cookie.maxAge = Time.now.until(sessionId.expires)
     }
 
-  def toExpiredCookie(): Cookie =
-    tap(new Cookie(cookieName, "")) { cookie =>
-      cookie.path = "/"
-      cookie.httpOnly = true
-      cookie.isDiscard = true
-      cookie.maxAge = Duration(0, TimeUnit.SECONDS)
-    }
-
   def fromCookie(cooki: Option[Cookie])(implicit ev: SecretStoreApi): Try[SessionId] =
     cooki match {
       case Some(cookie) => SessionId.from[Cookie](cookie)

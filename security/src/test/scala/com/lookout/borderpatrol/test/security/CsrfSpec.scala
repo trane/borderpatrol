@@ -1,20 +1,34 @@
 package com.lookout.borderpatrol.test.security
 
 import com.lookout.borderpatrol.security.Csrf._
-import com.lookout.borderpatrol.security.CsrfFilter
+import com.lookout.borderpatrol.security.{CsrfInsertFilter, CsrfVerifyFilter}
 import com.lookout.borderpatrol.test._
 import com.twitter.finagle.Service
 import com.twitter.finagle.httpx.{Response, Cookie, Request, Status}
-import com.twitter.util.Future
+import com.twitter.util.{Await, Future}
 
 class CsrfSpec extends BorderPatrolSuite {
-  import com.lookout.borderpatrol.test.sessionx.helpers._
+  import sessionx.helpers.{secretStore => store, _}
 
   val csrf1 = sessionid.untagged.asBase64
   val csrf2 = sessionid.untagged.asBase64
 
   val (header, param, cookiename, verified) = ("header", "param", "cookieName", "verified")
   val verify = Verify(InHeader(header), Param(param), CookieName(cookiename), VerifiedHeader(verified))
+
+  val filter = CsrfVerifyFilter(verify)
+
+  val service = Service.mk[Request, Response]{ req =>
+    Future.value {
+      req.headerMap.get(verified) match {
+        case Some("true") => Response(Status.Ok)
+        case Some("false") => Response(Status.Forbidden)
+        case _ => throw new Exception("bottom")
+      }
+    }
+  }
+
+  val testOkService = Service.mk[Request, Response]{ req => Future.value(Response(Status.Ok)) }
 
   def requestWithHeader: Request = {
     val req = Request("/")
@@ -30,6 +44,7 @@ class CsrfSpec extends BorderPatrolSuite {
   }
 
   behavior of "Verify"
+
   it should "return a request with a verified header set" in {
     val req = Request("/")
     verify.unsafeInject(req)(_.toString)
@@ -80,17 +95,8 @@ class CsrfSpec extends BorderPatrolSuite {
     req1.headerMap.get(verified).value should be(false.toString)
     req2.headerMap.get(verified).value should be(false.toString)
   }
-  behavior of "CsrfFilter"
-  val filter = CsrfFilter(verify)
-  val service = Service.mk[Request, Response]{ req =>
-    Future.value {
-      req.headerMap.get(verified) match {
-        case Some("true") => Response(Status.Ok)
-        case Some("false") => Response(Status.Forbidden)
-        case _ => throw new Exception("bottom")
-      }
-    }
-  }
+
+  behavior of "CsrfVerifyFilter"
 
   it should "make an Ok response when verify sets header to true" in {
     filter(requestWithParam, service).results.status should be(Status.Ok)
@@ -106,4 +112,13 @@ class CsrfSpec extends BorderPatrolSuite {
     filter(req, service).results.status should be(Status.Forbidden)
   }
 
+  behavior of "CsrfInsertFilter"
+
+  it should "make an Ok response when verify sets header to true" in {
+    val req = Request("/")
+    val output = (CsrfInsertFilter[Request](CookieName(cookiename)) andThen testOkService)(req)
+
+    Await.result(output).status should be (Status.Ok)
+    Await.result(output).cookies.get(cookiename) should not be (None)
+  }
 }

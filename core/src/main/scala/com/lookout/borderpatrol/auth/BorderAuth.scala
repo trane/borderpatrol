@@ -1,5 +1,6 @@
 package com.lookout.borderpatrol.auth
 
+import java.util.concurrent.TimeUnit
 import java.util.logging.Logger
 
 import com.lookout.borderpatrol.Binder.{BindRequest, MBinder}
@@ -7,11 +8,11 @@ import com.lookout.borderpatrol.util.Combinators._
 import com.lookout.borderpatrol.{CustomerIdentifier, LoginManager, ServiceIdentifier, ServiceMatcher}
 import com.lookout.borderpatrol.sessionx._
 import com.twitter.finagle.httpx.path.Path
-import com.twitter.finagle.httpx.{Status, Request, Response}
+import com.twitter.finagle.httpx.{Cookie, Status, Request, Response}
 import com.twitter.finagle.stats.StatsReceiver
 import com.twitter.finagle.{SimpleFilter, Service, Filter}
 import com.twitter.logging.Level
-import com.twitter.util.Future
+import com.twitter.util.{Duration, Future}
 import scala.util.{Failure, Success}
 
 /**
@@ -47,7 +48,7 @@ case class ServiceFilter(matchers: ServiceMatcher)
         log.log(Level.DEBUG, s"Processing: Request(${req.method} " +
           s"${req.host.fold("null-hostname")(h => s"${h}${req.path}")}) " +
           s"with CustomerIdentifier: ${cid.subdomain}, ServiceIdentifier: ${sid.name}")
-        service(ServiceRequest(req, cid, sid))
+         service(ServiceRequest(req, cid, sid))
       }
       case None => tap(Response(Status.NotFound))(r => {
         log.log(Level.DEBUG, "Failed to find CustomerIdentifier and ServiceIdentifier for " +
@@ -82,7 +83,7 @@ case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStor
         } yield tap(Response(Status.Found)) { res =>
           res.location = req.customerId.loginManager.protoManager.redirectLocation(req.req.host)
           res.addCookie(session.id.asCookie)
-          log.log(Level.DEBUG, s"Untagged: ${req.req}, allocating a new session: " +
+          log.log(Level.DEBUG, s"${req.req}, allocating a new session: " +
             s"${session.id.toLogIdString}, redirecting to location: ${res.location}")
         }
     }
@@ -174,7 +175,16 @@ case class LogoutService(store: SessionStore)(implicit secretStore: SecretStoreA
     })
     tap(Response(Status.Found)) { res =>
       res.location = req.customerId.defaultServiceId.path.toString
-      res.addCookie(SessionId.toExpiredCookie())
+      req.req.cookies.foreach[Unit] {
+        case (name: String, cookie: Cookie) if name.startsWith("border_") =>
+          // Expire all BP cookies
+          res.addCookie(
+            tap(new Cookie(name, "")) { cookie =>
+            cookie.isDiscard = true
+            cookie.maxAge = Duration(0, TimeUnit.SECONDS)
+          })
+        case _ =>
+      }
       log.log(Level.DEBUG, s"W/ Session: Redirecting to default service path: ${res.location}")
     }.toFuture
   }

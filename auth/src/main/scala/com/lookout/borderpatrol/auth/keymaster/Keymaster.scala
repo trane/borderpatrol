@@ -130,10 +130,10 @@ object Keymaster {
     /**
      * Grab the original request from the session store, otherwise just send them to the default location of '/'
      */
-    def requestFromSessionStore(id: SessionId): Future[Request] =
-      store.get[Request](id).flatMap {
+    def requestFromSessionStore(sessionId: SessionId): Future[Request] =
+      store.get[Request](sessionId).flatMap {
         case Some(session) => Future.value(session.data)
-        case None => Future.exception(OriginalRequestNotFound(s"no request stored for $id"))
+        case None => Future.exception(OriginalRequestNotFound(s"no request stored for ${sessionId.toLogIdString}"))
       }
 
     def apply(req: KeymasterIdentifyReq,
