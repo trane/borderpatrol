@@ -1,6 +1,6 @@
 package com.lookout.borderpatrol.crypto
 
-import com.lookout.borderpatrol.sessionx.{SessionDataError, SessionDataEncoder, Session, SessionId}
+import com.lookout.borderpatrol.sessionx.{SessionDataError, SessionDataEncoder, Session, SignedId}
 import com.twitter.io.Buf
 
 import scala.util.Try
@@ -23,7 +23,7 @@ trait Encryptable[A] {
 trait Decryptable[A] {
   implicit val fromArr: Array[Byte] => A
 
-  def decrypt(id: SessionId, bytes: Array[Byte]): Try[Session[A]] =
+  def decrypt(id: SignedId, bytes: Array[Byte]): Try[Session[A]] =
     CryptKey(id).decrypt[A](bytes).map(Session(id, _))
 }
 

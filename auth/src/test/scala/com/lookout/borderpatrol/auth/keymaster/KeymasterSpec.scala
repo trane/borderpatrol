@@ -32,7 +32,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
   val tokens2 = tokens.add("one", serviceToken2)
 
   // Method to decode SessionData from the sessionId
-  def getTokensFromSessionId(sid: SessionId): Future[Tokens] =
+  def getTokensFromSessionId(sid: SignedId): Future[Tokens] =
     (for {
       sessionMaybe <- sessionStore.get[Tokens](sid)
     } yield sessionMaybe.fold[Identity[Tokens]](EmptyIdentity)(s => Id(s.data))).map(i => i match {
@@ -43,7 +43,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
   // Method to decode SessionData from the sessionId in Response
   def sessionDataFromResponse(resp: Response): Future[Tokens] =
     for {
-      sessionId <- SessionId.fromResponse(resp).toFuture
+      sessionId <- SignedId.fromResponse(resp).toFuture
       toks <- getTokensFromSessionId(sessionId)
     } yield toks
 
@@ -244,7 +244,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
     // Validate
     Await.result(output).status should be (Status.Found)
     Await.result(output).location should be equals ("/dang")
-    val returnedSessionId = SessionId.fromResponse(Await.result(output)).toFuture
+    val returnedSessionId = SignedId.fromResponse(Await.result(output)).toFuture
     returnedSessionId should not be sessionId
     val session_d = sessionStore.get[Tokens](Await.result(returnedSessionId))
     val tokensz = sessionDataFromResponse(Await.result(output))
@@ -278,7 +278,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
     // Validate
     Await.result(output).status should be(Status.Found)
     Await.result(output).location should be equals ("/umb")
-    val returnedSessionId = SessionId.fromResponse(Await.result(output)).toFuture
+    val returnedSessionId = SignedId.fromResponse(Await.result(output)).toFuture
     returnedSessionId should not be sessionId
     val session_d = sessionStore.get[Tokens](Await.result(returnedSessionId))
     val tokensz = sessionDataFromResponse(Await.result(output))

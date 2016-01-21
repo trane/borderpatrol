@@ -1,7 +1,7 @@
 import sbtunidoc.Plugin.UnidocKeys._
 import scoverage.ScoverageSbtPlugin.ScoverageKeys.coverageExcludedPackages
 
-lazy val Version = "0.1.5-SNAPSHOT"
+lazy val Version = "0.1.6-SNAPSHOT"
 
 lazy val buildSettings = Seq(
   organization := "com.lookout",
@@ -204,4 +204,4 @@ lazy val server = project
       "com.twitter" %% "finagle-stats" % finagleVersion
     )
   )
-  .dependsOn(core % "test->test;compile->compile", auth)
+  .dependsOn(core % "test->test;compile->compile")

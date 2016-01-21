@@ -27,7 +27,7 @@ package com.lookout.borderpatrol.test.crypto
 import java.security.Key
 import javax.crypto.spec.SecretKeySpec
 
-import com.lookout.borderpatrol.sessionx.{SessionId, Session}
+import com.lookout.borderpatrol.sessionx.{SignedId, Session}
 import com.lookout.borderpatrol.crypto._
 import com.lookout.borderpatrol.test._
 import com.twitter.finagle.{httpx, memcached}
@@ -89,10 +89,10 @@ class cryptoSpec extends BorderPatrolSuite {
 
     def enc[A : Encryptable](session: Session[A]): Array[Byte] =
       implicitly[Encryptable[A]].encrypt(session)
-    def dec[A : Decryptable](id: SessionId, bytes: Array[Byte]): Try[Session[A]] =
+    def dec[A : Decryptable](id: SignedId, bytes: Array[Byte]): Try[Session[A]] =
       implicitly[Decryptable[A]].decrypt(id, bytes)
 
-    val id = SessionId.untagged.results
+    val id = SignedId.untagged.results
     dec[String](id, enc[String](Session(id, "hello"))).success.value should be(Session(id, "hello"))
   }
 

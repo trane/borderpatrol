@@ -5,8 +5,8 @@ class SessionError(val message: String, cause: Throwable) extends Exception(mess
   def this(message: String) = this(message, null)
 }
 
-case class SessionIdError(error: String)
-    extends SessionError(s"An error occurred reading SessionId: $error")
+case class SignedIdError(error: String)
+    extends SessionError(s"An error occurred reading SignedId: $error")
 
 case class SessionDataError(error: Throwable)
     extends SessionError(s"An error occurred reading Session data: ${error.getMessage}")

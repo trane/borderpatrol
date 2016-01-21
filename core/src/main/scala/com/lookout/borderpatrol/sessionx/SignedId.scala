@@ -25,17 +25,17 @@ import scala.util.{Success, Failure, Try}
  * @param secret the secret used to sign this session id
  * @param signature the bytes of the signature(expires, entropy, secret.id)
  */
-case class SessionId(expires: Time, entropy: Entropy, secret: Secret, tag: Tag, signature: Signature) {
+case class SignedId(expires: Time, entropy: Entropy, secret: Secret, tag: Tag, signature: Signature) {
   def toLogIdString: String = Base64StringEncoder.encode(signature.toArray)
 }
 
-object SessionId {
+object SignedId {
 
   import Generator.EntropyGenerator
 
   val entropySize: Size = 16
   val lifetime = Duration(1, TimeUnit.DAYS)
-  val cookieName: String = "border_session"
+  val sessionIdCookieName: String = "border_session"
 
   private[this] def currentExpiry: Time =
     Time.now + lifetime
@@ -43,8 +43,8 @@ object SessionId {
   private[sessionx] def expired(t: Time): Boolean =
     t < Time.now || t > currentExpiry
 
-  private[sessionx] def expired(sessionId: SessionId): Boolean =
-    expired(sessionId.expires)
+  private[sessionx] def expired(signedId: SignedId): Boolean =
+    expired(signedId.expires)
 
   private[sessionx] def genEntropy: Entropy =
     EntropyGenerator(entropySize)
@@ -55,17 +55,17 @@ object SessionId {
   private[sessionx] def payload(t: Time, e: Entropy, i: SecretId, tagId: TagId): Payload =
     timeBytes(t) ++ e ++ i :+ tagId /* Append the IndexSeq and Bytes to form payload */
 
-  private[sessionx] def payload(sessionId: SessionId): Payload =
-    payload(sessionId.expires, sessionId.entropy, sessionId.secret.id, sessionId.tag.id)
+  private[sessionx] def payload(signedId: SignedId): Payload =
+    payload(signedId.expires, signedId.entropy, signedId.secret.id, signedId.tag.id)
 
-  private[sessionx] def signWith(sessionId: SessionId, s: Secret): Signature =
-    s.sign(payload(sessionId))
+  private[sessionx] def signWith(signedId: SignedId, s: Secret): Signature =
+    s.sign(payload(signedId))
 
-  private[sessionx] def toIndexedSeq(sessionId: SessionId): IndexedSeq[Byte] =
-    payload(sessionId) ++ sessionId.signature
+  private[sessionx] def toIndexedSeq(signedId: SignedId): IndexedSeq[Byte] =
+    payload(signedId) ++ signedId.signature
 
-  private[sessionx] def toArray(sessionId: SessionId): Array[Byte] =
-    toIndexedSeq(sessionId).toArray
+  private[sessionx] def toArray(signedId: SignedId): Array[Byte] =
+    toIndexedSeq(signedId).toArray
 
   /**
    * Generate a new id wrapped in a [[com.twitter.util.Future Future]] since entropy is blocking on the JVM
@@ -73,36 +73,36 @@ object SessionId {
    * @param store where to fetch the current [[Secret]] to sign this id
    * @return
    */
-  def untagged(implicit store: SecretStoreApi): Future[SessionId] =
-    (SessionId(currentExpiry, genEntropy, store.current, Untagged)).toFuture
-  def authenticated(implicit store: SecretStoreApi): Future[SessionId] =
-    (SessionId(currentExpiry, genEntropy, store.current, AuthenticatedTag)).toFuture
+  def untagged(implicit store: SecretStoreApi): Future[SignedId] =
+    (SignedId(currentExpiry, genEntropy, store.current, Untagged)).toFuture
+  def authenticated(implicit store: SecretStoreApi): Future[SignedId] =
+    (SignedId(currentExpiry, genEntropy, store.current, AuthenticatedTag)).toFuture
 
   /**
-   * Creates [[com.lookout.borderpatrol.sessionx.SessionId SessionId]] instances based on existing values
+   * Creates [[com.lookout.borderpatrol.sessionx.SignedId SignedId]] instances based on existing values
    */
-  def apply(expires: Time, entropy: Entropy, secret: Secret, tag: Tag): SessionId =
-    new SessionId(expires, entropy, secret, tag, secret.sign(payload(expires, entropy, secret.id, tag.id)))
+  def apply(expires: Time, entropy: Entropy, secret: Secret, tag: Tag): SignedId =
+    new SignedId(expires, entropy, secret, tag, secret.sign(payload(expires, entropy, secret.id, tag.id)))
 
-  import SessionIdEncoder._
+  import SignedIdEncoder._
 
-  def as[A](sessionId: SessionId)(implicit ev: SessionIdEncoder[A]): A =
-    ev.encode(sessionId)
+  def as[A](signedId: SignedId)(implicit ev: SignedIdEncoder[A]): A =
+    ev.encode(signedId)
 
-  def from[A](a: A)(implicit ev: SessionIdEncoder[A]): Try[SessionId] =
+  def from[A](a: A)(implicit ev: SignedIdEncoder[A]): Try[SignedId] =
     ev.decode(a)
 
-  def toBase64(sessionId: SessionId): String =
-    Base64StringEncoder.encode(toArray(sessionId))
+  def toBase64(signedId: SignedId): String =
+    Base64StringEncoder.encode(toArray(signedId))
 
-  def toCookie(sessionId: SessionId): Cookie =
-    tap(new Cookie(cookieName, toBase64(sessionId))) { cookie =>
+  def toCookie(signedId: SignedId, cookieName: String): Cookie =
+    tap(new Cookie(cookieName, toBase64(signedId))) { cookie =>
       cookie.path = "/"
       cookie.httpOnly = true
-      cookie.maxAge = Time.now.until(sessionId.expires)
+      cookie.maxAge = Time.now.until(signedId.expires)
     }
 
-  def toExpiredCookie(): Cookie =
+  def toExpiredCookie(cookieName: String): Cookie =
     tap(new Cookie(cookieName, "")) { cookie =>
       cookie.path = "/"
       cookie.httpOnly = true
@@ -110,19 +110,21 @@ object SessionId {
       cookie.maxAge = Duration(0, TimeUnit.SECONDS)
     }
 
-  def fromCookie(cooki: Option[Cookie])(implicit ev: SecretStoreApi): Try[SessionId] =
+  private[this] def fromCookie(cooki: Option[Cookie], cookieName: String)(implicit ev: SecretStoreApi): Try[SignedId] =
     cooki match {
-      case Some(cookie) => SessionId.from[Cookie](cookie)
-      case None => Failure(SessionIdError(s"no ${cookieName} cookie"))
+      case Some(cookie) => SignedId.from[Cookie](cookie)
+      case None => Failure(SignedIdError(s"no ${cookieName} cookie found"))
     }
 
-  def fromRequest(req: Request)(implicit ev: SecretStoreApi): Try[SessionId] =
-    fromCookie(req.cookies.get(cookieName))
+  def fromRequest(req: Request, cookieName: String = SignedId.sessionIdCookieName)(implicit ev: SecretStoreApi):
+      Try[SignedId] =
+    fromCookie(req.cookies.get(cookieName), cookieName)
 
-  def fromResponse(rep: Response)(implicit ev: SecretStoreApi): Try[SessionId] =
-    fromCookie(rep.cookies.get(cookieName))
+  def fromResponse(rep: Response, cookieName: String = SignedId.sessionIdCookieName)(implicit ev: SecretStoreApi):
+      Try[SignedId] =
+    fromCookie(rep.cookies.get(cookieName), cookieName)
 
-  object SessionIdInjections {
+  object SignedIdInjections {
 
     type BytesTuple = (Payload, TimeBytes, Entropy, SecretId, TagId, Signature)
 
@@ -130,15 +132,15 @@ object SessionId {
     val signatureSize: Size = 32 // sha256 -> bytes
     val secretIdSize: Size = 2 // secret id byte2
     val tagIdSize: Size = 1 // tag id byte
-    val payloadSize: Size = timeBytesSize + SessionId.entropySize + secretIdSize + tagIdSize
+    val payloadSize: Size = timeBytesSize + SignedId.entropySize + secretIdSize + tagIdSize
     val expectedSize: Size = payloadSize + signatureSize
 
     def invalid(sig1: Signature, sig2: Signature): Boolean =
       sig1 != sig2
 
     def validate(t: Time, sig1: Signature, sig2: Signature): Try[Unit] =
-      if (SessionId.expired(t)) Failure(new SessionIdError(s"Expired $t"))
-      else if (invalid(sig1, sig2)) Failure(new SessionIdError("Signature is invalid"))
+      if (SignedId.expired(t)) Failure(new SignedIdError(s"Expired $t"))
+      else if (invalid(sig1, sig2)) Failure(new SignedIdError("Signature is invalid"))
       else Success(())
 
     def long2Time(l: Long): Time =
@@ -154,26 +156,26 @@ object SessionId {
     implicit def bytes2Secret(bytes: IndexedSeq[Byte])(implicit store: SecretStoreApi): Try[Secret] =
       store.find(_.id == bytes) match {
         case Some(s) => Success(s)
-        case None => Failure(new SessionIdError(s"No secret with id=$bytes"))
+        case None => Failure(new SignedIdError(s"No secret with id=$bytes"))
       }
 
     implicit def bytes2Tuple(bytes: IndexedSeq[Byte]): Try[BytesTuple] = bytes match {
       case a if a.size == expectedSize => {
         val (pl, sig) = a.splitAt(payloadSize)
         val (tb, tail1) = pl.splitAt(timeBytesSize)
-        val (ent, tail2) = tail1.splitAt(SessionId.entropySize)
+        val (ent, tail2) = tail1.splitAt(SignedId.entropySize)
         val (secretIdList, tagList) = tail2.splitAt(secretIdSize)
         Success((pl, tb, ent, secretIdList, tagList.head, sig))
       }
-      case _ => Failure(new SessionIdError("Not a session string"))
+      case _ => Failure(new SignedIdError("Not a session string"))
     }
 
-    implicit def seq2SessionId(bytes: IndexedSeq[Byte])(implicit store: SecretStoreApi): Try[SessionId] = for {
+    implicit def seq2SignedId(bytes: IndexedSeq[Byte])(implicit store: SecretStoreApi): Try[SignedId] = for {
       (pyld, tbs, ent, secretId, tagId, sig) <- bytes2Tuple(bytes)
       time <- bytes2Time(tbs)
       secret <- bytes2Secret(secretId)
       _ <- validate(time, sig, secret.sign(pyld))
-    } yield new SessionId(time, ent, secret, Tag(tagId), sig)
+    } yield new SignedId(time, ent, secret, Tag(tagId), sig)
 
     implicit def str2arr(s: String): Array[Byte] =
       Base64StringEncoder.decode(s)
@@ -184,7 +186,7 @@ object SessionId {
     implicit def str2seq(s: String): IndexedSeq[Byte] =
       arr2seq(str2arr(s))
 
-    implicit def str2SessionId(s: String)(implicit store: SecretStoreApi): Try[SessionId] =
-      seq2SessionId(str2seq(s))
+    implicit def str2SignedId(s: String)(implicit store: SecretStoreApi): Try[SignedId] =
+      seq2SignedId(str2seq(s))
   }
 }

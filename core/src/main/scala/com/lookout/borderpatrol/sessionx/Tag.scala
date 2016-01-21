@@ -1,7 +1,7 @@
 package com.lookout.borderpatrol.sessionx
 
 /**
- * Tag is a byte that help us differentiate the set of SessionId from others.
+ * Tag is a byte that help us differentiate the set of SignedId from others.
  */
 trait Tag {
   val id: Byte

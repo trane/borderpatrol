@@ -1,5 +1,6 @@
 package com.lookout.borderpatrol.auth
 
+import java.util.concurrent.TimeUnit
 import java.util.logging.Logger
 
 import com.lookout.borderpatrol.Binder.{BindRequest, MBinder}
@@ -7,11 +8,11 @@ import com.lookout.borderpatrol.util.Combinators._
 import com.lookout.borderpatrol.{CustomerIdentifier, LoginManager, ServiceIdentifier, ServiceMatcher}
 import com.lookout.borderpatrol.sessionx._
 import com.twitter.finagle.httpx.path.Path
-import com.twitter.finagle.httpx.{Status, Request, Response}
+import com.twitter.finagle.httpx.{Cookie, Status, Request, Response}
 import com.twitter.finagle.stats.StatsReceiver
 import com.twitter.finagle.{SimpleFilter, Service, Filter}
 import com.twitter.logging.Level
-import com.twitter.util.Future
+import com.twitter.util.{Duration, Future}
 import scala.util.{Failure, Success}
 
 /**
@@ -19,13 +20,13 @@ import scala.util.{Failure, Success}
  */
 case class ServiceRequest(req: Request, customerId: CustomerIdentifier, serviceId: ServiceIdentifier)
 case class SessionIdRequest(req: Request, customerId: CustomerIdentifier, serviceId: ServiceIdentifier,
-                            sessionId: SessionId)
+                            sessionId: SignedId)
 object SessionIdRequest {
-  def apply(sr: ServiceRequest, sid: SessionId): SessionIdRequest =
+  def apply(sr: ServiceRequest, sid: SignedId): SessionIdRequest =
     SessionIdRequest(sr.req, sr.customerId, sr.serviceId, sid)
 }
 case class AccessIdRequest[A](req: Request, customerId: CustomerIdentifier, serviceId: ServiceIdentifier,
-                              sessionId: SessionId, id: Id[A])
+                              sessionId: SignedId, id: Id[A])
 object AccessIdRequest {
   def apply[A](sr: SessionIdRequest, id: Id[A]): AccessIdRequest[A] =
     AccessIdRequest(sr.req, sr.customerId, sr.serviceId, sr.sessionId, id)
@@ -47,7 +48,7 @@ case class ServiceFilter(matchers: ServiceMatcher)
         log.log(Level.DEBUG, s"Processing: Request(${req.method} " +
           s"${req.host.fold("null-hostname")(h => s"${h}${req.path}")}) " +
           s"with CustomerIdentifier: ${cid.subdomain}, ServiceIdentifier: ${sid.name}")
-        service(ServiceRequest(req, cid, sid))
+         service(ServiceRequest(req, cid, sid))
       }
       case None => tap(Response(Status.NotFound))(r => {
         log.log(Level.DEBUG, "Failed to find CustomerIdentifier and ServiceIdentifier for " +
@@ -60,20 +61,20 @@ case class ServiceFilter(matchers: ServiceMatcher)
 }
 
 /**
- * Ensures we have a SessionId present in this request, sending a Redirect to the service login page if it doesn't
+ * Ensures we have a SignedId present in this request, sending a Redirect to the service login page if it doesn't
  */
 case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStoreApi)
     extends Filter[ServiceRequest, Response, SessionIdRequest, Response] {
   private[this] val log = Logger.getLogger(getClass.getSimpleName)
 
   /**
-   * Passes the SessionId to the next in the filter chain. If any failures decoding the SessionId occur
+   * Passes the SignedId to the next in the filter chain. If any failures decoding the SignedId occur
    * (expired, not there, etc), we will terminate early and send a redirect
    * @param req
    * @param service
    */
   def apply(req: ServiceRequest, service: Service[SessionIdRequest, Response]): Future[Response] =
-    SessionId.fromRequest(req.req) match {
+    SignedId.fromRequest(req.req, SignedId.sessionIdCookieName) match {
       case Success(sid) => service(SessionIdRequest(req, sid))
       case Failure(e) =>
         for {
@@ -81,8 +82,8 @@ case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStor
           _ <- store.update(session)
         } yield tap(Response(Status.Found)) { res =>
           res.location = req.customerId.loginManager.protoManager.redirectLocation(req.req.host)
-          res.addCookie(session.id.asCookie)
-          log.log(Level.DEBUG, s"Untagged: ${req.req}, allocating a new session: " +
+          res.addCookie(session.id.asCookie())
+          log.log(Level.DEBUG, s"${req.req}, allocating a new session: " +
             s"${session.id.toLogIdString}, redirecting to location: ${res.location}")
         }
     }
@@ -91,10 +92,10 @@ case class SessionIdFilter(store: SessionStore)(implicit secretStore: SecretStor
 /**
  * This is a border service that glues the main chain with identityProvider or accessIssuer chains
  * E.g.
- * - If SessionId is authenticated
+ * - If SignedId is authenticated
  *   - if path is NOT a service path, then redirect it to service identifier path
  *   - if path is a service path, then send feed it into accessIssuer chain
- * - If SessionId is NOT authenticated
+ * - If SignedId is NOT authenticated
  *   - if path is NOT a LoginManager path, then redirect it to LoginManager path
  *   - if path is a LoginManager path, then feed it into identityProvider chain
  *
@@ -168,13 +169,18 @@ case class LogoutService(store: SessionStore)(implicit secretStore: SecretStoreA
   private[this] val log = Logger.getLogger(getClass.getSimpleName)
 
   def apply(req: ServiceRequest): Future[Response] = {
-    SessionId.fromRequest(req.req).foreach(sid => {
+    SignedId.fromRequest(req.req, SignedId.sessionIdCookieName).foreach(sid => {
       log.log(Level.DEBUG, s"Logging out Session: ${sid.toLogIdString}")
       store.delete(sid)
     })
     tap(Response(Status.Found)) { res =>
       res.location = req.customerId.defaultServiceId.path.toString
-      res.addCookie(SessionId.toExpiredCookie())
+      // Expire all BP cookies present in the Request
+      req.req.cookies.foreach[Unit] {
+        case (name: String, cookie: Cookie) if name.startsWith("border_") =>
+          res.addCookie(SignedId.toExpiredCookie(name))
+        case _ =>
+      }
       log.log(Level.DEBUG, s"W/ Session: Redirecting to default service path: ${res.location}")
     }.toFuture
   }
@@ -188,7 +194,7 @@ case class IdentityFilter[A : SessionDataEncoder](store: SessionStore)(implicit 
     extends Filter[SessionIdRequest, Response, AccessIdRequest[A], Response] {
   private[this] val log = Logger.getLogger(getClass.getName)
 
-  def identity(sessionId: SessionId): Future[Identity[A]] =
+  def identity(sessionId: SignedId): Future[Identity[A]] =
     (for {
       sessionMaybe <- store.get[A](sessionId)
     } yield sessionMaybe.fold[Identity[A]](EmptyIdentity)(s => Id(s.data))) handle {
@@ -206,7 +212,7 @@ case class IdentityFilter[A : SessionDataEncoder](store: SessionStore)(implicit 
         _ <- store.update(s)
       } yield tap(Response(Status.Found)) { res =>
           res.location = req.customerId.loginManager.protoManager.redirectLocation(req.req.host)
-          res.addCookie(s.id.asCookie) // add SessionId value as a Cookie
+          res.addCookie(s.id.asCookie()) // add SignedId value as a Cookie
           log.info(s"Failed to find Session: ${req.sessionId.toLogIdString} for Request: ${req.req}, " +
             s"allocating a new session: ${s.id.toLogIdString}, redirecting to location: ${res.location}")
         }

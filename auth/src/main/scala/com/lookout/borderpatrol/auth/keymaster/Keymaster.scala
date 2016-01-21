@@ -23,7 +23,7 @@ object Keymaster {
     val identity = Identity(tokens)
   }
   case class KeymasterAccessReq(identity: Id[Tokens], customerId: CustomerIdentifier,
-                                serviceId: ServiceIdentifier, sessionId: SessionId) extends AccessRequest[Tokens]
+                                serviceId: ServiceIdentifier, sessionId: SignedId) extends AccessRequest[Tokens]
   case class KeymasterAccessRes(access: Access[ServiceToken]) extends AccessResponse[ServiceToken]
 
   /**
@@ -130,10 +130,10 @@ object Keymaster {
     /**
      * Grab the original request from the session store, otherwise just send them to the default location of '/'
      */
-    def requestFromSessionStore(id: SessionId): Future[Request] =
-      store.get[Request](id).flatMap {
+    def requestFromSessionStore(sessionId: SignedId): Future[Request] =
+      store.get[Request](sessionId).flatMap {
         case Some(session) => Future.value(session.data)
-        case None => Future.exception(OriginalRequestNotFound(s"no request stored for $id"))
+        case None => Future.exception(OriginalRequestNotFound(s"no request stored for ${sessionId.toLogIdString}"))
       }
 
     def apply(req: KeymasterIdentifyReq,
@@ -147,7 +147,7 @@ object Keymaster {
         } yield tap(Response(Status.Found))(res => {
           sessionAuthenticated.incr
           res.location = originReq.uri
-          res.addCookie(session.id.asCookie)
+          res.addCookie(session.id.asCookie())
           log.log(Level.DEBUG, s"Session: ${req.req.sessionId.toLogIdString}} is authenticated, " +
             s"allocated new Session: ${session.id.toLogIdString} and redirecting to location: ${res.location}")
         })
