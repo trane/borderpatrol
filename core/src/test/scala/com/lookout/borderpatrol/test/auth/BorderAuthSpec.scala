@@ -3,7 +3,7 @@ package com.lookout.borderpatrol.auth
 import com.lookout.borderpatrol.sessionx.SessionStores.MemcachedStore
 import com.lookout.borderpatrol.sessionx._
 import com.lookout.borderpatrol.test.BorderPatrolSuite
-import com.twitter.finagle.httpx._
+import com.twitter.finagle.http._
 import com.twitter.finagle.memcached
 import com.twitter.finagle.memcached.GetResult
 import com.twitter.io.Buf

@@ -7,8 +7,8 @@ import com.lookout.borderpatrol.Binder.{BindRequest, MBinder}
 import com.lookout.borderpatrol.util.Combinators._
 import com.lookout.borderpatrol.{CustomerIdentifier, LoginManager, ServiceIdentifier, ServiceMatcher}
 import com.lookout.borderpatrol.sessionx._
-import com.twitter.finagle.httpx.path.Path
-import com.twitter.finagle.httpx.{Cookie, Status, Request, Response}
+import com.twitter.finagle.http.path.Path
+import com.twitter.finagle.http.{Cookie, Status, Request, Response}
 import com.twitter.finagle.stats.StatsReceiver
 import com.twitter.finagle.{SimpleFilter, Service, Filter}
 import com.twitter.logging.Level

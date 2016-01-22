@@ -33,8 +33,8 @@ import com.lookout.borderpatrol.sessionx._
 import com.lookout.borderpatrol.util.Combinators._
 import com.twitter.finagle.stats.StatsReceiver
 import com.twitter.io.Buf
-import com.twitter.finagle.httpx.{Method, Request, Response, Status}
-import com.twitter.finagle.httpx.service.RoutingService
+import com.twitter.finagle.http.{Method, Request, Response, Status}
+import com.twitter.finagle.http.service.RoutingService
 import com.twitter.finagle.Service
 import com.twitter.util.Future
 import io.finch.response.ResponseBuilder

@@ -2,7 +2,7 @@ package com.lookout.borderpatrol.sessionx
 
 import com.lookout.borderpatrol.test._
 import com.twitter.util.{Future, Await}
-import com.twitter.finagle.httpx
+import com.twitter.finagle.http
 import com.twitter.finagle.memcached
 
 class SessionStoreSpec extends BorderPatrolSuite {
@@ -14,7 +14,7 @@ class SessionStoreSpec extends BorderPatrolSuite {
   val memcachedSessionStore = SessionStores.MemcachedStore(new memcached.MockClient())
   val intSession = sessions.create(1)
   val strSession = sessions.create("hello")
-  val reqSession = sessions.create(httpx.Request("localhost:8080/api/hello"))
+  val reqSession = sessions.create(http.Request("localhost:8080/api/hello"))
 
   val stores: List[SessionStore] = List(sessionStore, memcachedSessionStore)
 
@@ -23,7 +23,7 @@ class SessionStoreSpec extends BorderPatrolSuite {
     Await.all(
       store.update[Int](intSession),
       store.update[String](strSession),
-      store.update[httpx.Request](reqSession)
+      store.update[http.Request](reqSession)
     )
 
     it should s"fetch sessions that are stored in $store" in {
@@ -36,12 +36,12 @@ class SessionStoreSpec extends BorderPatrolSuite {
     }
 
     it should s"store request sessions $store" in {
-      store.get[httpx.Request](reqSession.id).results.get.data.uri shouldEqual reqSession.data.uri
+      store.get[http.Request](reqSession.id).results.get.data.uri shouldEqual reqSession.data.uri
     }
 
     it should s"return a Future exception when decoding to wrong type in $store" in {
-      // try to make an Session[Int] => Session[httpx.Request]
-      store.get[httpx.Request](intSession.id).isThrowable should be(true)
+      // try to make an Session[Int] => Session[http.Request]
+      store.get[http.Request](intSession.id).isThrowable should be(true)
 
       /* TODO: Disallow this: Int -> Buf -> String
       isThrow(store.get[Int](strSession.id)) should be(false)

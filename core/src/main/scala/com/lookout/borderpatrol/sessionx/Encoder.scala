@@ -3,9 +3,9 @@ package com.lookout.borderpatrol.sessionx
 import argonaut.Json
 import com.lookout.borderpatrol.crypto.{Decryptable, Encryptable}
 import com.lookout.borderpatrol.sessionx.SignedId.SignedIdInjections
-import com.twitter.finagle.httpx.Cookie
+import com.twitter.finagle.http.Cookie
 import com.twitter.io.Buf
-import com.twitter.finagle.httpx
+import com.twitter.finagle.http
 import scala.util.{Success, Failure, Try}
 import argonaut._, Argonaut._
 
@@ -70,8 +70,8 @@ object EncryptedDataEncoder {
   implicit object EncryptedIntEncoder extends EncryptedDataEncoder[Int] {
     implicit val encoder: SessionDataEncoder[Int] = SessionDataEncoder.encodeInt
   }
-  implicit object EncryptedReqEncoder extends EncryptedDataEncoder[httpx.Request] {
-    implicit val encoder: SessionDataEncoder[httpx.Request] = SessionDataEncoder.encodeRequest
+  implicit object EncryptedReqEncoder extends EncryptedDataEncoder[http.Request] {
+    implicit val encoder: SessionDataEncoder[http.Request] = SessionDataEncoder.encodeRequest
   }
   implicit object EncryptedBytesEncoder extends EncryptedDataEncoder[Array[Byte]] {
     implicit val encoder: SessionDataEncoder[Array[Byte]] = SessionDataEncoder.encodeByteArray
@@ -105,11 +105,11 @@ object SessionDataEncoder {
 
   /**
    * A [[com.lookout.borderpatrol.sessionx.SessionDataEncoder SessionDataEncoder]] instance for
-   * [[com.twitter.finagle.httpx.Request httpx.Request]]
+   * [[com.twitter.finagle.http.Request http.Request]]
    */
-  implicit val encodeRequest: SessionDataEncoder[httpx.Request] = SessionDataEncoder(
+  implicit val encodeRequest: SessionDataEncoder[http.Request] = SessionDataEncoder(
     data => Buf.ByteArray.Owned(data.encodeBytes()),
-    buf => httpx.Request.decodeBytes(Buf.ByteArray.Owned.extract(buf))
+    buf => http.Request.decodeBytes(Buf.ByteArray.Owned.extract(buf))
   )
 
   /**
@@ -163,7 +163,7 @@ object SignedIdEncoder {
 
   /**
    * A [[com.lookout.borderpatrol.sessionx.SignedIdEncoder SignedIdEncoder]] instance for
-   * [[com.twitter.finagle.httpx.Cookie Cookie]]
+   * [[com.twitter.finagle.http.Cookie Cookie]]
    */
   implicit def encodeCookie(implicit secretStoreApi: SecretStoreApi): SignedIdEncoder[Cookie] = SignedIdEncoder(
     id => id.asCookie(),

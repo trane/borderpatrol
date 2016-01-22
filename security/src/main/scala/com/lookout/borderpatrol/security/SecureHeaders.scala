@@ -3,7 +3,7 @@ package com.lookout.borderpatrol.security
 import java.net.InetAddress
 
 import com.twitter.finagle.{Service, SimpleFilter}
-import com.twitter.finagle.httpx.{HeaderMap, Request, Response}
+import com.twitter.finagle.http.{HeaderMap, Request, Response}
 import com.twitter.util.Future
 import com.lookout.borderpatrol.util.Combinators.tap
 

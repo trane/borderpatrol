@@ -5,8 +5,8 @@ import java.net.URL
 import com.lookout.borderpatrol._
 import com.lookout.borderpatrol.Binder._
 import com.twitter.finagle.Service
-import com.twitter.finagle.httpx.{Status, Response, Request}
-import com.twitter.finagle.httpx.path.Path
+import com.twitter.finagle.http.{Status, Response, Request}
+import com.twitter.finagle.http.path.Path
 import com.twitter.util.{Await, Future}
 
 class BinderSpec extends BorderPatrolSuite {
@@ -38,7 +38,7 @@ class BinderSpec extends BorderPatrolSuite {
   behavior of "ManagerBinder"
 
   it should "successfully connect to server and returns the response" in {
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:5679", mkTestService[Request]{_ => Response(Status.NotAcceptable).toFuture })
     try {
       val bindReq = BindRequest[Manager](keymasterIdManager, req(keymasterIdManager.path.toString))
@@ -54,7 +54,7 @@ class BinderSpec extends BorderPatrolSuite {
   behavior of "LoginManagerBinder"
 
   it should "successfully connect to server and returns the response" in {
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:5679", mkTestService[Request]{_ => Response(Status.NotAcceptable).toFuture })
     try {
       val bindReq = BindRequest[LoginManager](checkpointLoginManager,
@@ -71,7 +71,7 @@ class BinderSpec extends BorderPatrolSuite {
   behavior of "ServiceIdentifierBinder"
 
   it should "successfully connect to server and returns the response" in {
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:5679", mkTestService[Request]{_ => Response(Status.NotAcceptable).toFuture })
     try {
       val bindReq = BindRequest[ServiceIdentifier](one, req(one.path.toString))

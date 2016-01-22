@@ -6,8 +6,10 @@ import com.lookout.borderpatrol._
 import com.lookout.borderpatrol.sessionx.SecretStores._
 import com.lookout.borderpatrol.sessionx.SessionStores._
 import com.lookout.borderpatrol.sessionx._
-import com.twitter.finagle.MemcachedClient
-import com.twitter.finagle.httpx.path.Path
+import com.twitter.finagle.Memcached
+import com.twitter.finagle.Name
+import com.twitter.finagle.Resolver
+import com.twitter.finagle.http.path.Path
 import com.twitter.app.App
 import cats.data.Xor
 import io.circe.{Encoder, _}
@@ -67,7 +69,7 @@ object Config {
     c.downField("type").as[String].flatMap {
       case "InMemoryStore" => Xor.right(defaultSessionStore)
       case "MemcachedStore"   => c.downField("hosts").as[String].map(hosts =>
-        SessionStores.MemcachedStore(MemcachedClient.newRichClient(hosts)))
+        SessionStores.MemcachedStore(Memcached.client.newRichClient(hosts)))
       case other  => Xor.left(DecodingFailure(s"Invalid sessionStore: $other", c.history))
     }
   }

@@ -4,7 +4,7 @@ import com.lookout.borderpatrol.security.SecureHeaderFilter
 import com.lookout.borderpatrol.security.SecureHeaders
 import com.lookout.borderpatrol.test._
 import com.twitter.finagle.Service
-import com.twitter.finagle.httpx.{Response, Request, Status}
+import com.twitter.finagle.http.{Response, Request, Status}
 import com.twitter.util.Future
 
 class SecureHeadersSpec extends BorderPatrolSuite {

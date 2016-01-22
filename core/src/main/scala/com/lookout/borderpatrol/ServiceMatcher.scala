@@ -1,7 +1,7 @@
 package com.lookout.borderpatrol
 
-import com.twitter.finagle.httpx.Request
-import com.twitter.finagle.httpx.path.Path
+import com.twitter.finagle.http.Request
+import com.twitter.finagle.http.path.Path
 
 /*
  * We derive a service `name` (a [[String]] name referencing a [[com.twitter.finagle.Name Name]]) via the `Path`
@@ -77,7 +77,7 @@ case class ServiceMatcher(customerIds: Set[CustomerIdentifier], serviceIds: Set[
     )
 
   /**
-   * Derive a CustomerIdentifier and ServiceIdentifier from an `httpx.Request`
+   * Derive a CustomerIdentifier and ServiceIdentifier from an `http.Request`
    * - Find CustomerIdentifier from `subdomain` from `req.host`
    * - Find ServiceIdentifier from `req.path`.
    *   If it fails to find, then check if it matches with paths in LoginManager. If it does,

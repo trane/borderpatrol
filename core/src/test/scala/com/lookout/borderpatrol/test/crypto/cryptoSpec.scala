@@ -30,7 +30,7 @@ import javax.crypto.spec.SecretKeySpec
 import com.lookout.borderpatrol.sessionx.{SignedId, Session}
 import com.lookout.borderpatrol.crypto._
 import com.lookout.borderpatrol.test._
-import com.twitter.finagle.{httpx, memcached}
+import com.twitter.finagle.{http, memcached}
 import com.twitter.io.Buf
 import com.twitter.util.{Future, Await}
 
@@ -109,12 +109,12 @@ class cryptoSpec extends BorderPatrolSuite {
   val store = EncryptedSessionStore.MemcachedStore(new memcached.MockClient())
   val strSession = Session("hello").results
   val intSession = Session(1).results
-  val reqSession = Session(httpx.Request("/api")).results
+  val reqSession = Session(http.Request("/api")).results
 
   Await.all(
     store.update[Int](intSession),
     store.update[String](strSession),
-    store.update[httpx.Request](reqSession)
+    store.update[http.Request](reqSession)
   )
 
   it should s"fetch sessions that are stored in $store" in {
@@ -127,12 +127,12 @@ class cryptoSpec extends BorderPatrolSuite {
   }
 
   it should s"store request sessions $store" in {
-    store.get[httpx.Request](reqSession.id).results.get.data.uri shouldEqual reqSession.data.uri
+    store.get[http.Request](reqSession.id).results.get.data.uri shouldEqual reqSession.data.uri
   }
 
   it should s"return a Future exception when decoding to wrong type in $store" in {
-    // try to make an Session[Int] => Session[httpx.Request]
-    store.get[httpx.Request](intSession.id).isThrowable should be(true)
+    // try to make an Session[Int] => Session[http.Request]
+    store.get[http.Request](intSession.id).isThrowable should be(true)
 
     /* TODO: Disallow this: Int -> Buf -> String
     isThrow(store.get[Int](strSession.id)) should be(false)

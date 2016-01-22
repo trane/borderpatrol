@@ -5,8 +5,8 @@ import java.net.URL
 import com.lookout.borderpatrol.sessionx._
 import com.lookout.borderpatrol.test.{sessionx, BorderPatrolSuite}
 import com.lookout.borderpatrol._
-import com.twitter.finagle.MemcachedClient
-import com.twitter.finagle.httpx.path.Path
+import com.twitter.finagle.Memcached
+import com.twitter.finagle.http.path.Path
 import cats.data.Xor
 import io.circe._
 import io.circe.jawn._
@@ -22,7 +22,7 @@ class ConfigSpec extends BorderPatrolSuite {
   // Stores
   val defaultSecretStore = SecretStores.InMemorySecretStore(Secrets(Secret(), Secret()))
   val defaultSessionStore = SessionStores.InMemoryStore
-  val memcachedSessionStore = SessionStores.MemcachedStore(MemcachedClient.newRichClient("localhost:1234"))
+  val memcachedSessionStore = SessionStores.MemcachedStore(Memcached.client.newRichClient("localhost:1234"))
   val consulSecretStore = SecretStores.ConsulSecretStore("testBpKey", Set(new URL("http://localhost:1234")))
 
   // StatdExporter

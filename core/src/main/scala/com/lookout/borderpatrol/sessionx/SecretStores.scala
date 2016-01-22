@@ -13,7 +13,7 @@ import io.circe.generic.semiauto._
 
 import com.lookout.borderpatrol.BinderBase
 import com.lookout.borderpatrol.util.Combinators._
-import com.twitter.finagle.httpx.{Method, Status, Request}
+import com.twitter.finagle.http.{Method, Status, Request}
 import com.twitter.finagle.util.DefaultTimer
 import com.twitter.logging.Level
 import com.twitter.util._

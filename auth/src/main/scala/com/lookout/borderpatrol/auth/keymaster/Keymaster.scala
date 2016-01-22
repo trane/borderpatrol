@@ -10,7 +10,7 @@ import com.lookout.borderpatrol.Binder._
 import com.lookout.borderpatrol.auth._
 import com.twitter.finagle.stats.StatsReceiver
 import com.twitter.finagle.{Filter, Service}
-import com.twitter.finagle.httpx._
+import com.twitter.finagle.http._
 import com.twitter.logging.Level
 import com.twitter.util.Future
 

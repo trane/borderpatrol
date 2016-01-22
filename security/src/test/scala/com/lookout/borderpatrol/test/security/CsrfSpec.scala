@@ -4,7 +4,7 @@ import com.lookout.borderpatrol.security.Csrf._
 import com.lookout.borderpatrol.security.{CsrfInsertFilter, CsrfVerifyFilter}
 import com.lookout.borderpatrol.test._
 import com.twitter.finagle.Service
-import com.twitter.finagle.httpx.{Response, Cookie, Request, Status}
+import com.twitter.finagle.http.{Response, Cookie, Request, Status}
 import com.twitter.util.{Await, Future}
 
 class CsrfSpec extends BorderPatrolSuite {

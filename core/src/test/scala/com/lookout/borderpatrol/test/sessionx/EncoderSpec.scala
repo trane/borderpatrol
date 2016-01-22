@@ -3,7 +3,7 @@ package com.lookout.borderpatrol.sessionx
 import argonaut.Json
 import com.lookout.borderpatrol.test._
 import com.twitter.io.Buf
-import com.twitter.finagle.httpx
+import com.twitter.finagle.http
 
 import scala.util.{Try, Success}
 
@@ -68,7 +68,7 @@ class EncoderSpec extends BorderPatrolSuite {
     def invalid[A](input: Buf)(implicit ev: SessionDataEncoder[A]): Try[A] =
       ev.decode(input)
 
-    invalid[httpx.Request](Buf.U32BE(1)).failure.exception should be(a[SessionDataError])
+    invalid[http.Request](Buf.U32BE(1)).failure.exception should be(a[SessionDataError])
   }
 
   behavior of "SecretsEncoder"

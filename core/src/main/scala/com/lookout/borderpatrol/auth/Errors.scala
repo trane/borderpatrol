@@ -1,7 +1,7 @@
 package com.lookout.borderpatrol.auth
 
 import com.lookout.borderpatrol.ServiceIdentifier
-import com.twitter.finagle.httpx.Status
+import com.twitter.finagle.http.Status
 
 class AuthError(val message: String, cause: Throwable) extends Exception(message, cause) {
   // scalastyle:off null

@@ -1,7 +1,7 @@
 package com.lookout.borderpatrol.test
 
 import com.lookout.borderpatrol._
-import com.twitter.finagle.httpx.path.Path
+import com.twitter.finagle.http.path.Path
 
 class ServiceMatcherSpec extends BorderPatrolSuite {
   import sessionx.helpers._

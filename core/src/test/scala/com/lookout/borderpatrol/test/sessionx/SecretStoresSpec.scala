@@ -8,8 +8,8 @@ import com.lookout.borderpatrol.sessionx.SecretStores._
 import com.lookout.borderpatrol.sessionx.ConsulResponse._
 import com.lookout.borderpatrol.test._
 import com.lookout.borderpatrol.util.Combinators.tap
-import com.twitter.finagle.httpx.service.RoutingService
-import com.twitter.finagle.httpx.{Method, Status, Response, Request}
+import com.twitter.finagle.http.service.RoutingService
+import com.twitter.finagle.http.{Method, Status, Response, Request}
 import io.circe.generic.auto._
 import io.circe.syntax._
 import io.circe.generic.semiauto._
@@ -84,7 +84,7 @@ class SecretStoresSpec extends BorderPatrolSuite {
 
   it should "succeed to find valid secrets in the Step-1 GET and skip the following Step(s)" in {
     var serverModifyIndex = 0
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:6789",
       RoutingService.byMethodAndPath {
         case (Method.Get, _) => mkTestService[Request, Response]{ req =>
@@ -125,7 +125,7 @@ class SecretStoresSpec extends BorderPatrolSuite {
 
   it should "succeed to set new secrets in Step-2 PUT, if it find expired secrets in the Step-1 GET" in {
     var serverModifyIndex = 0
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:6789",
       RoutingService.byMethodAndPath {
         case (Method.Get, _) => mkTestService[Request, Response]{ req =>
@@ -168,7 +168,7 @@ class SecretStoresSpec extends BorderPatrolSuite {
 
   it should "succeed to set new secrets in Step-2 PUT, if Step-1 GET returns NotFound" in {
     var serverModifyIndex = 0
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:6789",
       RoutingService.byMethodAndPath {
         case (Method.Get, _) => mkTestService[Request, Response]{ req =>
@@ -208,7 +208,7 @@ class SecretStoresSpec extends BorderPatrolSuite {
 
   it should "succeed to get new secrets in Step-3 GET, if Step-1 GET returns NotFound, Step-2 PUT returns false" in {
     var serverModifyIndex = 0
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:6789",
       RoutingService.byMethodAndPath {
         case (Method.Get, _) => mkTestService[Request, Response]{ req =>
@@ -254,7 +254,7 @@ class SecretStoresSpec extends BorderPatrolSuite {
     var serverModifyIndex = 0
     val cr1 = ConsulResponse(5, 0x11, "SomeKye", 5, 5,
       DatatypeConverter.printBase64Binary("""{"key":"value"}""".getBytes))
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:6789",
       RoutingService.byMethodAndPath {
         case (Method.Get, _) => mkTestService[Request, Response]{ req =>
@@ -297,7 +297,7 @@ class SecretStoresSpec extends BorderPatrolSuite {
     var serverModifyIndex = 0
     val cr1 = ConsulResponse(5, 0x11, "SomeKye", 5, 5,
       DatatypeConverter.printBase64Binary("""{"key":"value"}""".getBytes))
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:6789",
       RoutingService.byMethodAndPath {
         case (Method.Get, _) => mkTestService[Request, Response]{ req =>
@@ -338,7 +338,7 @@ class SecretStoresSpec extends BorderPatrolSuite {
 
   it should "catch exception thrown by Step-2 PUT response error status, use extant secrets until next attempt" in {
     var serverModifyIndex = 0
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:6789",
       RoutingService.byMethodAndPath {
         case (Method.Get, _) => mkTestService[Request, Response]{ req =>
@@ -376,7 +376,7 @@ class SecretStoresSpec extends BorderPatrolSuite {
 
   it should "log a message if Step-3 GET returns expired Secrets, use extant secrets until next attempt" in {
     var serverModifyIndex = 0
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:6789",
       RoutingService.byMethodAndPath {
         case (Method.Get, _) => mkTestService[Request, Response]{ req =>
@@ -422,7 +422,7 @@ class SecretStoresSpec extends BorderPatrolSuite {
     var serverModifyIndex = 0
     val cr1 = ConsulResponse(5, 0x11, "SomeKye", 5, 5,
       DatatypeConverter.printBase64Binary("""{"key":"value"}""".getBytes))
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:6789",
       RoutingService.byMethodAndPath {
         case (Method.Get, _) => mkTestService[Request, Response]{ req =>

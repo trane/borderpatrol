@@ -1,8 +1,8 @@
 package com.lookout.borderpatrol
 
 import java.net.URL
-import com.twitter.finagle.httpx.{Method, Response, Request}
-import com.twitter.finagle.httpx.path.Path
+import com.twitter.finagle.http.{Method, Response, Request}
+import com.twitter.finagle.http.path.Path
 import com.twitter.util.Future
 
 case class Manager(name: String, path: Path, hosts: Set[URL])

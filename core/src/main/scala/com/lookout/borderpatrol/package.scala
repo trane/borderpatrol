@@ -2,7 +2,7 @@ package com.lookout
 
 import com.twitter.util.Future
 import org.jboss.netty.handler.codec.http.HttpHeaders
-import com.twitter.finagle.httpx
+import com.twitter.finagle.http
 
 /**
  * This is the root package of borderpatrol-core which provides a functional approach to web sessions and
@@ -56,22 +56,22 @@ package object borderpatrol {
   }
 
   object errors {
-    abstract class BorderError(val status: httpx.Status, val description: String) extends Exception
-    class InvalidRequest(description: String = "") extends BorderError(httpx.Status.BadRequest, description)
-    class UnauthorizedRequest(description: String = "") extends BorderError(httpx.Status.Unauthorized, description)
-    class ForbiddenRequest(description: String = "") extends BorderError(httpx.Status.Forbidden, description)
+    abstract class BorderError(val status: http.Status, val description: String) extends Exception
+    class InvalidRequest(description: String = "") extends BorderError(http.Status.BadRequest, description)
+    class UnauthorizedRequest(description: String = "") extends BorderError(http.Status.Unauthorized, description)
+    class ForbiddenRequest(description: String = "") extends BorderError(http.Status.Forbidden, description)
   }
 
   object request {
 
     trait RequestBase {
-      val request: httpx.Request
+      val request: http.Request
       val auth: Option[String] = request.headerMap.get(HttpHeaders.Names.AUTHORIZATION)
     }
 
-    case class AuthRequest[A](request: httpx.Request) extends RequestBase
+    case class AuthRequest[A](request: http.Request) extends RequestBase
 
-    case class AuthResourceRequest[A](request: httpx.Request) extends RequestBase
+    case class AuthResourceRequest[A](request: http.Request) extends RequestBase
 
   }
 

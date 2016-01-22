@@ -7,12 +7,12 @@ import com.lookout.borderpatrol.auth.OAuth2.OAuth2CodeVerify
 import com.lookout.borderpatrol._
 import com.lookout.borderpatrol.auth.ServiceRequest
 import com.lookout.borderpatrol.sessionx.SecretStores.InMemorySecretStore
-import com.twitter.finagle.httpx.Method.{Put, Get}
-import com.twitter.finagle.httpx.path.Path
-import com.twitter.finagle.httpx.{RequestBuilder, Status, Response, Request}
+import com.twitter.finagle.http.Method.{Put, Get}
+import com.twitter.finagle.http.path.Path
+import com.twitter.finagle.http.{RequestBuilder, Status, Response, Request}
 import com.twitter.finagle.stats.NullStatsReceiver
 import com.twitter.util._
-import com.twitter.finagle.{Service, httpx}
+import com.twitter.finagle.{Service, http}
 import scala.util.{Success, Try}
 import com.twitter.bijection.Injection
 import com.twitter.util.{Await, Time}

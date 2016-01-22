@@ -1,7 +1,7 @@
 package com.lookout.borderpatrol.example
 
 import com.lookout.borderpatrol.server._
-import com.twitter.finagle.Httpx
+import com.twitter.finagle.Http
 import com.twitter.server.TwitterServer
 import com.twitter.util.Await
 
@@ -18,8 +18,8 @@ object BorderPatrolApp extends TwitterServer with Config {
     val statsdReporter = new StatsdExporter(serverConfig.statsdExporterConfig)
 
     // Create a server
-    val server1 = Httpx.serve(":8080", MainServiceChain)
-    val server2 = Httpx.serve(":8081", getMockRoutingService)
+    val server1 = Http.serve(":8080", MainServiceChain)
+    val server2 = Http.serve(":8081", getMockRoutingService)
     Await.all(server1, server2)
   }
 }

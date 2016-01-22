@@ -25,7 +25,7 @@
 package com.lookout.borderpatrol
 
 import argonaut._, Argonaut._
-import com.twitter.finagle.httpx.{Request, Cookie}
+import com.twitter.finagle.http.{Request, Cookie}
 import com.twitter.util.{Time, Future}
 
 import scala.util.{Failure, Success}
@@ -53,7 +53,7 @@ import scala.util.{Failure, Success}
  *
  * A [[com.lookout.borderpatrol.sessionx.SignedId SignedId]] is a cryptographically signed identifier for a
  * [[com.lookout.borderpatrol.sessionx.Session Session]], it consists of entropy, expiry, secret,and signature of those
- * items. This is meant to be used as the [[com.twitter.finagle.httpx.Cookie]] value, so we provide serializing to
+ * items. This is meant to be used as the [[com.twitter.finagle.http.Cookie]] value, so we provide serializing to
  * [[String]].
  *
  * {{{
@@ -67,14 +67,14 @@ import scala.util.{Failure, Success}
  * A`. The only requirement for a [[com.lookout.borderpatrol.sessionx.SessionStore SessionStore]][B,M] to store/fetch
  * a `Session[A]` is that there be some implicit injective views from `A => B` and `B => Try[A]`.
  *
- * We have provided default encodings for: `httpx.Request => Buf`, `String => Buf` and their injective views.
+ * We have provided default encodings for: `http.Request => Buf`, `String => Buf` and their injective views.
  *
  * {{{
  *  // set up secret/session stores
  *  implicit val secretStore = SecretStores.InMemorySecretStore(Secrets(Secret(), Secret()))
  *  val sessionStore = SessionStore.InMemoryStore()
  *
- *  // create a Session[httpx.Request]
+ *  // create a Session[http.Request]
  *  val newSessionFuture = Session(Request("http://localhost/api/stuff")) // entropy is blocking on the JVM
  *  val newSession = Await.result(newSessionFuture)
  *

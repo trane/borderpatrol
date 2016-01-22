@@ -2,7 +2,7 @@ package com.lookout.borderpatrol
 
 import java.net.URL
 
-import com.twitter.finagle.httpx.path.Path
+import com.twitter.finagle.http.path.Path
 
 /**
  * An identifier for Border Patrol to determine by `path` which service a request

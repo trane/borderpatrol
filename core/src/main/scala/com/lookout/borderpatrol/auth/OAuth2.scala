@@ -17,7 +17,7 @@ import com.nimbusds.jose.JWSVerifier
 import com.nimbusds.jose.crypto.{ECDSAVerifier, RSASSAVerifier}
 import com.nimbusds.jose.util.X509CertUtils
 import com.nimbusds.jwt.{PlainJWT, SignedJWT, JWTClaimsSet}
-import com.twitter.finagle.httpx.{Status, Response, Request}
+import com.twitter.finagle.http.{Status, Response, Request}
 import com.twitter.util.Future
 
 import scala.util.{Failure, Success, Try}

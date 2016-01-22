@@ -1,7 +1,7 @@
 package com.lookout.borderpatrol
 
 import com.twitter.finagle.Service
-import com.twitter.finagle.httpx.{Status, Request, Response}
+import com.twitter.finagle.http.{Status, Request, Response}
 import com.twitter.util.{Await, Future}
 
 package object test {

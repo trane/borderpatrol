@@ -14,7 +14,7 @@ import com.twitter.finagle.Service
  * {{{
  *   case class Credential(user: String, password: String)
  *
- *   def httpBasicAccess(cred: Credential, req: httpx.Request): AccessRequest[String] =
+ *   def httpBasicAccess(cred: Credential, req: http.Request): AccessRequest[String] =
  *      new AccessRequest[String] {
  *        val identity = s"${cred.user}:${cred.password}"
  *        val serviceId = "example"
@@ -27,9 +27,9 @@ import com.twitter.finagle.Service
  *      }
  *
  *   case class ApiToken(token: String)
- *   case class TokenAccessResponse(access: Option[ApiToken], reply: httpx.Response) extends AccessResponse[ApiToken]
+ *   case class TokenAccessResponse(access: Option[ApiToken], reply: http.Response) extends AccessResponse[ApiToken]
  *
- *   case class ApiTokenIssuer(remote: Service[httpx.Request, httpx.Response])
+ *   case class ApiTokenIssuer(remote: Service[http.Request, http.Response])
  *       extends AccessIssuer[String, ApiToken] {
  *
  *     def apply(req: AccessRequest[String]): Future[AccessResponse[ApiToken]] =

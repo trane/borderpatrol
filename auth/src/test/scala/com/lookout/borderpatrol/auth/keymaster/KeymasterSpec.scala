@@ -11,7 +11,7 @@ import com.lookout.borderpatrol.util.Combinators.tap
 import com.nimbusds.jwt.{PlainJWT, JWTClaimsSet}
 import com.twitter.finagle.memcached.GetResult
 import com.twitter.finagle.memcached
-import com.twitter.finagle.httpx._
+import com.twitter.finagle.http._
 import com.twitter.util.{Await, Future}
 
 import org.scalatest.mock.MockitoSugar
@@ -515,7 +515,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
   behavior of "keymasterIdentityProviderChain"
 
   it should "succeed and invoke the GET on loginManager" in {
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:5678", mkTestService[Request, Response]{request =>
         if (request.path.contains("check")) Response(Status.Ok).toFuture
         else Response(Status.BadRequest).toFuture
@@ -545,7 +545,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
   }
 
   it should "succeed and invoke the GET on identityManager" in {
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:5678", mkTestService[Request, Response]{request =>
         if (request.path.contains(keymasterIdManager.path.toString))
           tap(Response(Status.Ok))(res => {
@@ -581,7 +581,7 @@ class KeymasterSpec extends BorderPatrolSuite with MockitoSugar {
   behavior of "keymasterAccessIssuerChain"
 
   it should "succeed and invoke the GET on accessManager" in {
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:5678", mkTestService[Request, Response]{request =>
         if (request.path.contains(keymasterAccessManager.path.toString))
           tap(Response(Status.Ok))(res => {

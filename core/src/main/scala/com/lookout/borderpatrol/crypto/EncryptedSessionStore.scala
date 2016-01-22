@@ -28,7 +28,7 @@ object EncryptedSessionStore {
    *
    * {{{
    *   val store = MemcachedStore(Memcached.newKetamaClient("localhost:11211"))
-   *   val requestSession = store.get[httpx.Request](id)
+   *   val requestSession = store.get[http.Request](id)
    *   requestSession.onSuccess(s => log(s"Success! you were going to ${s.data.uri}"))
    *                 .onFailure(log)
    * }}}

@@ -4,8 +4,8 @@ import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
 import java.util.logging.Logger
 
-import com.twitter.finagle.{Httpx, Service}
-import com.twitter.finagle.httpx.{Response, Request}
+import com.twitter.finagle.{Http, Service}
+import com.twitter.finagle.http.{Response, Request}
 import com.twitter.util.Future
 import scala.collection.JavaConverters._
 import scala.language.postfixOps
@@ -85,8 +85,8 @@ object BinderBase {
     val hostAndPorts = urls.map(u => u.getAuthority).mkString(",")
 
     // Create
-    if (https) Httpx.client.withTls(hostname).newService(hostAndPorts)
-    else Httpx.newService(hostAndPorts)
+    if (https) Http.client.withTls(hostname).newService(hostAndPorts)
+    else Http.newService(hostAndPorts)
   }
 
   private[this] def getOrCreate(name: String, urls: Set[URL]): Future[Service[Request, Response]] =

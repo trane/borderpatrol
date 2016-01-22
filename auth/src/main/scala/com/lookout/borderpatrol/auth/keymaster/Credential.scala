@@ -2,7 +2,7 @@ package com.lookout.borderpatrol.auth.keymaster
 
 import com.lookout.borderpatrol.{CustomerIdentifier, ServiceIdentifier}
 import com.lookout.borderpatrol.util.Combinators._
-import com.twitter.finagle.httpx.{Method, Request}
+import com.twitter.finagle.http.{Method, Request}
 
 
 trait Credential {

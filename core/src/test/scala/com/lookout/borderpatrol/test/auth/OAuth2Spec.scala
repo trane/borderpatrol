@@ -15,8 +15,8 @@ import com.nimbusds.jose.{JWSVerifier, JWSSigner, JWSHeader, JWSAlgorithm}
 import com.nimbusds.jose.crypto.{ECDSAVerifier, ECDSASigner, RSASSAVerifier, RSASSASigner}
 import com.nimbusds.jose.util.{X509CertUtils, Base64URL}
 import com.nimbusds.jwt.{PlainJWT, SignedJWT, JWTClaimsSet}
-import com.twitter.finagle.httpx._
-import com.twitter.finagle.httpx.service.RoutingService
+import com.twitter.finagle.http._
+import com.twitter.finagle.http.service.RoutingService
 import com.twitter.util.Await
 import org.bouncycastle.x509.X509V1CertificateGenerator
 
@@ -134,7 +134,7 @@ class OAuth2Spec extends BorderPatrolSuite {
   it should "succeed and transform the Request with OAuth2 code to JWT ClaimsSet using RSA certificates" in {
 
     //Launch a server for fetching token from a code
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:4567",
       RoutingService.byPath {
         case p1 if p1 contains "tokenUrl" => mkTestService[Request, Response] { req =>
@@ -186,7 +186,7 @@ class OAuth2Spec extends BorderPatrolSuite {
   it should "succeed and transform the Request with OAuth2 code to JWT ClaimsSet using EC certificates" in {
 
     //Launch a server for fetching token from a code
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:4567",
       RoutingService.byPath {
         case p1 if p1 contains "tokenUrl" => mkTestService[Request, Response] { req =>
@@ -238,7 +238,7 @@ class OAuth2Spec extends BorderPatrolSuite {
   it should "succeed and use cached certificate to transform the Request with OAuth2 code to JWT ClaimsSet" in {
 
     //Launch a server for fetching token from a code
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:4567",
       RoutingService.byPath {
         case p1 if p1 contains "tokenUrl" => mkTestService[Request, Response] { req =>
@@ -321,7 +321,7 @@ class OAuth2Spec extends BorderPatrolSuite {
   }
 
   it should "throw an exception if fails to parse OAuth2 AAD Token in the response" in {
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:4567", mkTestService[Request, Response] { req =>
         assert(req.getParam("code") == "XYZ123")
         tap(Response(Status.Ok))(res => {
@@ -354,7 +354,7 @@ class OAuth2Spec extends BorderPatrolSuite {
   }
 
   it should "throw an exception if OAuth2 Server returns an failure response for code to token conversion" in {
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:4567", mkTestService[Request, Response] { req =>
         assert(req.getParam("code") == "XYZ123")
         Response(Status.NotAcceptable).toFuture
@@ -386,7 +386,7 @@ class OAuth2Spec extends BorderPatrolSuite {
   it should "throw an Exception if it fails to parse ID-token in AAD-token returned by OAuth2 Server" in {
     val idToken = "stuff" //"""{"key":"value"}"""
     val aadToken = AadToken(testRsaAccessToken.serialize(), idToken)
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:4567", mkTestService[Request, Response] { req =>
         assert(req.getParam("code") == "XYZ123")
         tap(Response(Status.Ok))(res => {
@@ -420,7 +420,7 @@ class OAuth2Spec extends BorderPatrolSuite {
   it should "throw an Exception if it fails to parse Access-token in AAD-token returned by OAuth2 Server" in {
     val accessToken = new PlainJWT(new JWTClaimsSet.Builder().subject("SomethingAccess").build)
     val aadToken = AadToken(accessToken.serialize(), testRsaIdToken.serialize())
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:4567", mkTestService[Request, Response] { req =>
         assert(req.getParam("code") == "XYZ123")
         tap(Response(Status.Ok))(res => {
@@ -458,7 +458,7 @@ class OAuth2Spec extends BorderPatrolSuite {
       new JWTClaimsSet.Builder().subject("abc123").claim("upn", "test@example.com").build)
     accessToken.sign(testRsaSigner)
     val aadToken = AadToken(accessToken.serialize(), testRsaIdToken.serialize())
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:4567", mkTestService[Request, Response] { req =>
         assert(req.getParam("code") == "XYZ123")
         tap(Response(Status.Ok))(res => {
@@ -492,7 +492,7 @@ class OAuth2Spec extends BorderPatrolSuite {
   it should "throw an exception if it fails to find Certificate in the XML code returned by OAuth2 Server" in {
 
     //Launch a server for fetching token from a code
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:4567",
       RoutingService.byPath {
         case p1 if p1 contains "tokenUrl" => mkTestService[Request, Response] { req =>
@@ -545,7 +545,7 @@ class OAuth2Spec extends BorderPatrolSuite {
   it should "throw an exception if it fails to parse XML code returned by OAuth2 Server" in {
 
     //Launch a server for fetching token from a code
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:4567",
       RoutingService.byPath {
         case p1 if p1 contains "tokenUrl" => mkTestService[Request, Response] { req =>
@@ -597,7 +597,7 @@ class OAuth2Spec extends BorderPatrolSuite {
   it should "throw an exception if it fails to decode Certificate returned by OAuth2 Server" in {
 
     //Launch a server for fetching token from a code
-    val server = com.twitter.finagle.Httpx.serve(
+    val server = com.twitter.finagle.Http.serve(
       "localhost:4567",
       RoutingService.byPath {
         case p1 if p1 contains "tokenUrl" => mkTestService[Request, Response] { req =>

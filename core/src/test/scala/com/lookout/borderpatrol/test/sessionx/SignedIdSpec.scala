@@ -1,7 +1,7 @@
 package com.lookout.borderpatrol.sessionx
 
 import com.lookout.borderpatrol.test._
-import com.twitter.finagle.httpx.Cookie
+import com.twitter.finagle.http.Cookie
 
 class SessionIdSpec extends BorderPatrolSuite {
   import sessionx.helpers._

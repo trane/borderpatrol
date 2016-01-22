@@ -4,13 +4,13 @@ import java.util.concurrent.TimeUnit
 import com.lookout.borderpatrol.crypto.Generator
 import com.lookout.borderpatrol.util.Combinators.tap
 import com.twitter.bijection.Injection
-import com.twitter.finagle.httpx.{Response, Request, Cookie}
+import com.twitter.finagle.http.{Response, Request, Cookie}
 import com.twitter.util._
 
 import scala.util.{Success, Failure, Try}
 
 /**
- * This type represents the value of a user's [[com.twitter.finagle.httpx.Cookie Cookie]]
+ * This type represents the value of a user's [[com.twitter.finagle.http.Cookie Cookie]]
  * The design of this is to act as a cryptographically verifiable identifier for a user
  *
  * In [[String]] form, is a `Base64` encoded concatenation of the following transformation:

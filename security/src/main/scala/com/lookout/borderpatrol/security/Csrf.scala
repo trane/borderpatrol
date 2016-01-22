@@ -3,7 +3,7 @@ package com.lookout.borderpatrol.security
 import com.lookout.borderpatrol.util.Combinators.tap
 import com.lookout.borderpatrol.sessionx._
 import com.twitter.finagle.{SimpleFilter, Service, Filter}
-import com.twitter.finagle.httpx.{Status, Cookie, Request, Response}
+import com.twitter.finagle.http.{Status, Cookie, Request, Response}
 import com.twitter.util.{Time, Future}
 
 object Csrf {
